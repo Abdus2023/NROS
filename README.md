@@ -1,163 +1,141 @@
 # NROS — Native Robotics Operating System
 
-> A ground-up redesign of robotics middleware addressing ROS2's complexity, performance bottlenecks, and developer experience. Built for deterministic real-time performance, zero-copy communication, and seamless hardware integration.
+NROS is an experimental robotics software stack exploring a simpler, more deterministic alternative to conventional robotics middleware. The project focuses on explicit communication semantics, real-time-oriented execution, hardware abstraction, simulation, developer tooling, and safety-conscious verification.
 
-## 📄 Documentation
+> **Project status:** NROS is under active development. The repository contains a mixture of specifications, scaffolding, simulations, implementations, and verification artifacts. A documented capability must not be assumed to be production-ready merely because it appears in the architecture or roadmap.
 
-- **[Full Design Document v1.0 — DESIGN.md](./DESIGN.md)** — Complete 25-section architecture specification (2025 lines)
-  - Core Philosophy & Differentiators from ROS2
-  - Layered Architecture (Microkernel, IPC, HAL, Core Services, Application)
-  - Programming Model (Rust/C++/Python examples)
-  - Real-Time Scheduler, Zero-Copy IPC, HAL Deep Dives
-  - Benchmarks, Deployment, Migration Guide, Roadmap & Implementation Status
-- **[NROS vs ROS2 — COMPARISON.md](./COMPARISON.md)** — Comprehensive technical comparison (547 lines)
-- **[Audit Report — AUDIT.md](./AUDIT.md)** — 7-pass repository-level verification (1511 lines) with P0 safety findings CORE-001..004, evidence taxonomy, maturity scores, risk register
-- **[Evidence Registry — EVIDENCE_REGISTRY.md](./EVIDENCE_REGISTRY.md)** — Feature → spec → implementation → status (SPECIFIED/SCAFFOLDED/SIMULATED/IMPLEMENTED/TESTED/BENCHMARKED/...) → test → claim_allowed per AUDIT recommendation
-- **[Core Safety — crates/nros-core/SAFETY.md](./crates/nros-core/SAFETY.md)** — Safety Gate v0.1 invariants, guard-based redesign WriteGuard/ReadGuard, generic T destruction, monotonic clock, benchmark separation, Miri/loom
-  - Architecture: DDS middleware vs Zero-Copy IPC / RT Scheduler
-  - Performance: 46× latency, 15× throughput, 79% memory, 100 KHz real-time
-  - Features: zero-copy default, compile-time checking, fleet mgmt, HAL unified, GPU auto-dispatch
-  - Developer Experience: 51% fewer LOC, 73-81% faster builds
-  - Deployment: 29× faster startup, 37% power saving +58% battery life
-  - Safety: Rust memory safety, deadline monitoring, ISO 26262 / IEC 61508 ready
-  - TCO: 39% savings ($362K over 5 years) — reproducible benchmarks from `crates/*`
+## What NROS Is
 
-## 🚀 Performance Targets
+NROS is organized around a small set of architectural concerns:
 
-| Metric | ROS2 (Typical) | NROS (Target) |
-|--------|----------------|---------------|
-| Message Latency (local) | 100-500 μs | < 10 μs |
-| Throughput (1KB msgs) | 50K msg/s | 500K msg/s |
-| Memory Overhead | ~50MB base | < 10MB base |
-| CPU Usage (idle) | 5-10% | < 1% |
-| Startup Time | 2-5 seconds | < 100ms |
-| Max Real-time Frequency | 1 KHz | 100 KHz |
+- **Core runtime and communication** — execution, messaging, and low-level communication primitives.
+- **Node model** — lifecycle, parameters, deadlines, and application-facing behavior.
+- **Hardware abstraction** — interfaces intended to separate robotics software from hardware-specific implementations.
+- **Transport and distributed operation** — local and network communication, with distributed-system functionality developed incrementally.
+- **Simulation** — deterministic physics-oriented and sensor abstractions for development and testing.
+- **Developer tooling** — CLI and Studio components for project creation, inspection, and experimentation.
+- **Verification and safety** — explicit evidence, safety gates, testing, and audit artifacts.
 
-**Target**: <10 μs latency, 500K msg/s — Prototype measurement repository-reported 6.2 μs avg, 780K msg/s (see §18, but needs independent verification per AUDIT.md — benchmark separated from correctness gate, monotonic clock, no assert in `cargo test`)
+## Current Evidence Model
 
-## 🏗️ Architecture Overview
+NROS distinguishes design intent from repository evidence.
 
+| Status | Meaning |
+|---|---|
+| `PROPOSED` | Future direction or idea. |
+| `SPECIFIED` | Defined by an explicit design/specification. |
+| `SCAFFOLDED` | Structural implementation exists, but the intended capability is incomplete. |
+| `SIMULATED` | Behavior is represented for development or demonstration rather than provided by the real subsystem. |
+| `IMPLEMENTED` | Functional implementation exists in the repository. |
+| `TESTED` | Automated tests provide evidence for the implementation. |
+| `BENCHMARKED` | Performance measurements have been collected. |
+| `INTEGRATION-TESTED` | Multiple components have been verified together. |
+| `HARDWARE-VALIDATED` | Behavior has been validated against the relevant physical hardware. |
+| `PRODUCTION-READY` | The project-defined production criteria have been satisfied. |
+
+Higher status must not be inferred without the corresponding evidence.
+
+## Architecture at a Glance
+
+```text
+┌──────────────────────────────────────────┐
+│             Robot Applications           │
+├──────────────────────────────────────────┤
+│          APIs / CLI / NROS Studio        │
+├──────────────────────────────────────────┤
+│             Core Services                │
+├──────────────────────────────────────────┤
+│       Communication / Transport          │
+├──────────────────────────────────────────┤
+│        Core Runtime / Execution          │
+├──────────────────────────────────────────┤
+│       Hardware Abstraction Layer         │
+└──────────────────────────────────────────┘
 ```
-┌─────────────────────────────────────────┐
-│   Application Layer (Robot Programs)    │
-├─────────────────────────────────────────┤
-│     High-Level APIs & Tools             │
-├─────────────────────────────────────────┤
-│       Core Services Layer               │
-├─────────────────────────────────────────┤
-│      Communication Substrate            │
-├─────────────────────────────────────────┤
-│       NROS Microkernel/Scheduler        │
-├─────────────────────────────────────────┤
-│         Hardware Abstraction Layer      │
-└─────────────────────────────────────────┘
-```
 
-## 🛠️ Quick Start (Vision)
+The architecture is specified more deeply in the design and architecture documentation. The implementation status of individual components must be read together with their evidence and verification records.
+
+## Repository Status
+
+The repository currently contains both implemented functionality and experimental/scaffolded components. Examples include:
+
+- `nros-core` — core communication/runtime primitives with safety-oriented work and tests.
+- `nros-node` — node lifecycle, parameters, deadline monitoring, and related runtime behavior.
+- `nros-hal` — hardware-abstraction work, including simulated DMA-oriented components.
+- `nros-transport` — UDP/TCP and transport experimentation, with some capabilities still simulated or scaffolded.
+- `nros-distributed` — distributed-system structures with simulated/incomplete consensus behavior.
+- `nros-cli` — CLI architecture and project-generation functionality.
+- `nros-sim` — deterministic simulation-oriented functionality and replay work.
+- `nros-studio` — development/inspection UI with both implemented infrastructure and simulated data paths.
+- `nros-types`, `nros-macros`, `nros` — supporting types, macros, and facade layers.
+- `nros-audit` — repository-oriented verification and claim-analysis tooling.
+
+For authoritative status, consult the verification and evidence documentation rather than relying on this summary alone.
+
+## Documentation
+
+Start with the documentation hub:
+
+- **[Documentation](./docs/README.md)** — documentation map and recommended reading paths.
+- **[Architecture](./docs/ARCHITECTURE.md)** — current architecture overview.
+- **[Repository Representation](./docs/REPOSITORY_REPRESENTATION.md)** — repository knowledge/representation model.
+- **[Safety Remediation](./docs/SAFETY_REMEDIATION.md)** — safety remediation record.
+- **[Threat Model](./docs/THREAT_MODEL.md)** — security and threat model.
+- **[Design Specification](./DESIGN.md)** — detailed historical/current design specification.
+- **[Comparison](./COMPARISON.md)** — NROS and ROS2 comparison material.
+- **[Audit](./AUDIT.md)** — repository audit and verification history.
+- **[Evidence Registry](./EVIDENCE_REGISTRY.md)** — feature, implementation, test, benchmark, and claim evidence.
+- **[Core Safety](./crates/nros-core/SAFETY.md)** — safety-related constraints and implementation notes for the core crate.
+
+## Building and Testing
+
+NROS is a Rust workspace. With an appropriate Rust toolchain installed, begin with:
 
 ```bash
-# Create new project
-nros init my_robot --template=mobile_base
-
-# Build with realtime profile
-nros build --profile=realtime
-
-# Run with live inspection dashboard
-nros run --inspect  # http://localhost:8080
+cargo check --workspace
+cargo test --workspace
 ```
 
-## ✅ Implementation Status — with Evidence Taxonomy (per AUDIT.md)
+For component-specific examples, tests, CI requirements, and verification procedures, use the documentation and repository workflows rather than treating the commands above as a complete validation procedure.
 
-> Statuses: SPECIFIED, SCAFFOLDED, SIMULATED, IMPLEMENTED, TESTED, BENCHMARKED, INTEGRATION-TESTED, HARDWARE-VALIDATED, PRODUCTION-READY, SAFETY-QUALIFIABLE
-> See `EVIDENCE_REGISTRY.md` for full mapping of feature → spec → implementation → test → benchmark → claim_allowed
-> `AUDIT.md` 7 passes with P0 findings CORE-001..004 fixed in Safety Gate v0.1
+## Repository Layout
 
-### Phase 1 - Core Infrastructure [SAFETY GATE FIXED]
-
-| Artifact (from §25) | Path | Status (Evidence) | Target Met / Notes |
-|---------------------|------|-------------------|-------------------|
-| **#1 Zero-Copy IPC** `nros-core-implementation` | `crates/nros-core/` + `implementations/nros-core-implementation/` | ✅ TESTED after Safety Gate v0.1: WriteGuard/ReadGuard guard-based, MaybeUninit + drop_in_place, reservation CAS prevents aliasing, monotonic clock, benchmark separated #[ignore] | Prototype 6.2μs repository-reported, needs independent verification, no longer asserts in `cargo test` (fixes CORE-007/008) |
-| **#2 Node Impl** `nros-node-example` | `crates/nros-node/` + `implementations/nros-node-example/` | ✅ IMPLEMENTED-TESTED: lifecycle, params runtime validation, deadline monitoring, e-stop atomic | Compile-time bounds checking / MDL compiler / proc macro `#[nros::node]` still SPECIFIED (AUDIT Pass 2) |
-| **#3 HAL Sensors** `nros-hal-sensors` | `crates/nros-hal/` + `implementations/nros-hal-sensors/` | 🟡 SIMULATED for DMA: unified trait + config + sync 10ms IMPLEMENTED, but DmaBuffer `Vec<u8>` not real DMA memfd/mmap/DMA-BUF, camera clone not zero-copy → label `SimulatedDmaBuffer` vs `RealDmaBuffer` | Good middleware API foundation, real hardware integration LOW |
-| **#4 Network Transport** `nros-network-transport` | `crates/nros-transport/` + `implementations/nros-network-transport/` | 🟡 IMPLEMENTED basic UDP/TCP/48B Twist/mDNS + SIMULATED for compression LZ4 `[1]+data`, checksum not verified, zero-copy FlatBuffers copy-based, multicast stub println → label `MockCompression` vs `Lz4Compression` | 48B serialization measured, compression 0.6 assumed not measured |
-| **#5 Distributed** `nros-distributed-system` | `crates/nros-distributed/` + `implementations/nros-distributed-system/` | 🟡 SIMULATED: RobotId/NodeRole/term/peer registry IMPLEMENTED, but Raft RequestVote uses a deterministic pseudo-random grant (not real RPC), replication `Ok(())` stub → label `SimulatedElection` vs `RaftElection` | Scaffolding useful, not Raft implementation |
-| **#6 CLI Tools** `nros-cli-tools` | `crates/nros-cli/` + `implementations/nros-cli-tools/` | ✅ IMPLEMENTED-TESTED after fix: command architecture IMPLEMENTED, `nros init` now generates compilable plain Rust (fixes P0 NROS-011), build system size 950KB/480KB SIMULATED not measured, topic list hard-coded SIMULATED | Golden test `cargo check` after init must pass per CI |
-| **#7 Simulation Engine** `nros-simulation-engine` | `crates/nros-sim/` + `implementations/nros-simulation-engine/` | ✅ IMPLEMENTED-TESTED: Vector3/Quaternion/Transform/RigidBody fixed timestep 240Hz deterministic, sensors gradient/raycast/noise, replay recording | Bullet backend SPECIFIED not proven, sim/real parity SCAFFOLDED |
-| **#8 NROS Studio** `nros-studio` | `crates/nros-studio/` | ✅ IMPLEMENTED: HTTP server, dashboard SVG flow + Three.js TF + timeline + Chart.js, SSE `/api/stream`, REST `/api/nodes/topics/tf/metrics/params` | Real telemetry SIMULATED `pseudo_rand()` + hard-coded nodes → label `DemoDataProvider` vs `LiveNrosDataProvider`, live param editing only Studio HashMap not real node |
-
-*Extended beyond §25 — implements §7.2 Studio, §7.3 Simulation, Phase 2 — now with evidence taxonomy and Safety Gate v0.1 fixes*
-
-**CI Gate:** `.github/workflows/ci.yml` on the audited branch (Pass 24, branch-bound with SHA manifest): `cargo fmt --check`, `cargo check --workspace --all-targets`, `cargo test --workspace --all-targets`, `cargo clippy --workspace` (report-only until a clippy-clean baseline is established; flip to `-D warnings` once clean), `cargo miri test -p nros-core` + `-p nros-types` as a **hard failure** (no `|| echo`), `nros init` golden test that builds the CLI and runs `cargo check` on both generated templates, and `cargo run -p nros-audit -- safety` as a structural soundness regression gate. Benchmarks are `continue-on-error` and report-only.
-
-**Run demos (requires Rust toolchain):**
-```bash
-cargo run -p nros-core --bin nros-core-demo
-cargo run -p nros-node --bin nros-node-demo
-cargo run -p nros-hal --bin nros-hal-demo
-cargo run -p nros-transport --bin nros-transport-demo
-cargo run -p nros-distributed --bin nros-distributed-demo
-cargo run -p nros-cli --bin nros-cli-demo  # full showcase init/build/topic/profile/fleet
-cargo run -p nros-cli --bin nros -- help
-cargo run -p nros-sim --bin nros-sim-demo  # physics + sensors deterministic replay
-cargo run -p nros-studio --bin nros-studio # Studio dashboard at http://localhost:8080
-cargo test -p nros-core -p nros-node -p nros-hal -p nros-transport -p nros-distributed -p nros-cli -p nros-sim -p nros-studio -- --nocapture
-```
-
-## 📂 Repository Structure
-
-```
+```text
 NROS/
-├── DESIGN.md              # Full design document v1.0 (2025 lines)
-├── COMPARISON.md          # NROS vs ROS2 benchmark (547 lines)
-├── AUDIT.md               # 7-pass verification (1511 lines)
-├── AUDIT_PASS_8_12.md     # Pass 8-12 deep verification (1209 lines)
-├── AUDIT_PASS_13_19.md    # Pass 13-19 transport/HAL zero-copy, vertical slice, gates (1282 lines)
-├── EVIDENCE_REGISTRY.md   # Evidence taxonomy
-├── Cargo.toml             # Workspace root (12 crates — 10 original + types + audit, 6/6 §25 + sim + studio + types + macros + facade + audit)
-├── crates/
-│   ├── nros-types/        # ✅ Canonical types — Twist, Vector3, Timestamp (fixes INTEGRATION-001)
-│   ├── nros-core/         # ✅ TESTED after Safety Gate v0.1.1 type-state WriteGuard->InitializedWriteGuard
-│   ├── nros-node/         # ✅ IMPLEMENTED-TESTED lifecycle, params runtime validation
-│   ├── nros-hal/          # 🟡 HAL Sensors — SimulatedDmaBuffer (Arc zero-copy) vs RealDmaBuffer SCAFFOLDED
-│   ├── nros-transport/    # 🟡 Network — UDP/TCP 48B Twist, MockCompression vs Lz4 with real feature, multicast real join, checksum verified
-│   ├── nros-distributed/  # 🟡 Distributed — SimulatedElection random_bool vs RaftElection SCAFFOLDED, ReplicationMode Simulated vs Real
-│   ├── nros-cli/          # ✅ CLI — init now generates compilable plain Rust (P0 NROS-011 fixed), build sizes SIMULATED
-│   ├── nros-sim/          # ✅ Sim — SimulatedPhysicsEngine vs BulletPhysicsEngine, sensors, replay
-│   ├── nros-studio/       # ✅ Studio — DemoDataProvider SIMULATED vs LiveNrosDataProvider SCAFFOLDED, SSE /api/stream, Three.js TF, force layout
-│   ├── nros-macros/       # ✅ Macros — passthrough SCAFFOLDED, allows #[nros::node] to compile
-│   ├── nros/              # ✅ Facade — aggregates crates + macros, prelude, init()/spin() placeholder
-│   ├── nros-audit/        # ✅ Audit — claim linter DOC-GATE Claim Strength per Pass 11
-│   └── static/index.html # Improved dashboard ready to paste
-└── implementations/       # Archival artifacts (7/7) — see implementations/README.md for canonical mapping
-    ├── nros-core-implementation/main.rs
-    ├── nros-node-example/main.rs
-    ├── nros-hal-sensors/main.rs
-    ├── nros-network-transport/main.rs
-    ├── nros-distributed-system/main.rs
-    ├── nros-cli-tools/main.rs
-    └── nros-simulation-engine/main.rs
+├── README.md
+├── DESIGN.md
+├── COMPARISON.md
+├── AUDIT.md
+├── EVIDENCE_REGISTRY.md
+├── docs/                 # Project documentation and verification material
+├── crates/               # Rust workspace crates
+├── implementations/      # Implementation/reference artifacts
+├── examples/             # Examples, where present
+└── .github/              # CI and repository automation
 ```
 
-## 🗺️ Roadmap
+## Development Direction
 
-- **Phase 1 (6mo)**: Microkernel, Zero-Copy IPC, Type System, HAL
-- **Phase 2 (4mo)**: CLI, NROS Studio, Sim Integration
-- **Phase 3 (6mo)**: Drivers, Navigation, Perception, ROS2 Bridge
-- **Phase 4 (6mo)**: Security Audit, Safety Cert, Perf Opt
-- **Phase 5-7**: AI Integration, Formal Verification, Quantum-Ready
+NROS is being developed incrementally. Near-term work centers on strengthening the existing foundations, separating real implementations from simulations and scaffolding, improving verification coverage, and making the documentation accurately reflect repository state.
 
-## 🤝 Get Involved
+Longer-term architectural work includes deeper hardware integration, distributed operation, robotics applications, richer tooling, safety qualification work, and other capabilities described by the project specifications. Those directions are **not claims of current availability**.
 
-```bash
-git clone https://github.com/Abdus2023/NROS
-cd NROS && cat DESIGN.md
-```
+## Contributing
 
-- Core runtime: MIT license (planned)
-- Standard library: Apache 2.0 (planned)
-- Discord: discord.gg/nros (vision)
-- Forum: discuss.nros.org (vision)
+Contributions should preserve the distinction between specification, implementation, and evidence. When adding a capability:
+
+1. Define or update the relevant specification.
+2. Implement the smallest verifiable increment.
+3. Add appropriate tests and evidence.
+4. Update the corresponding status and documentation.
+5. Do not describe simulated or scaffolded behavior as production functionality.
+
+See the repository documentation for the detailed development and verification workflow.
+
+## License and Project Links
+
+Refer to the repository metadata and current project documentation for authoritative licensing and community information.
 
 ---
 
-*This repository currently hosts the design specification. Implementation artifacts described in Section 25 demonstrate feasibility and are being ported to this codebase.*
+**NROS documentation principle:** describe what the repository can demonstrate today, distinguish it from what it specifies for tomorrow, and make the evidence for important claims discoverable.
