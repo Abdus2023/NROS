@@ -318,6 +318,19 @@ fn check_safety_invariants() {
         println!("✅ E0252: prelude sources canonical domain types from nros_types (single source)");
     }
 
+    // RingBuffer Drop must iterate by count (wrapping_sub), not `for idx in read..write`,
+    // which leaks slots when u64 indices wrap (Pass 24 §4.6).
+    let drop_block = core_lib.split("impl<T> Drop for RingBuffer<T>").nth(1);
+    if let Some(block) = drop_block {
+        let body = block.split("\n}\n").next().unwrap_or(block);
+        if body.contains("for idx in read..write") {
+            println!("❌ Drop REGRESSED: RingBuffer uses `for idx in read..write` (leaks on u64 wraparound)");
+            failures += 1;
+        } else if body.contains("wrapping_sub(read)") {
+            println!("✅ Drop: RingBuffer drains by wrapping_sub count (u64-wraparound safe)");
+        }
+    }
+
     println!("\n🔒 SAFETY-GATE result: {} failure(s)", failures);
     if failures > 0 {
         // Exit non-zero so CI doc-gate fails on structural regression.
