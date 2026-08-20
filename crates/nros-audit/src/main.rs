@@ -26,7 +26,7 @@ fn main() {
         _ => {
             println!("Usage: nros-audit [claims|workspace|ci|benchmarks|safety|all]");
             println!("  claims      — Check README claims vs EVIDENCE_REGISTRY claim_allowed");
-            println!("  workspace   — Check README 8 crates vs Cargo.toml 11 crates (DOC-001)");
+            println!("  workspace   — Check README crate count vs Cargo.toml members (DOC-001)");
             println!("  ci          — Check .github/workflows/ci.yml exists on audited ref");
             println!("  benchmarks  — Check benchmark claims vs artifacts");
             println!("  safety      — Check Pass 24 soundness invariants in source");
