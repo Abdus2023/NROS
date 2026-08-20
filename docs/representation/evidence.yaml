@@ -1,0 +1,75 @@
+schema_version: "0.1"
+kind: evidence_catalog
+project: NROS
+
+rules:
+  - id: EVID-001
+    rule: source_presence_is_not_execution_evidence
+  - id: EVID-002
+    rule: configured_ci_is_not_passed_ci
+  - id: EVID-003
+    rule: benchmark_artifact_is_not_independent_validation
+  - id: EVID-004
+    rule: simulated_implementation_cannot_support_real_backend_claim
+  - id: EVID-005
+    rule: hardware_validation_requires_actual_hardware_evidence
+
+records:
+  - capability: CORE-IPC-001
+    source:
+      status: present
+      paths:
+        - crates/nros-core/src
+    tests:
+      status: present
+    ci:
+      status: unknown
+    miri:
+      status: unknown
+    benchmark:
+      status: present_non_gating
+    hardware:
+      status: not_applicable
+
+  - capability: HAL-002
+    source:
+      status: absent
+    tests:
+      status: absent
+    ci:
+      status: not_applicable
+    benchmark:
+      status: absent
+    hardware:
+      status: absent
+
+  - capability: DIST-002
+    source:
+      status: scaffolded_only
+    tests:
+      status: state_machine_only
+    ci:
+      status: unknown
+    benchmark:
+      status: absent
+    hardware:
+      status: absent
+
+  - capability: STUDIO-002
+    source:
+      status: scaffolded_only
+    tests:
+      status: absent_for_live_telemetry
+    ci:
+      status: unknown
+    benchmark:
+      status: absent
+    hardware:
+      status: absent
+
+verification_state:
+  workflow_definition: present_or_staged
+  workflow_execution: must_be_observed
+  miri_execution: must_be_observed
+  benchmark_execution: must_be_observed
+  hardware_validation: must_be_observed

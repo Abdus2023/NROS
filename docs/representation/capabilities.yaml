@@ -1,0 +1,124 @@
+schema_version: "0.1"
+kind: capability_catalog
+project: NROS
+
+state_vocabulary:
+  - SPECIFIED
+  - SCAFFOLDED
+  - SIMULATED
+  - IMPLEMENTED
+  - TESTED
+  - BENCHMARKED
+  - INTEGRATION-TESTED
+  - HARDWARE-VALIDATED
+  - PRODUCTION-READY
+  - SAFETY-QUALIFIABLE
+
+capabilities:
+  - id: CORE-IPC-001
+    name: SPSC ring buffer
+    crate: nros-core
+    specification: DESIGN.md#14.1
+    state: TESTED
+    claim: allowed_with_scope
+    limitations:
+      - benchmark_is_non_gating
+      - MPMC_not_implemented
+
+  - id: CORE-IPC-002
+    name: Shared-memory memfd/mmap IPC
+    crate: nros-core
+    specification: DESIGN.md#14.2
+    state: SPECIFIED
+    claim: forbidden
+
+  - id: NODE-001
+    name: Node lifecycle
+    crate: nros-node
+    specification: DESIGN.md#3.1
+    state: IMPLEMENTED
+    claim: allowed_with_scope
+
+  - id: NODE-002
+    name: Compile-time graph and message validation
+    crate: nros-node
+    specification: DESIGN.md#5
+    state: SPECIFIED
+    claim: forbidden
+
+  - id: HAL-001
+    name: Unified sensor abstraction
+    crate: nros-hal
+    specification: DESIGN.md#6.1
+    state: IMPLEMENTED
+    claim: allowed_with_scope
+
+  - id: HAL-002
+    name: Real V4L2/DMA-BUF camera path
+    crate: nros-hal
+    specification: DESIGN.md#16.4
+    state: SPECIFIED
+    claim: forbidden
+
+  - id: TRANSPORT-001
+    name: UDP transport
+    crate: nros-transport
+    specification: DESIGN.md#14.3
+    state: IMPLEMENTED
+    claim: allowed_with_scope
+
+  - id: TRANSPORT-002
+    name: True zero-copy network serialization
+    crate: nros-transport
+    specification: DESIGN.md#14.3
+    state: SCAFFOLDED
+    claim: forbidden
+
+  - id: DIST-001
+    name: Distributed leader election state machine
+    crate: nros-distributed
+    specification: DESIGN.md#17.1
+    state: IMPLEMENTED
+    claim: allowed_as_scaffolding
+
+  - id: DIST-002
+    name: Real Raft protocol and replicated state
+    crate: nros-distributed
+    specification: DESIGN.md#17.1
+    state: SCAFFOLDED
+    claim: forbidden
+
+  - id: SIM-001
+    name: Deterministic simulation primitives
+    crate: nros-sim
+    specification: DESIGN.md#7.3
+    state: TESTED
+    claim: allowed_with_scope
+
+  - id: STUDIO-001
+    name: Studio HTTP dashboard architecture
+    crate: nros-studio
+    specification: DESIGN.md#7.2
+    state: IMPLEMENTED
+    claim: allowed_with_scope
+
+  - id: STUDIO-002
+    name: Production live telemetry
+    crate: nros-studio
+    specification: DESIGN.md#7.2
+    state: SCAFFOLDED
+    claim: forbidden
+
+  - id: CLI-001
+    name: nros init project generation
+    crate: nros-cli
+    specification: AUDIT.md#NROS-011
+    state: TESTED
+    claim: allowed_with_scope
+
+  - id: AUDIT-001
+    name: Repository evidence and claim validation
+    crate: nros-audit
+    specification: AUDIT.md
+    state: IMPLEMENTED
+    claim: allowed_with_scope

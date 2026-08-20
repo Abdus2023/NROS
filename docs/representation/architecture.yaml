@@ -1,0 +1,68 @@
+schema_version: "0.1"
+kind: architecture
+project: NROS
+source_of_truth: DESIGN.md
+
+layers:
+  - id: application
+    name: Application Layer
+    intent: Robot programs and application behavior
+  - id: api_tools
+    name: High-Level APIs and Tools
+    intent: Navigation, manipulation, perception, CLI, and developer tooling
+  - id: core_services
+    name: Core Services
+    intent: Lifecycle, parameters, logging, TF, and execution services
+  - id: communication
+    name: Communication Substrate
+    intent: Local IPC and remote transport
+  - id: runtime
+    name: NROS Runtime / Scheduler
+    intent: Deterministic execution and resource management
+  - id: hal
+    name: Hardware Abstraction Layer
+    intent: Sensors, actuators, and heterogeneous compute
+
+workspace:
+  crates:
+    - id: nros-types
+      role: canonical_types
+      layer: core_services
+    - id: nros-core
+      role: runtime_ipc
+      layer: runtime
+    - id: nros-node
+      role: node_model
+      layer: core_services
+    - id: nros-hal
+      role: hardware_abstraction
+      layer: hal
+    - id: nros-transport
+      role: network_transport
+      layer: communication
+    - id: nros-distributed
+      role: distributed_coordination
+      layer: core_services
+    - id: nros-cli
+      role: developer_tooling
+      layer: api_tools
+    - id: nros-sim
+      role: simulation
+      layer: api_tools
+    - id: nros-studio
+      role: observability
+      layer: api_tools
+    - id: nros-macros
+      role: procedural_macros
+      layer: api_tools
+    - id: nros
+      role: public_facade
+      layer: api_tools
+    - id: nros-audit
+      role: verification_tooling
+      layer: core_services
+
+separation_rules:
+  - architecture_intent_is_not_implementation_evidence
+  - crate_topology_is_not_runtime_topology
+  - documented_capability_requires_independent_evidence_state

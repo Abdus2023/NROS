@@ -1,0 +1,52 @@
+schema_version: "0.1"
+kind: representation_snapshot
+project: NROS
+
+identity:
+  repository: Abdus2023/NROS
+  branch: arena/repository-representation
+
+source_revision:
+  commit: "8134625afebfa8cd29a233d8a5aa0c27492ce47b"
+  relation: represented_repository_state
+
+snapshot_revision:
+  relation: commit_containing_this_snapshot
+  value: "generated_at_commit"
+
+representation:
+  schema: "0.1"
+  manifests:
+    - architecture.yaml
+    - capabilities.yaml
+    - evidence.yaml
+    - claims.yaml
+
+content_integrity:
+  algorithm: git_blob_sha1
+  source_revision_blobs:
+    architecture.yaml: "04d3a0b15f27d335a64a82de6110344481d87d54"
+    capabilities.yaml: "78c21edaedfe5b491a738bbbdbd8552a5e39f45e"
+    evidence.yaml: "21676bc4f4ae5e8cfdbbd6ba68b4f80fa5ee646c"
+    claims.yaml: "f4773c3a2bb30ed025ce1347c07817508340afb1"
+
+verification_contract:
+  mode: source_revision_content_match
+  required_checks:
+    - source_revision_resolves
+    - manifest_exists_at_source_revision
+    - manifest_blob_matches_recorded_fingerprint
+  failure_policy: representation_gate_fails
+
+purpose: >-
+  Pin the representation to an explicit source revision and record the Git
+  blob identities of its normative manifests. The snapshot is descriptive
+  identity evidence; it does not assert that CI, tests, benchmarks, Miri, or
+  hardware validation succeeded.
+
+non_inference_rules:
+  - source_revision_is_not_execution_success
+  - snapshot_revision_is_not_release_status
+  - branch_identity_is_not_release_status
+  - manifest_presence_is_not_implementation_evidence
+  - content_fingerprint_is_not_verification_success

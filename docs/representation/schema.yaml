@@ -1,0 +1,89 @@
+schema_version: "0.1"
+kind: representation_schema
+project: NROS
+
+purpose: >-
+  Normative structural contract for the repository representation manifests.
+  This schema describes the minimum fields and cross-document relationships;
+  it does not infer implementation or verification success.
+
+documents:
+  architecture:
+    file: architecture.yaml
+    kind: architecture
+    required:
+      - schema_version
+      - kind
+      - project
+      - source_of_truth
+      - layers
+      - workspace
+      - separation_rules
+
+  capabilities:
+    file: capabilities.yaml
+    kind: capability_catalog
+    required:
+      - schema_version
+      - kind
+      - project
+      - state_vocabulary
+      - capabilities
+    record_required:
+      - id
+      - name
+      - crate
+      - specification
+      - state
+      - claim
+    relationships:
+      evidence: one_record_per_capability
+      claim_policy: claim_class_must_exist
+
+  evidence:
+    file: evidence.yaml
+    kind: evidence_catalog
+    required:
+      - schema_version
+      - kind
+      - project
+      - rules
+      - records
+      - verification_state
+    record_required:
+      - capability
+      - source
+      - tests
+      - ci
+      - miri
+      - benchmark
+      - hardware
+    relationships:
+      capability: must_reference_existing_capability
+
+  claims:
+    file: claims.yaml
+    kind: claim_policy
+    required:
+      - schema_version
+      - kind
+      - project
+      - claim_classes
+      - claims
+      - invariants
+    record_required:
+      - id
+      - subject
+      - class
+    relationships:
+      class: must_reference_existing_claim_class
+
+invariants:
+  - no_specification_implies_implementation
+  - no_claim_without_evidence_record
+  - no_real_claim_from_simulated_backend
+  - no_hardware_claim_without_hardware_evidence
+  - no_ci_pass_claim_without_executed_successful_run
+  - no_performance_validation_claim_from_non_gating_benchmark_only
+  - every_workspace_crate_must_be_represented
+  - every_capability_must_be_evidence_linked
