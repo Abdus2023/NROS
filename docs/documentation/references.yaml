@@ -3,100 +3,107 @@ kind: documentation_reference_catalog
 project: NROS
 
 purpose: >-
-  Explicit catalog of important documentation-to-document and
-  documentation-to-external references. Resolution status is recorded
-  without silently converting unresolved references into evidence.
+  Explicit catalog of important documentation-to-document references.
+  Resolution status is recorded without silently converting references into evidence.
 
 references:
   - source: DOC-README
-    target: DOC-DESIGN
+    target: DOC-ARCHITECTURE
     status: resolved
     kind: internal_document
-    note: README directs readers toward the repository design and architecture material.
-
   - source: DOC-README
+    target: DOC-GETTING-STARTED
+    status: resolved
+    kind: internal_document
+  - source: DOC-README
+    target: DOC-VERIFICATION
+    status: resolved
+    kind: internal_document
+  - source: DOC-DESIGN
+    target: DOC-ARCHITECTURE
+    status: resolved
+    kind: internal_document
+  - source: DOC-DESIGN
+    target: DOC-MIGRATION
+    status: resolved
+    kind: internal_document
+  - source: DOC-COMPARISON
     target: DOC-EVIDENCE
     status: resolved
     kind: internal_document
-    note: Capability claims are interpreted against the evidence registry.
-
-  - source: DOC-DESIGN
+  - source: DOC-COMPARISON
+    target: DOC-SAFETY
+    status: resolved
+    kind: internal_document
+  - source: DOC-AUDIT
+    target: DOC-DOCUMENTATION-INTEGRITY
+    status: resolved
+    kind: internal_document
+  - source: DOC-AUDIT
+    target: DOC-VERIFICATION
+    status: resolved
+    kind: internal_document
+  - source: DOC-EVIDENCE
+    target: DOC-VERIFICATION
+    status: resolved
+    kind: internal_document
+  - source: DOC-EVIDENCE
     target: DOC-REPRESENTATION
     status: resolved
     kind: internal_document
-    note: Design is an upstream source for repository representation.
-
-  - source: DOC-AUDIT
-    target: DOC-EVIDENCE
+  - source: DOC-REFERENCE
+    target: DOC-IMPLEMENTATIONS
     status: resolved
     kind: internal_document
-    note: Audit findings rely on explicit evidence classification.
-
-  - source: DOC-AUDIT
+  - source: DOC-REFERENCE
+    target: DOC-DEVELOPMENT
+    status: resolved
+    kind: internal_document
+  - source: DOC-SAFETY
     target: DOC-THREAT-MODEL
     status: resolved
     kind: internal_document
-    note: Safety and security findings are related to the threat model.
-
-  - source: DOC-THREAT-MODEL
+  - source: DOC-SAFETY
     target: DOC-CORE-SAFETY
     status: resolved
     kind: internal_document
-    note: Core safety documentation supplies implementation-specific safety constraints.
-
-  - source: DOC-CI
+  - source: DOC-VERIFICATION
     target: DOC-EVIDENCE
     status: resolved
     kind: internal_document
-    note: CI execution contributes verification evidence but does not itself prove all capabilities.
-
-  - source: DOC-IMPLEMENTATIONS
+  - source: DOC-VERIFICATION
+    target: DOC-CI
+    status: resolved
+    kind: internal_document
+  - source: DOC-MIGRATION
     target: DOC-DESIGN
     status: resolved
     kind: internal_document
-    note: Implementation hierarchy is documented in relation to system design.
-
-  - source: DOC-REPRESENTATION-SCHEMA
-    target: DOC-REPRESENTATION-ARCH
+  - source: DOC-MIGRATION
+    target: DOC-AUDIT
     status: resolved
     kind: internal_document
-
-  - source: DOC-REPRESENTATION-SCHEMA
-    target: DOC-REPRESENTATION-CAPABILITIES
+  - source: DOC-MIGRATION
+    target: DOC-COMPARISON
     status: resolved
     kind: internal_document
-
-  - source: DOC-REPRESENTATION-SCHEMA
-    target: DOC-REPRESENTATION-EVIDENCE
+  - source: DOC-DOCUMENTATION-INTEGRITY
+    target: DOC-DOCUMENTATION-MANIFESTS
     status: resolved
     kind: internal_document
-
-  - source: DOC-REPRESENTATION-SCHEMA
-    target: DOC-REPRESENTATION-CLAIMS
+  - source: DOC-DOCUMENTATION-MANIFESTS
+    target: DOC-DOCUMENTATION-SCHEMA
     status: resolved
     kind: internal_document
-
-  - source: DOC-REPRESENTATION-SCHEMA
-    target: DOC-REPRESENTATION-SNAPSHOT
+  - source: DOC-DOCUMENTATION-MANIFESTS
+    target: DOC-REPRESENTATION-MANIFESTS
     status: resolved
     kind: internal_document
-
-  - source: DOC-DOCUMENTATION-SCHEMA
-    target: DOC-REPRESENTATION-SCHEMA
-    status: resolved
-    kind: internal_document
-    note: Documentation representation follows the repository representation's evidence-aware model.
-
-  - source: DOC-REPRESENTATION-SNAPSHOT
-    target: DOC-DESIGN
-    status: resolved
-    kind: internal_document
-    note: Snapshot records representation state at a pinned repository revision.
 
 reference_policy:
   resolved: Reference target is represented by a known repository document or explicit artifact.
-  unresolved: Reference is known to exist conceptually but its target cannot yet be established.
-  external: Reference leaves the repository boundary and requires independent external resolution.
+  unresolved: Reference is known conceptually but its target cannot yet be established.
+  external: Reference leaves the repository boundary and requires independent validation.
   intentionally_missing: Absence is deliberate and documented.
   unknown: Resolution has not yet been established.
 
