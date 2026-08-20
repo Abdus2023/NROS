@@ -1,0 +1,143 @@
+schema_version: "0.1"
+kind: documentation_representation_schema
+project: NROS
+
+purpose: >-
+  Normative structural contract for representing the repository's
+  documentation system. This schema records document identity, authority,
+  relationships, references, and repository state without treating narrative
+  documentation as implementation or verification evidence.
+
+documents:
+  inventory:
+    file: inventory.yaml
+    kind: documentation_inventory
+    required:
+      - schema_version
+      - kind
+      - project
+      - documents
+    record_required:
+      - id
+      - path
+      - type
+      - authority
+      - status
+      - purpose
+
+  authorities:
+    file: authorities.yaml
+    kind: documentation_authority_catalog
+    required:
+      - schema_version
+      - kind
+      - project
+      - authorities
+    record_required:
+      - id
+      - name
+      - authority_level
+      - scope
+
+  relationships:
+    file: relationships.yaml
+    kind: documentation_relationship_graph
+    required:
+      - schema_version
+      - kind
+      - project
+      - relationships
+    record_required:
+      - source
+      - relation
+      - target
+
+  references:
+    file: references.yaml
+    kind: documentation_reference_catalog
+    required:
+      - schema_version
+      - kind
+      - project
+      - references
+    record_required:
+      - source
+      - target
+      - status
+
+  snapshot:
+    file: snapshot.yaml
+    kind: documentation_representation_snapshot
+    required:
+      - schema_version
+      - kind
+      - project
+      - repository
+      - source_revision
+      - documents
+
+vocabularies:
+  document_types:
+    - normative
+    - specification
+    - architecture
+    - design
+    - audit
+    - verification
+    - safety
+    - security
+    - operational
+    - guide
+    - reference
+    - generated
+    - evidence
+    - policy
+
+  document_status:
+    - active
+    - draft
+    - superseded
+    - archived
+    - unknown
+
+  authority_levels:
+    - canonical
+    - authoritative
+    - supporting
+    - derived
+    - informational
+
+  relationship_types:
+    - defines
+    - specifies
+    - constrains
+    - describes
+    - verifies
+    - evidences
+    - references
+    - depends_on
+    - supersedes
+    - implements
+    - derived_from
+    - contradicts
+
+  reference_status:
+    - resolved
+    - unresolved
+    - external
+    - intentionally_missing
+    - unknown
+
+invariants:
+  - every_document_path_must_exist
+  - every_document_id_must_be_unique
+  - every_relationship_source_must_exist
+  - every_relationship_target_must_exist
+  - every_reference_source_must_exist
+  - canonical_authority_must_have_explicit_scope
+  - superseded_documents_must_identify_successor_when_one_exists
+  - documentation_presence_is_not_implementation_evidence
+  - documentation_authority_is_not_verification_success
+  - unresolved_references_must_remain_visible
+  - contradictory_documentation_must_not_be_silently_resolved
+  - snapshot_must_pin_a_repository_revision
