@@ -108,6 +108,7 @@ vocabularies:
     - informational
 
   relationship_types:
+    - governs
     - defines
     - specifies
     - constrains
