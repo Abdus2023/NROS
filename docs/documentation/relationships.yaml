@@ -1,0 +1,157 @@
+schema_version: "0.1"
+kind: documentation_relationship_graph
+project: NROS
+
+relationships:
+  - source: DOC-REPRESENTATION
+    relation: governs
+    target: DOC-REPRESENTATION-SCHEMA
+    rationale: Repository representation defines the role of machine-readable representation artifacts.
+
+  - source: DOC-DESIGN
+    relation: specifies
+    target: DOC-REPRESENTATION
+    rationale: System design is an upstream specification input to repository representation.
+
+  - source: DOC-DESIGN
+    relation: constrains
+    target: DOC-IMPLEMENTATIONS
+    rationale: Design requirements constrain which implementation hierarchy is authoritative.
+
+  - source: DOC-EVIDENCE
+    relation: constrains
+    target: DOC-README
+    rationale: Evidence classification limits how advertised capabilities may be interpreted.
+
+  - source: DOC-AUDIT
+    relation: verifies
+    target: DOC-EVIDENCE
+    rationale: Audit records inspect evidence quality and repository state.
+
+  - source: DOC-AUDIT
+    relation: verifies
+    target: DOC-IMPLEMENTATIONS
+    rationale: Audit findings evaluate implementation integrity and authoritative source boundaries.
+
+  - source: DOC-THREAT-MODEL
+    relation: constrains
+    target: DOC-DESIGN
+    rationale: Safety and concurrency threats establish constraints on system design.
+
+  - source: DOC-CORE-SAFETY
+    relation: constrains
+    target: DOC-IMPLEMENTATIONS
+    rationale: Core safety rules constrain implementation behavior and verification requirements.
+
+  - source: DOC-CI
+    relation: verifies
+    target: DOC-IMPLEMENTATIONS
+    rationale: CI is an execution mechanism for build, test, lint, and verification checks.
+
+  - source: DOC-IMPLEMENTATIONS
+    relation: implements
+    target: DOC-DESIGN
+    rationale: Authoritative crates are intended to implement the documented system design.
+
+  - source: DOC-REPRESENTATION-SCHEMA
+    relation: governs
+    target: DOC-REPRESENTATION-ARCH
+    rationale: Representation schema defines required manifest structure.
+
+  - source: DOC-REPRESENTATION-SCHEMA
+    relation: governs
+    target: DOC-REPRESENTATION-CAPABILITIES
+    rationale: Capability manifest is part of the repository representation contract.
+
+  - source: DOC-REPRESENTATION-SCHEMA
+    relation: governs
+    target: DOC-REPRESENTATION-EVIDENCE
+    rationale: Evidence manifest is part of the repository representation contract.
+
+  - source: DOC-REPRESENTATION-SCHEMA
+    relation: governs
+    target: DOC-REPRESENTATION-CLAIMS
+    rationale: Claims manifest is part of the repository representation contract.
+
+  - source: DOC-REPRESENTATION-SCHEMA
+    relation: governs
+    target: DOC-REPRESENTATION-SNAPSHOT
+    rationale: Snapshot manifest is part of the repository representation contract.
+
+  - source: DOC-REPRESENTATION-SCHEMA
+    relation: governs
+    target: DOC-DOCUMENTATION-SCHEMA
+    rationale: Documentation representation extends the same evidence-aware representation philosophy.
+
+  - source: DOC-REPRESENTATION-CAPABILITIES
+    relation: references
+    target: DOC-REPRESENTATION-EVIDENCE
+    rationale: Capabilities are classified against explicit evidence records.
+
+  - source: DOC-REPRESENTATION-CLAIMS
+    relation: constrains
+    target: DOC-REPRESENTATION-CAPABILITIES
+    rationale: Claim classes determine which capability states support which public claims.
+
+  - source: DOC-REPRESENTATION-SNAPSHOT
+    relation: evidences
+    target: DOC-REPRESENTATION-SCHEMA
+    rationale: Snapshot records representation identity and source revision.
+
+  - source: DOC-REPRESENTATION-SNAPSHOT
+    relation: evidences
+    target: DOC-REPRESENTATION-ARCH
+    rationale: Snapshot pins the represented architecture state.
+
+  - source: DOC-REPRESENTATION-SNAPSHOT
+    relation: evidences
+    target: DOC-REPRESENTATION-CAPABILITIES
+    rationale: Snapshot pins the represented capability state.
+
+  - source: DOC-REPRESENTATION-SNAPSHOT
+    relation: evidences
+    target: DOC-REPRESENTATION-EVIDENCE
+    rationale: Snapshot pins the represented evidence state.
+
+  - source: DOC-REPRESENTATION-SNAPSHOT
+    relation: evidences
+    target: DOC-REPRESENTATION-CLAIMS
+    rationale: Snapshot pins the represented claim state.
+
+  - source: DOC-AUDIT-PASS-8-12
+    relation: superseded_by
+    target: DOC-AUDIT
+    rationale: Historical audit pass is retained for traceability but current audit authority is consolidated in AUDIT.md.
+
+  - source: DOC-AUDIT-PASS-13-19
+    relation: superseded_by
+    target: DOC-AUDIT
+    rationale: Historical audit pass is retained for traceability.
+
+  - source: DOC-AUDIT-PASS-20-23
+    relation: superseded_by
+    target: DOC-AUDIT
+    rationale: Historical audit pass is retained for traceability.
+
+  - source: DOC-AUDIT-PASS-24
+    relation: superseded_by
+    target: DOC-AUDIT
+    rationale: Historical audit pass is retained for traceability.
+
+  - source: DOC-AUDIT-PASS-25
+    relation: superseded_by
+    target: DOC-AUDIT
+    rationale: Historical audit pass is retained for traceability.
+
+  - source: DOC-AUDIT-PASS-26
+    relation: superseded_by
+    target: DOC-AUDIT
+    rationale: Historical audit pass is retained for traceability.
+
+invariants:
+  - relationships_are_directional
+  - every_endpoint_must_exist_in_inventory
+  - historical_records_must_not_be_treated_as_current_authority
+  - verifies_does_not_mean_success_without_execution_evidence
+  - references_must_not_be_interpreted_as_implementation
+  - supersession_preserves_historical_traceability
