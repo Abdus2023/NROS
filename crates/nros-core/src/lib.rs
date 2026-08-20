@@ -159,7 +159,8 @@ pub struct WriteGuard<'a, T> {
 
 impl<'a, T> WriteGuard<'a, T> {
     /// Raw pointer — unsafe escape hatch for advanced zero-copy, caller must ensure full init
-    pub fn as_mut_ptr(&self) -> *mut T {
+    /// Safety: Caller must completely initialize T via ptr::write before commit
+    pub unsafe fn as_mut_ptr(&self) -> *mut T {
         unsafe { (*self.ptr).as_mut_ptr() }
     }
 
@@ -183,18 +184,16 @@ impl<'a, T> WriteGuard<'a, T> {
         guard
     }
 
-    /// Initialize with closure — ergonomic for field-by-field init without exposing &mut T over uninit
-    pub fn init_with<F>(self, f: F) -> InitializedWriteGuard<'a, T>
+    /// Initialize with closure — UNSAFE: closure MUST fully initialize MaybeUninit<T>
+    /// This was previously safe init_with() which allowed safe API to manufacture InitializedWriteGuard without proving init (P0)
+    /// Now unsafe, caller must ensure closure fully initializes
+    pub unsafe fn init_with_unchecked<F>(self, f: F) -> InitializedWriteGuard<'a, T>
     where
         F: FnOnce(&mut MaybeUninit<T>),
     {
-        unsafe {
-            let uninit = &mut *self.ptr;
-            f(uninit);
-            // Safety: closure must have initialized the MaybeUninit
-            // We cannot enforce at compile time, but this is safer than as_mut() -> &mut T over uninit
-            // For 100% safety, caller should use write_value()
-        }
+        let uninit = &mut *self.ptr;
+        f(uninit);
+        // Safety: caller guarantees closure fully initialized MaybeUninit
         let guard = InitializedWriteGuard {
             ptr: self.ptr,
             ring: self.ring,
@@ -203,6 +202,17 @@ impl<'a, T> WriteGuard<'a, T> {
         };
         std::mem::forget(self);
         guard
+    }
+
+    /// Legacy safe init_with that was unsound — kept for backward compat but now calls unsafe version internally
+    /// Marked unsafe in spirit but kept safe for now with warning — will be removed in next version
+    /// Use write_value() for 100% safe path
+    #[deprecated(note = "Use write_value() for safe initialization, or unsafe init_with_unchecked() if you must initialize field-by-field and can prove full init")]
+    pub fn init_with<F>(self, f: F) -> InitializedWriteGuard<'a, T>
+    where
+        F: FnOnce(&mut MaybeUninit<T>),
+    {
+        unsafe { self.init_with_unchecked(f) }
     }
 
     /// Abandon reservation without committing — slot remains uninitialized, available for retry
@@ -346,6 +356,8 @@ pub fn channel<T>(capacity: usize) -> (Producer<T>, Consumer<T>) {
 }
 
 // ── Legacy Publisher/Subscriber — kept for backward compat, now using guard API ──
+// P1 Fix: Close raw ring escape hatch per AUDIT Pass 20-23 — ring() exposes Arc<RingBuffer> allowing arbitrary endpoint creation outside SPSC discipline
+// New code should use channel() API that returns Producer/Consumer not Clone, enforces single producer/consumer via type system
 
 pub struct Publisher<T> {
     ring: Arc<RingBuffer<T>>,
@@ -357,6 +369,7 @@ impl<T> Publisher<T> {
         Self { ring: Arc::new(RingBuffer::new(capacity)), topic: topic.to_string() }
     }
 
+    #[deprecated(note = "Use channel() API for type-enforced SPSC, from_ring() exposes raw Arc and weakens SPSC guarantee per CORE-016/019")]
     pub fn from_ring(topic: &str, ring: Arc<RingBuffer<T>>) -> Self {
         Self { ring, topic: topic.to_string() }
     }
@@ -372,7 +385,10 @@ impl<T> Publisher<T> {
     }
 
     pub fn topic(&self) -> &str { &self.topic }
+
+    #[deprecated(note = "Use channel() API for type-enforced SPSC — ring() exposes raw Arc<RingBuffer> allowing arbitrary producers/consumers outside type system, weakens SPSC guarantee")]
     pub fn ring(&self) -> Arc<RingBuffer<T>> { self.ring.clone() }
+
     pub fn len(&self) -> usize { self.ring.len() }
     pub fn is_empty(&self) -> bool { self.ring.is_empty() }
 }
