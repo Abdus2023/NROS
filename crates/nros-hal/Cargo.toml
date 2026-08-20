@@ -1,0 +1,19 @@
+[package]
+name = "nros-hal"
+version.workspace = true
+edition.workspace = true
+description = "NROS HAL: Unified sensor interface, zero-copy DMA, multi-sensor synchronization, hardware triggers"
+license.workspace = true
+
+[lib]
+name = "nros_hal"
+path = "src/lib.rs"
+
+[[bin]]
+name = "nros-hal-demo"
+path = "src/main.rs"
+
+[dependencies]
+# Pass 24: removed unused nros-core / nros-types path deps. HAL keeps its own local
+# domain types (Timestamp, Vector3, Image, ...) until the canonical migration (I-007).
+

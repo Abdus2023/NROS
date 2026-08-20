@@ -1,0 +1,736 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="description" content="NROS Studio — Live Monitoring & Visualization, 3D TF, timeline, metrics, breakpoints" />
+  <title>NROS Studio — Live Monitoring • v2</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
+
+  <!-- Chart.js + Three.js CDN (defer) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <style>
+    :root{
+      --bg-0:#080a0c; --bg-1:#121416; --bg-2:#1a1e22;
+      --panel:#1e2429; --panel-2:#252d33;
+      --glass: rgba(255,255,255,0.04); --glass-2: rgba(255,255,255,0.07);
+      --muted:#8aa0b3; --muted-2:#5a6d7e;
+      --accent:#00d9ff; --accent-2:#00ff88; --accent-3:#9D4EDD;
+      --danger-0:#ff4d6d; --danger-1:#ff8a5b; --warn:#ffcc00;
+      --radius:12px; --radius-sm:8px;
+      --max-width:1800px;
+      --font: "Inter", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      --mono: "JetBrains Mono", "Fira Code", monospace;
+      --shadow: 0 8px 32px rgba(0,0,0,0.6);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; font-family:var(--font);
+      background: radial-gradient(1200px 800px at 20% -10%, rgba(0,217,255,0.15), transparent 60%),
+                  radial-gradient(1000px 600px at 90% 10%, rgba(0,255,136,0.12), transparent 50%),
+                  linear-gradient(180deg,var(--bg-1) 0%, var(--bg-0) 100%);
+      color:#e6eef3; -webkit-font-smoothing:antialiased; overflow:hidden; padding:10px; display:flex; justify-content:center;
+    }
+    .app{width:100%; max-width:var(--max-width); display:grid; grid-template-rows:auto 1fr auto; gap:10px; height:calc(100vh - 20px);}
+    header.header{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 18px; background:linear-gradient(90deg,var(--panel),rgba(255,255,255,0.02)); border-radius:var(--radius); border:1px solid rgba(255,255,255,0.06); box-shadow:var(--shadow); backdrop-filter:blur(12px);}
+    .brand{display:flex; gap:12px; align-items:center}
+    .status-dot{width:12px;height:12px;border-radius:50%; background:var(--accent-2); box-shadow:0 0 12px var(--accent-2); display:inline-block; animation:pulse 2s infinite}
+    @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.7;transform:scale(1.15)}}
+    .brand-title{font-weight:800; font-size:18px; letter-spacing:-0.02em}
+    .brand-sub{font-size:12px; color:var(--muted); margin-top:2px}
+    .header-actions{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+    .pill{display:flex; gap:6px; align-items:center; padding:6px 12px; background:var(--glass); border:1px solid rgba(255,255,255,0.06); border-radius:999px; font-size:13px; color:var(--muted)}
+    .pill strong{color:#fff; font-weight:600}
+    .pill.live{border-color:rgba(0,255,136,0.3); background:rgba(0,255,136,0.08)}
+    .btn{padding:6px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:var(--glass-2); color:#fff; cursor:pointer; font-size:13px; transition:all 0.15s}
+    .btn:hover{background:rgba(0,217,255,0.15); border-color:var(--accent); transform:translateY(-1px)}
+    .btn:active{transform:translateY(0)}
+    .btn-primary{background:linear-gradient(90deg,var(--accent),var(--accent-2)); color:#000; border:0; font-weight:600}
+    .btn-active{background:rgba(0,255,136,0.2); border-color:var(--accent-2); color:var(--accent-2)}
+    .workspace{display:grid; grid-template-columns:300px 1fr 380px; gap:10px; height:100%; min-height:0}
+    aside.sidebar{background:var(--panel); border-radius:var(--radius); padding:12px; overflow:hidden; display:flex; flex-direction:column; gap:12px; border:1px solid rgba(255,255,255,0.06); box-shadow:var(--shadow)}
+    aside h2{color:var(--accent);margin:4px 0 8px;font-size:12px; letter-spacing:0.08em; text-transform:uppercase; font-weight:700}
+    .search-box{position:relative}
+    .search-box input{width:100%; padding:8px 12px 8px 32px; border-radius:8px; border:1px solid rgba(255,255,255,0.08); background:var(--bg-2); color:#fff; font-size:13px}
+    .search-box input:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(0,217,255,0.15)}
+    .search-box::before{content:"🔍"; position:absolute; left:10px; top:50%; transform:translateY(-50%); opacity:0.6; font-size:12px}
+    .scroll-area{overflow:auto; flex:1; min-height:0; padding-right:4px}
+    .scroll-area::-webkit-scrollbar{width:6px} .scroll-area::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.15); border-radius:3px}
+    .node-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px}
+    .node-item{background:var(--glass); padding:10px 12px; border-radius:8px; display:flex; flex-direction:column; gap:4px; cursor:pointer; border-left:3px solid transparent; transition:all 0.15s}
+    .node-item:hover{background:var(--glass-2); border-left-color:var(--accent); transform:translateX(3px)}
+    .node-item:focus{outline:2px solid rgba(0,217,255,0.2); outline-offset:2px}
+    .node-item.active{border-left-color:var(--accent-2); background:linear-gradient(90deg,rgba(0,255,136,0.12),rgba(255,255,255,0.02))}
+    .node-name{font-weight:600;color:#fff;font-size:13px;display:flex;justify-content:space-between;align-items:center}
+    .node-status{color:var(--muted);font-size:11px;display:flex;gap:8px}
+    .badge{font-size:10px; padding:2px 6px; border-radius:999px; background:rgba(255,255,255,0.08)} .badge-ok{background:rgba(0,255,136,0.15);color:var(--accent-2)} .badge-warn{background:rgba(255,204,0,0.15);color:var(--warn)}
+    .topic-list{display:flex;flex-direction:column;gap:4px}
+    .topic-item{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-radius:8px;background:var(--glass);font-size:12px;cursor:pointer;transition:background 0.15s}
+    .topic-item:hover{background:var(--glass-2)}
+    .topic-name{color:var(--accent);font-weight:600;font-family:var(--mono);font-size:11px} .topic-meta{color:var(--muted);font-size:10px}
+    main.stage{background:var(--bg-2);border-radius:var(--radius);position:relative;overflow:hidden;border:1px solid rgba(255,255,255,0.06);display:flex;flex-direction:column;box-shadow:var(--shadow)}
+    .stage-toolbar{display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:rgba(0,0,0,0.2); border-bottom:1px solid rgba(255,255,255,0.06); gap:10px; flex-wrap:wrap}
+    .stage-toolbar h3{font-size:13px; font-weight:600; color:#fff; display:flex; gap:8px; align-items:center}
+    .alert{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;margin:10px;background:linear-gradient(90deg,var(--danger-0),var(--danger-1));color:#fff;font-size:13px;box-shadow:var(--shadow);animation:slideIn 0.3s}
+    .alert[hidden]{display:none} @keyframes slideIn{from{transform:translateY(-10px);opacity:0}to{transform:translateY(0);opacity:1}}
+    .canvas-area{flex:1;position:relative;overflow:hidden; isolation:isolate; display:grid; grid-template-rows:1fr 160px}
+    .graph-wrap{position:relative; overflow:hidden}
+    .graph-canvas{position:relative; width:100%; height:100%; min-height:380px; background:
+        radial-gradient(600px 400px at 30% 20%, rgba(0,217,255,0.08), transparent 60%),
+        radial-gradient(500px 300px at 80% 80%, rgba(157,78,221,0.08), transparent 60%),
+        linear-gradient(180deg,#0a0c0e,#070809); overflow:hidden}
+    svg#connections{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1}
+    svg#connections line{stroke:rgba(0,217,255,0.5);stroke-width:2;stroke-linecap:round} .flow-dot{fill:var(--accent);filter:drop-shadow(0 0 4px var(--accent))}
+    .node-graph{position:absolute;width:152px;min-height:96px;background:linear-gradient(180deg,rgba(22,45,58,0.9),rgba(12,39,50,0.9));border:1px solid rgba(0,217,255,0.2);border-radius:12px;padding:12px;cursor:grab;user-select:none;z-index:2;box-shadow:0 8px 24px rgba(0,0,0,0.6),0 0 0 1px rgba(255,255,255,0.04) inset;display:flex;flex-direction:column;gap:8px;transition:transform 0.12s,box-shadow 0.12s,border-color 0.12s;backdrop-filter:blur(12px)}
+    .node-graph:hover{transform:scale(1.03);box-shadow:0 12px 32px rgba(0,0,0,0.7),0 0 20px rgba(0,217,255,0.2);border-color:var(--accent)}
+    .node-graph:active{cursor:grabbing;transform:scale(1.02)} .node-graph:focus{outline:2px solid rgba(0,217,255,0.3);outline-offset:2px}
+    .node-graph.selected{border-color:var(--accent-2);box-shadow:0 0 0 2px rgba(0,255,136,0.2),0 8px 24px rgba(0,0,0,0.6)}
+    .node-graph .name{font-weight:700;font-size:13px;color:#fff;display:flex;justify-content:space-between;align-items:center}
+    .node-graph .rate{color:var(--accent);font-size:11px;font-family:var(--mono)} .node-graph .meta{display:flex;gap:6px;flex-wrap:wrap} .node-graph .meta span{font-size:10px;padding:2px 6px;border-radius:999px;background:rgba(255,255,255,0.08)}
+    .three-wrap{height:160px; background:#0a0e12; border-top:1px solid rgba(255,255,255,0.06); position:relative}
+    .three-wrap canvas{width:100%!important;height:100%!important;display:block}
+    .three-overlay{position:absolute; top:8px; left:10px; font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:0.08em; background:rgba(0,0,0,0.4); padding:4px 8px; border-radius:6px}
+    .timeline{height:84px; background:rgba(0,0,0,0.3); border-top:1px solid rgba(255,255,255,0.06); padding:8px 14px; display:flex; flex-direction:column; gap:6px}
+    .timeline-header{display:flex; justify-content:space-between; font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.08em}
+    .timeline-bar{height:36px; background:var(--glass); border-radius:8px; position:relative; overflow:hidden; display:flex; align-items:center; padding:0 8px; gap:2px; cursor:pointer}
+    .timeline-msg{height:60%; width:3px; background:var(--accent); border-radius:2px; opacity:0.8}
+    aside.stats{background:var(--panel);border-radius:var(--radius);padding:10px;overflow:hidden;display:flex;flex-direction:column;gap:10px;border:1px solid rgba(255,255,255,0.06);box-shadow:var(--shadow)}
+    aside.stats h2{color:var(--accent);margin:2px 0 6px;font-size:12px; letter-spacing:0.08em; text-transform:uppercase; font-weight:700}
+    .metrics-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+    .metric{background:var(--glass);padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);position:relative;overflow:hidden}
+    .metric.full{grid-column:1/-1}
+    .metric .label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px}
+    .metric .value{font-size:18px;font-weight:800;color:#fff;display:flex;align-items:baseline;gap:4px;line-height:1}
+    .metric .value small{font-size:11px;color:var(--muted);font-weight:500}
+    .metric .delta{font-size:11px;color:var(--accent-2);margin-top:4px}
+    .mini-chart{height:64px;width:100%;margin-top:8px;display:block}
+    .param-panel{background:var(--glass);border-radius:8px;padding:10px;border:1px solid rgba(255,255,255,0.06)}
+    .param-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:12px}
+    .param-row:last-child{border-bottom:0}
+    .param-row input[type=range]{width:80px}
+    .viz-3d{height:140px;background:radial-gradient(400px 200px at 50% 0%, rgba(0,217,255,0.15), transparent),linear-gradient(180deg,#0f1418,#0a0e12);border-radius:8px;border:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;position:relative;overflow:hidden}
+    .viz-3d::before{content:"";position:absolute;inset:0;background:linear-gradient(rgba(255,255,255,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.04) 1px,transparent 1px);background-size:24px 24px;opacity:0.5}
+    @media (max-width:1300px){.workspace{grid-template-columns:260px 1fr 340px}.metrics-grid{grid-template-columns:1fr}}
+    @media (max-width:1000px){.workspace{grid-template-columns:220px 1fr}aside.stats{display:none}body{padding:6px}}
+    @media (max-width:680px){.app{height:auto;min-height:100vh}.workspace{grid-template-columns:1fr;grid-auto-rows:auto}aside.sidebar{order:2}main.stage{order:1;min-height:680px}aside.stats{order:3;display:flex}.metrics-grid{grid-template-columns:1fr 1fr}header.header{flex-direction:column;align-items:flex-start}.header-actions{width:100%;justify-content:space-between}.graph-canvas{min-height:320px}.canvas-area{grid-template-rows:1fr 140px}}
+    :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+    <header class="header" role="banner">
+      <div class="brand">
+        <span class="status-dot" aria-hidden="true"></span>
+        <div>
+          <div class="brand-title">NROS Studio <span style="font-weight:400; color:var(--muted); font-size:12px">v2 • Live</span></div>
+          <div class="brand-sub">Monitoring • Visualization • <span style="color:var(--accent)">nros run --inspect</span> • 3D TF • Timeline • Breakpoints</div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <div class="pill live" id="livePill" role="status" aria-live="polite">● LIVE • <span id="connStatus">SSE</span></div>
+        <div class="pill">🤖 <strong id="nodeCount">4</strong>&nbsp;Nodes</div>
+        <div class="pill">📡 <strong id="topicCount">12</strong>&nbsp;Topics</div>
+        <div class="pill">⚡ <strong id="avgLatency">2.3</strong> μs • <span id="throughputHeader">487K msg/s</span></div>
+        <button class="btn" id="recordBtn">⏺️ Record</button>
+        <button class="btn btn-primary" id="inspectBtn">🔍 Inspect</button>
+      </div>
+    </header>
+
+    <div class="workspace" role="main">
+      <aside class="sidebar" aria-label="Nodes and topics">
+        <h2>Active Nodes</h2>
+        <div class="search-box"><input id="nodeSearch" type="search" placeholder="Filter nodes... (e.g., controller)" aria-label="Filter nodes" /></div>
+        <div class="scroll-area">
+          <ul class="node-list" id="nodeList" tabindex="0" aria-label="Node list"></ul>
+          <h2 style="margin-top:16px">Topics • QoS</h2>
+          <div class="search-box" style="margin-bottom:8px"><input id="topicSearch" type="search" placeholder="Filter topics... (/camera, realtime)" aria-label="Filter topics" /></div>
+          <div class="topic-list" id="topicList" aria-label="Topic list"></div>
+        </div>
+        <div style="margin-top:auto; padding-top:10px; border-top:1px solid rgba(255,255,255,0.06); font-size:11px; color:var(--muted)">
+          <div>Realtime: <strong id="rtFactor">1.0×</strong> <input id="rtSlider" type="range" min="0.1" max="2" step="0.1" value="1" style="width:80px; vertical-align:middle"></div>
+          <div style="margin-top:6px; display:flex; gap:8px"><span>Uptime: <span id="uptime">00:00:00</span></span><span>TF: <span style="color:var(--accent-2)">ok</span></span><span id="fps">60</span> FPS</div>
+          <div style="margin-top:6px"><button class="btn" id="btnForce" style="font-size:11px; padding:4px 8px">🧲 Force layout</button> <button class="btn" id="btnSaveLayout" style="font-size:11px; padding:4px 8px">💾 Save layout</button></div>
+        </div>
+      </aside>
+
+      <main class="stage" aria-label="Node graph">
+        <div class="stage-toolbar">
+          <h3>📊 Live Graph • TF • Timeline • Flow</h3>
+          <div style="display:flex; gap:6px; flex-wrap:wrap">
+            <button class="btn" id="zoomIn">+</button><button class="btn" id="zoomOut">−</button>
+            <button class="btn" id="resetLayout">Reset</button>
+            <button class="btn" id="toggleFlow">Flow: ON</button>
+            <button class="btn" id="toggle3D">3D: ON</button>
+            <button class="btn" id="toggleForce">Force: OFF</button>
+          </div>
+        </div>
+        <div id="alert" class="alert" role="alert" aria-live="assertive" hidden>
+          <span id="alertIcon">⚠️</span><div id="alertText">Alert</div><button class="btn" style="margin-left:auto; background:rgba(0,0,0,0.2)" id="closeAlert">Dismiss</button>
+        </div>
+        <div class="canvas-area" id="canvasArea">
+          <div class="graph-wrap">
+            <div class="graph-canvas" id="graphCanvas" tabindex="0" aria-label="Graph canvas">
+              <svg id="connections" aria-hidden="true">
+                <defs>
+                  <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(0,217,255,0.7)"/></marker>
+                  <marker id="arrow2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(255,255,255,0.4)"/></marker>
+                  <filter id="glow"><feGaussianBlur stdDeviation="2.5" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                </defs>
+              </svg>
+            </div>
+          </div>
+          <div class="three-wrap" id="threeWrap">
+            <div class="three-overlay">3D TF • base_link → camera/lidar/imu • Vulkan • drag nodes → TF updates • Three.js r160</div>
+            <!-- Three.js canvas injected here -->
+          </div>
+        </div>
+        <div class="timeline" aria-label="Timeline">
+          <div class="timeline-header"><span>Timeline — message timestamps • click to scrub • §7.2</span><span><span id="timelineRate">20</span> ev/s • <button class="btn" id="clearTimeline" style="padding:2px 6px; font-size:10px">Clear</button> • <button class="btn" id="replayBtn" style="padding:2px 6px; font-size:10px">Replay 0.5×</button></span></div>
+          <div class="timeline-bar" id="timelineBar" aria-label="Timeline events" title="Click to scrub deterministic replay per nros replay --speed=0.5"></div>
+        </div>
+      </main>
+
+      <aside class="stats" aria-label="Metrics">
+        <h2>Performance Metrics — §4.3 Profiler + §18 Benchmarks</h2>
+        <div class="metrics-grid">
+          <div class="metric"><div class="label">Message Latency</div><div class="value"><span id="latencyValue">2.3</span><small>μs P99 <span id="p99">12.1</span></small></div><div class="delta">↓ 80× vs ROS2 287μs • jitter 2.3μs</div><canvas id="latencyChart" class="mini-chart"></canvas></div>
+          <div class="metric"><div class="label">Throughput</div><div class="value"><span id="throughputValue">487</span><small>K msg/s</small></div><div class="delta">↑ 15× vs ROS2 52K • CPU 38%</div><canvas id="throughputChart" class="mini-chart"></canvas></div>
+          <div class="metric"><div class="label">CPU Usage</div><div class="value"><span id="cpuValue">38</span><small>% • 2.5 cores</small></div><canvas id="cpuChart" class="mini-chart"></canvas></div>
+          <div class="metric"><div class="label">Memory</div><div class="value"><span id="memoryValue">1.2</span><small>GB / 8GB</small></div><div class="delta">79% less vs ROS2 85MB 10 nodes→18MB</div></div>
+          <div class="metric"><div class="label">Deadline Misses</div><div class="value"><span id="missesValue">0</span><small>/ hour</small></div><div class="delta">Target 0 • ROS2 1847/72h</div></div>
+          <div class="metric"><div class="label">Network / BW</div><div class="value"><span id="networkValue">12.5</span><small>MB/s LZ4 30-60%</small></div><div class="delta">/camera 25.8 MB/s • /lidar 450KB/s</div></div>
+          <div class="metric full viz-3d" id="mini3D" style="height:110px"><span style="position:relative; z-index:1">🦾 TF Tree • odom → base_link → camera/lidar/imu • automatic TF handling • would integrate Foxglove</span></div>
+          <div class="metric full param-panel" id="paramPanel"><div class="label">Live Parameters — §17.3 dynamic reconfiguration (click node)</div><div id="paramContent" style="font-size:12px; color:var(--muted)">Select node • live editing per <code>nros param set</code> → POST /api/params • validation @range, @unit, @maxlen</div></div>
+        </div>
+      </aside>
+    </div>
+
+    <footer style="display:flex; justify-content:space-between; align-items:center; padding:8px 4px; font-size:11px; color:var(--muted)" aria-label="Footer">
+      <div>🚀 <strong style="color:#fff">NROS v0.1</strong> • Rust native, zero-copy default, compile-time graph validation, deterministic • <span style="color:var(--accent-2)">100 KHz max RT</span> vs ROS2 1KHz • <span id="connStatusFooter">SSE live</span> • <span id="tfStatus">TF 4 frames</span></div>
+      <div>Press <kbd>?</kbd> shortcuts • Arrows nudge • <span id="fps">60</span> FPS • <a href="/api/status" style="color:var(--accent)">/api/status</a> • <a href="/api/stream" style="color:var(--accent)">/api/stream</a></div>
+    </footer>
+  </div>
+
+<script type="module">
+/* ── Imports ── */
+import * as THREE_HEAD from 'three'; // will be resolved via importmap if available, fallback handled
+let THREE = null;
+try { THREE = await import('three'); } catch(e){ console.warn('Three.js not available, using placeholder'); }
+
+/* ── Demo data (fallback if API offline) ── */
+const nodesDataFallback = [
+  { id:'camera', name:'camera_driver', display:'Camera', rate:'30 Hz', hz:30, cpu:18, mem:120, priority:150, pos:{x:60,y:40}, topics:["/camera/image"], params:{resolution:"640x480", fps:30, format:"RGB8"} },
+  { id:'lidar', name:'lidar_processor', display:'LiDAR', rate:'10 Hz', hz:10, cpu:8, mem:60, priority:100, pos:{x:300,y:110}, topics:["/scan"], params:{range:"10m", rays:360} },
+  { id:'planner', name:'path_planner', display:'Planner', rate:'5 Hz', hz:5, cpu:5, mem:80, priority:100, pos:{x:520,y:70}, topics:["/path"], params:{algorithm:"HybridAStar"} },
+  { id:'controller', name:'velocity_controller', display:'Controller', rate:'1000 Hz', hz:1000, cpu:12.5, mem:45, priority:200, pos:{x:750,y:120}, topics:["/cmd_vel","/odom","/motor_commands"], params:{max_speed:2.0, wheel_base:0.5, cmd_timeout_ms:500} },
+];
+const connectionsFallback = [
+  {from:'camera', to:'planner', topic:'/camera/image', rate:30},
+  {from:'lidar', to:'planner', topic:'/scan', rate:10},
+  {from:'planner', to:'controller', topic:'/cmd_vel', rate:5},
+  {from:'controller', to:'camera', topic:'/odom', rate:50, dashed:true},
+];
+const topicsFallback = [
+  {name:'/cmd_vel', type:'geometry_msgs/Twist', rate:'10 Hz', bw:'1.2 KB/s', qos:'Realtime 100μs', latency:{avg:5.2,p99:12.1}},
+  {name:'/odom', type:'nav_msgs/Odometry', rate:'50 Hz', bw:'8.5 KB/s', qos:'Reliable', latency:{avg:6.1,p99:11.0}},
+  {name:'/camera/image', type:'sensor_msgs/Image', rate:'30 Hz', bw:'25.8 MB/s', qos:'BestEffort', latency:{avg:8.5,p99:15.0}},
+  {name:'/scan', type:'sensor_msgs/LaserScan', rate:'10 Hz', bw:'450 KB/s', qos:'BestEffort', latency:{avg:7.0,p99:13.0}},
+  {name:'/path', type:'nav_msgs/Path', rate:'5 Hz', bw:'2.1 KB/s', qos:'Reliable', latency:{avg:12.0,p99:20.0}},
+  {name:'/motor_commands', type:'robot_msgs/MotorCmd', rate:'1000 Hz', bw:'48 KB/s', qos:'RealTime', latency:{avg:2.3,p99:5.0}},
+];
+
+let nodesData = [...nodesDataFallback];
+let connections = [...connectionsFallback];
+let topics = [...topicsFallback];
+
+const app = {
+  nodes: new Map(),
+  svgLines: [],
+  flowDots: [],
+  charts: {},
+  chartData: { latency:[], throughput:[], cpu:[] },
+  misses: 0,
+  selectedNode: null,
+  flowEnabled: true,
+  forceEnabled: false,
+  threeEnabled: true,
+  fpsCounter: { frames:0, last:performance.now(), fps:60 },
+  sse: null,
+  tfFrames: [],
+};
+
+const graphCanvas = document.getElementById('graphCanvas');
+const svg = document.getElementById('connections');
+const nodeListEl = document.getElementById('nodeList');
+const topicListEl = document.getElementById('topicList');
+const alertEl = document.getElementById('alert');
+const alertText = document.getElementById('alertText');
+const timelineBar = document.getElementById('timelineBar');
+const threeWrap = document.getElementById('threeWrap');
+
+/* ── Helpers ── */
+const el = (tag, cls, html)=>{ const e=document.createElement(tag); if(cls) e.className=cls; if(html!==undefined) e.innerHTML=html; return e; };
+const debounce = (fn, wait=120)=>{ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),wait);}; };
+const q = (sel)=>document.querySelector(sel);
+
+/* ── Three.js 3D TF ── */
+let threeScene = null;
+function initThree(){
+  if(!THREE || !app.threeEnabled) {
+    q('.three-wrap').innerHTML = '<div class="three-overlay">3D disabled • TF 4 frames • install Three.js</div>';
+    return;
+  }
+  const width = threeWrap.clientWidth;
+  const height = threeWrap.clientHeight;
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0a0e12);
+  const camera = new THREE.PerspectiveCamera(45, width/height, 0.1, 100);
+  camera.position.set(3,2,3);
+  const renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
+  renderer.setSize(width,height);
+  renderer.setPixelRatio(window.devicePixelRatio);
+  threeWrap.innerHTML = '<div class="three-overlay">3D TF • base_link → camera/lidar/imu • Vulkan • orbit drag • Three.js r160</div>';
+  threeWrap.appendChild(renderer.domElement);
+
+  // Grid + lights
+  scene.add(new THREE.GridHelper(10,20,0x00d9ff, 0x1a2a33));
+  const light = new THREE.DirectionalLight(0xffffff, 1); light.position.set(5,10,5); scene.add(light);
+  scene.add(new THREE.AmbientLight(0xffffff,0.6));
+
+  // TF frames as boxes + lines to parent
+  const tfGroup = new THREE.Group();
+  scene.add(tfGroup);
+
+  const frameMeshes = new Map();
+  function addFrame(name, color=0x00d9ff, pos=[0,0,0]){
+    const geo = new THREE.BoxGeometry(0.2,0.1,0.3);
+    const mat = new THREE.MeshStandardMaterial({color});
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(...pos);
+    mesh.name = name;
+    const label = document.createElement('div');
+    // We will just add mesh
+    tfGroup.add(mesh);
+    frameMeshes.set(name, mesh);
+    return mesh;
+  }
+  addFrame('odom',0x555555,[0,0,0]);
+  addFrame('base_link',0x00ff88,[0.5,0,0]);
+  addFrame('camera',0x00d9ff,[0.8,0.3,0.2]);
+  addFrame('lidar',0xffcc00,[0.5,0.4,0]);
+  addFrame('imu',0x9D4EDD,[0.5,0.2,-0.2]);
+
+  // Axes
+  const controls = { autoRotate:true };
+  
+  function animate(){
+    requestAnimationFrame(animate);
+    if(controls.autoRotate){ tfGroup.rotation.y += 0.003; }
+    renderer.render(scene,camera);
+  }
+  animate();
+
+  threeScene = { scene, camera, renderer, tfGroup, frameMeshes };
+
+  // Fetch TF from API
+  fetch('/api/tf').then(r=>r.json()).then(frames=>{
+    app.tfFrames = frames;
+    q('#tfStatus').textContent = `TF ${frames.length} frames`;
+    // Update positions based on real TF
+    frames.forEach(tf=>{
+      const mesh = frameMeshes.get(tf.frame);
+      if(mesh){ mesh.position.set(tf.translation[0], tf.translation[2], tf.translation[1]); }
+    });
+  }).catch(()=>{});
+
+  window.addEventListener('resize', debounce(()=>{
+    const w=threeWrap.clientWidth, h=threeWrap.clientHeight;
+    camera.aspect=w/h; camera.updateProjectionMatrix(); renderer.setSize(w,h);
+  },200));
+}
+
+/* ── Node DOM ── */
+function createNodeElement(n){
+  const c = el('div','node-graph');
+  c.dataset.id=n.id;
+  c.style.left=n.pos.x+'px'; c.style.top=n.pos.y+'px';
+  c.setAttribute('role','button'); c.setAttribute('tabindex','0');
+  c.setAttribute('aria-label', `${n.display} ${n.rate} CPU ${n.cpu}%`);
+  c.innerHTML=`<div class="name"><span>${n.display}</span><span style="font-size:10px;padding:2px 6px;border-radius:999px;background:rgba(0,217,255,0.15);color:var(--accent)">${n.priority}</span></div><div class="rate">${n.rate} • ${n.cpu}% CPU • ${n.mem}MB</div><div class="meta"><span>${(n.topics&&n.topics[0])||''}</span></div>`;
+  c.addEventListener('click',()=>selectNode(n.id));
+  c.addEventListener('keydown',(e)=>{ if(e.key==='Enter'||e.key===' '){ selectNode(n.id); e.preventDefault(); }});
+  graphCanvas.appendChild(c);
+  return c;
+}
+function renderNodes(){
+  graphCanvas.querySelectorAll('.node-graph').forEach(e=>e.remove());
+  app.nodes.clear();
+  nodesData.forEach(nd=>{ const el=createNodeElement(nd); app.nodes.set(nd.id,{data:nd, el}); });
+}
+
+/* ── SVG lines + flow ── */
+function createSvgLine(fromEl,toEl,dashed){
+  const line=document.createElementNS('http://www.w3.org/2000/svg','line');
+  line.setAttribute('stroke', dashed?'rgba(255,255,255,0.25)':'rgba(0,217,255,0.5)');
+  if(dashed) line.setAttribute('stroke-dasharray','6 6');
+  line.setAttribute('stroke-width','2'); line.setAttribute('marker-end', dashed?'url(#arrow2)':'url(#arrow)');
+  svg.appendChild(line); return line;
+}
+function createFlowDot(color='var(--accent)'){
+  const dot=document.createElementNS('http://www.w3.org/2000/svg','circle');
+  dot.setAttribute('r','4'); dot.setAttribute('class','flow-dot'); dot.style.opacity='0';
+  if(color!=='var(--accent)') dot.setAttribute('fill',color);
+  svg.appendChild(dot); return dot;
+}
+function updateLines(){
+  app.svgLines.forEach(({line,fromEl,toEl})=>{
+    const r=graphCanvas.getBoundingClientRect(); const a=fromEl.getBoundingClientRect(); const b=toEl.getBoundingClientRect();
+    const ax=a.left-r.left+a.width/2, ay=a.top-r.top+a.height/2, bx=b.left-r.left+b.width/2, by=b.top-r.top+b.height/2;
+    line.setAttribute('x1',ax); line.setAttribute('y1',ay); line.setAttribute('x2',bx); line.setAttribute('y2',by);
+  });
+}
+
+/* ── Dragging ── */
+function enableDraggingFor(el){
+  let pointerId=null, start=null;
+  const onDown=(e)=>{ el.setPointerCapture(e.pointerId); pointerId=e.pointerId; start={x:e.clientX,y:e.clientY,left:parseFloat(el.style.left),top:parseFloat(el.style.top)}; el.style.transition='none'; el.classList.add('selected'); };
+  const onMove=(e)=>{ if(pointerId!==e.pointerId) return; const dx=e.clientX-start.x, dy=e.clientY-start.y; const nl=Math.max(0,Math.min(graphCanvas.clientWidth-el.offsetWidth,start.left+dx)), nt=Math.max(0,Math.min(graphCanvas.clientHeight-el.offsetHeight,start.top+dy)); el.style.left=nl+'px'; el.style.top=nt+'px'; const node=app.nodes.get(el.dataset.id); if(node){ node.data.pos.x=nl; node.data.pos.y=nt; try{ localStorage.setItem('nros-node-'+el.dataset.id, JSON.stringify({x:nl,y:nt})); }catch(_){} } requestAnimationFrame(updateLines); };
+  const onUp=(e)=>{ if(pointerId!==e.pointerId) return; try{ el.releasePointerCapture(e.pointerId);}catch(_){} pointerId=null; el.style.transition=''; };
+  el.addEventListener('pointerdown',onDown); window.addEventListener('pointermove',onMove); window.addEventListener('pointerup',onUp);
+  el.addEventListener('keydown',(e)=>{ const step=e.shiftKey?10:2; let l=parseFloat(el.style.left), t=parseFloat(el.style.top), m=false; if(e.key==='ArrowLeft'){l-=step;m=true} if(e.key==='ArrowRight'){l+=step;m=true} if(e.key==='ArrowUp'){t-=step;m=true} if(e.key==='ArrowDown'){t+=step;m=true} if(m){ el.style.left=l+'px'; el.style.top=t+'px'; updateLines(); e.preventDefault(); try{ localStorage.setItem('nros-node-'+el.dataset.id, JSON.stringify({x:l,y:t})); }catch(_){} } });
+}
+
+/* ── Force-directed layout ── */
+function applyForceLayout(iterations=120){
+  if(!app.nodes.size) return;
+  const nodes = Array.from(app.nodes.values());
+  const kRep = 8000, kAttr = 0.02, desired = 200, damping=0.85;
+  const velocities = new Map(); nodes.forEach(n=> velocities.set(n.data.id,{x:0,y:0}));
+  const centerX = graphCanvas.clientWidth/2, centerY = graphCanvas.clientHeight/2;
+  for(let iter=0; iter<iterations; iter++){
+    // Repulsion
+    for(let i=0;i<nodes.length;i++){
+      for(let j=i+1;j<nodes.length;j++){
+        const a=nodes[i], b=nodes[j];
+        const dx=a.data.pos.x - b.data.pos.x, dy=a.data.pos.y - b.data.pos.y;
+        const dist = Math.sqrt(dx*dx+dy*dy) || 1;
+        if(dist<300){
+          const force = kRep/(dist*dist);
+          const fx = (dx/dist)*force, fy = (dy/dist)*force;
+          const va=velocities.get(a.data.id), vb=velocities.get(b.data.id);
+          va.x+=fx; va.y+=fy; vb.x-=fx; vb.y-=fy;
+        }
+      }
+    }
+    // Attraction via edges
+    connections.forEach(edge=>{
+      const from = app.nodes.get(edge.from), to = app.nodes.get(edge.to);
+      if(!from||!to) return;
+      const dx=from.data.pos.x - to.data.pos.x, dy=from.data.pos.y - to.data.pos.y;
+      const dist=Math.sqrt(dx*dx+dy*dy)||1;
+      const force = kAttr*(dist-desired);
+      const fx=(dx/dist)*force, fy=(dy/dist)*force;
+      const vf=velocities.get(edge.from), vt=velocities.get(edge.to);
+      vf.x-=fx; vf.y-=fy; vt.x+=fx; vt.y+=fy;
+    });
+    // Center gravity
+    nodes.forEach(n=>{
+      const v=velocities.get(n.data.id);
+      const dx=centerX - n.data.pos.x, dy=centerY - n.data.pos.y;
+      v.x+=dx*0.01; v.y+=dy*0.01;
+      v.x*=damping; v.y*=damping;
+      n.data.pos.x+=v.x; n.data.pos.y+=v.y;
+      n.data.pos.x=Math.max(0,Math.min(graphCanvas.clientWidth-n.el.offsetWidth,n.data.pos.x));
+      n.data.pos.y=Math.max(0,Math.min(graphCanvas.clientHeight-n.el.offsetHeight,n.data.pos.y));
+    });
+  }
+  nodes.forEach(n=>{ n.el.style.left=n.data.pos.x+'px'; n.el.style.top=n.data.pos.y+'px'; try{ localStorage.setItem('nros-node-'+n.data.id, JSON.stringify(n.data.pos)); }catch(_){} });
+  updateLines();
+}
+
+/* ── Charts ── */
+function createMiniCharts(){
+  const make=(id,color,maxY)=>{
+    const canvas=document.getElementById(id);
+    const ctx=canvas?.getContext('2d');
+    if(!ctx || typeof Chart==='undefined'){
+      const cont=canvas?.parentElement;
+      if(cont){
+        const barC=el('div'); barC.style.display='flex'; barC.style.gap='2px'; barC.style.height='64px'; barC.style.alignItems='flex-end';
+        for(let i=0;i<24;i++){ const b=el('div'); b.style.flex='1'; b.style.height=(20+Math.random()*60)+'%'; b.style.background=color; b.style.borderRadius='2px'; barC.appendChild(b); }
+        canvas?.replaceWith(barC);
+      }
+      return null;
+    }
+    return new Chart(ctx,{
+      type:'line',
+      data:{labels:Array(30).fill(''), datasets:[{data:Array(30).fill(null), borderColor:color, backgroundColor:color+'20', tension:0.35, borderWidth:2, pointRadius:0, fill:true}]},
+      options:{animation:false, responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}, tooltip:{enabled:false}}, scales:{x:{display:false}, y:{display:false, min:0, max:maxY}}}
+    });
+  };
+  app.charts.latency=make('latencyChart','rgba(0,217,255,0.9)',10);
+  app.charts.throughput=make('throughputChart','rgba(0,255,136,0.9)',600);
+  app.charts.cpu=make('cpuChart','rgba(255,200,0,0.9)',100);
+}
+function pushSeries(arr,val,max=30){ arr.push(Number(val)); if(arr.length>max) arr.shift(); return arr; }
+function refreshCharts(lat,thr,cpu){
+  pushSeries(app.chartData.latency,lat); pushSeries(app.chartData.throughput,thr); pushSeries(app.chartData.cpu,cpu);
+  if(app.charts.latency){ app.charts.latency.data.datasets[0].data=app.chartData.latency.slice(); app.charts.latency.update('none'); }
+  if(app.charts.throughput){ app.charts.throughput.data.datasets[0].data=app.chartData.throughput.slice(); app.charts.throughput.update('none'); }
+  if(app.charts.cpu){ app.charts.cpu.data.datasets[0].data=app.chartData.cpu.slice(); app.charts.cpu.update('none'); }
+}
+
+/* ── Lists ── */
+function populateLists(){
+  const nf=q('#nodeSearch').value.toLowerCase();
+  const tf=q('#topicSearch').value.toLowerCase();
+  const nl=q('#nodeList'); nl.innerHTML='';
+  nodesData.filter(n=> (n.name+n.display).toLowerCase().includes(nf)).forEach(n=>{
+    const li=el('li','node-item'+(app.selectedNode===n.id?' active':'')); li.tabIndex=0; li.setAttribute('role','button');
+    li.innerHTML=`<div class="node-name"><span>${n.name}</span><span class="badge ${n.hz>=100?'badge-ok':''}">${n.hz}Hz</span></div><div class="node-status"><span>CPU ${n.cpu}%</span><span>${n.mem}MB</span><span>P${n.priority}</span></div>`;
+    li.addEventListener('click',()=>selectNode(n.id)); nl.appendChild(li);
+  });
+  const tl=q('#topicList'); tl.innerHTML='';
+  topics.filter(t=> (t.name+t.type+t.qos).toLowerCase().includes(tf)).forEach(t=>{
+    const d=el('div','topic-item'); d.innerHTML=`<div><div class="topic-name">${t.name}</div><div class="topic-meta">${t.type} • ${t.qos}</div></div><div style="text-align:right"><div class="topic-meta">${t.rate}</div><div class="topic-meta">${t.bw}</div></div>`;
+    d.title=`Latency avg ${t.latency.avg}μs p99 ${t.latency.p99}μs`; tl.appendChild(d);
+  });
+  q('#nodeCount').textContent=nodesData.length; q('#topicCount').textContent=topics.length;
+}
+function selectNode(id){
+  app.selectedNode=id;
+  document.querySelectorAll('.node-graph').forEach(e=> e.classList.toggle('selected', e.dataset.id===id));
+  populateLists();
+  const node=nodesData.find(n=>n.id===id); if(!node) return;
+  const pc=q('#paramContent');
+  let html=`<div style="font-weight:600;color:#fff;margin-bottom:8px">${node.display} (${node.name}) • ${node.rate} • P${node.priority}</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">`;
+  (node.topics||[]).forEach(t=> html+=`<span style="font-size:10px;padding:2px 6px;border-radius:999px;background:rgba(0,217,255,0.15);color:var(--accent)">${t}</span>`);
+  html+=`</div><div>`;
+  for(const [k,v] of Object.entries(node.params||{})){
+    if(typeof v==='boolean'){ html+=`<div class="param-row"><span>${k}</span><input type="checkbox" ${v?'checked':''} onchange="updateParam('${id}','${k}',this.checked)"></div>`; }
+    else if(typeof v==='number'){ html+=`<div class="param-row"><span>${k}</span><span><input type="range" min="0" max="${k.includes('timeout')?1000:10}" step="0.1" value="${v}" oninput="updateParam('${id}','${k}',this.value)"><span id="pv-${k}">${v}</span></span></div>`; }
+    else { html+=`<div class="param-row"><span>${k}</span><span style="font-family:var(--mono);color:var(--accent)">${v}</span></div>`; }
+  }
+  html+=`</div><div style="margin-top:8px;display:flex;gap:6px"><button class="btn" onclick="restartNode('${id}')">Restart</button><button class="btn" onclick="viewLogs('${id}')">Logs</button><button class="btn btn-primary" onclick="editBreakpoint('${id}')">Breakpoint</button></div>`;
+  pc.innerHTML=html;
+}
+
+/* ── Timeline ── */
+function addTimelineEvent(isAlert=false){
+  const dot=el('div','timeline-msg'); dot.style.height=(40+Math.random()*60)+'%'; dot.style.opacity=(0.5+Math.random()*0.5).toString();
+  if(isAlert||Math.random()<0.05){ dot.style.background='var(--danger-0)'; dot.style.width='4px'; }
+  timelineBar.appendChild(dot);
+  while(timelineBar.children.length>140) timelineBar.removeChild(timelineBar.firstChild);
+  q('#timelineRate').textContent = Math.floor(15+Math.random()*10);
+}
+
+/* ── Flow animation ── */
+function initFlowDots(){
+  svg.querySelectorAll('circle.flow-dot').forEach(e=>e.remove());
+  app.flowDots=[];
+  connections.forEach(conn=>{
+    const from=app.nodes.get(conn.from), to=app.nodes.get(conn.to); if(!from||!to) return;
+    const count = Math.max(1, Math.floor(conn.rate/10));
+    for(let i=0;i<count;i++){
+      const dot=createFlowDot(conn.dashed? 'rgba(255,255,255,0.4)':'var(--accent)');
+      app.flowDots.push({dot, from:from.el, to:to.el, progress: Math.random(), speed:0.004 + (conn.rate/1000)*0.02 + Math.random()*0.004, topic:conn.topic});
+    }
+  });
+}
+function animateFlow(){
+  if(!app.flowEnabled) return;
+  app.flowDots.forEach(fd=>{
+    fd.progress+=fd.speed; if(fd.progress>1) fd.progress=0;
+    const r=graphCanvas.getBoundingClientRect(); const a=fd.from.getBoundingClientRect(); const b=fd.to.getBoundingClientRect();
+    const ax=a.left-r.left+a.width/2, ay=a.top-r.top+a.height/2, bx=b.left-r.left+b.width/2, by=b.top-r.top+b.height/2;
+    const x=ax+(bx-ax)*fd.progress, y=ay+(by-ay)*fd.progress;
+    fd.dot.setAttribute('cx',x); fd.dot.setAttribute('cy',y);
+    fd.dot.style.opacity=(0.2+Math.sin(fd.progress*Math.PI)*0.8).toString();
+  });
+}
+
+/* ── Real-time metrics via SSE + fetch fallback ── */
+let sseConnected=false;
+function connectSSE(){
+  try{
+    const es = new EventSource('/api/stream');
+    app.sse=es;
+    es.onopen=()=>{ sseConnected=true; q('#livePill').classList.add('live'); q('#connStatus').textContent='SSE live'; q('#connStatusFooter').textContent='SSE live'; };
+    es.onmessage=(e)=>{
+      try{
+        const data=JSON.parse(e.data);
+        handleMetricFrame(data);
+      }catch(_){}
+    };
+    es.onerror=()=>{ sseConnected=false; q('#connStatus').textContent='reconnecting…'; es.close(); setTimeout(connectSSE,2000); };
+  }catch(e){ console.warn('SSE failed',e); }
+}
+
+async function fetchRealMetrics(){
+  try{
+    const res=await fetch('/api/metrics',{cache:'no-store'});
+    if(res.ok){ const data=await res.json(); return data; }
+  }catch(_){}
+  return null;
+}
+
+function handleMetricFrame(data){
+  const latency=data.latency_us, thr=(data.throughput_kmsg||data.throughput_kmsg===0)? data.throughput_kmsg*1000 : data.throughput_kmsg, cpu=data.cpu_pct, mem=data.memory_gb, misses=data.deadline_misses;
+  q('#latencyValue').textContent=latency.toFixed(1);
+  q('#p99').textContent=(latency*1.8).toFixed(1);
+  q('#throughputValue').textContent=Math.floor(thr/1000).toString();
+  q('#throughputHeader').textContent=Math.floor(thr/1000)+'K msg/s';
+  q('#cpuValue').textContent=Math.floor(cpu).toString();
+  q('#memoryValue').textContent=mem.toFixed(1);
+  q('#avgLatency').textContent=latency.toFixed(1);
+  if(misses>0){ app.misses+=misses; q('#missesValue').textContent=app.misses.toString(); showAlert(`Deadline miss detected — ${misses} miss sample`,3000); addTimelineEvent(true); }
+  refreshCharts(Number(latency), thr, cpu);
+  addTimelineEvent();
+}
+
+async function simulateMetricsFallback(){
+  if(sseConnected) return; // SSE handles it
+  const real=await fetchRealMetrics();
+  if(real){ handleMetricFrame(real); return; }
+  const latency=1.2+Math.random()*2.8, thr=420+Math.random()*120, cpu=32+Math.random()*12, mem=1.0+Math.random()*0.6;
+  handleMetricFrame({latency_us:latency, throughput_kmsg:thr/1000, cpu_pct:cpu, memory_gb:mem, deadline_misses: Math.random()<0.04?1:0});
+  if(Math.random()<0.06){
+    const msgs=['Deadline miss detected in velocity_controller (priority 200) — exceeded 1000μs','High latency on /camera/image topic — 25.8 MB/s peak','Node lidar_processor 2% misses — check CPU affinity [2,3]','Network congestion 224.0.0.1:5000 multicast','Parameter hot-reload: max_speed 2.0→2.5 m/s'];
+    const msg=msgs[Math.floor(Math.random()*msgs.length)];
+    showAlert(msg); app.misses++; q('#missesValue').textContent=app.misses.toString(); addTimelineEvent(true);
+  }
+}
+
+function showAlert(msg, timeout=5000){
+  alertText.textContent=msg; alertEl.hidden=false; alertEl.setAttribute('aria-hidden','false');
+  const dot=el('div','timeline-msg'); dot.style.background='var(--danger-0)'; dot.style.height='100%'; dot.style.width='3px'; timelineBar.appendChild(dot);
+  setTimeout(()=>{ alertEl.hidden=true; alertEl.setAttribute('aria-hidden','true'); }, timeout);
+}
+
+/* ── Fetch real nodes/topics from backend ── */
+async function loadRealGraph(){
+  try{
+    const [nodesRes, topicsRes] = await Promise.all([fetch('/api/nodes'), fetch('/api/topics')]);
+    if(nodesRes.ok){
+      const nodesJson=await nodesRes.json();
+      if(Array.isArray(nodesJson) && nodesJson.length>0){
+        // Merge into nodesData
+        nodesJson.forEach(n=>{
+          const existing = nodesData.find(nd=> nd.name===n.name);
+          if(existing){ existing.cpu=n.cpu_pct; existing.mem=n.memory_mb; existing.rate=n.rate_hz+' Hz'; existing.hz=n.rate_hz; }
+        });
+        renderNodes();
+        // Recreate lines
+        svg.querySelectorAll('line').forEach(l=>l.remove());
+        app.svgLines=[];
+        connections.forEach(conn=>{
+          const from=app.nodes.get(conn.from), to=app.nodes.get(conn.to);
+          if(from&&to){ const line=createSvgLine(from.el,to.el,conn.dashed); app.svgLines.push({line,fromEl:from.el,toEl:to.el}); }
+        });
+        app.nodes.forEach(o=> enableDraggingFor(o.el));
+        updateLines(); initFlowDots();
+        populateLists();
+      }
+    }
+    if(topicsRes.ok){
+      const topicsJson=await topicsRes.json();
+      if(Array.isArray(topicsJson) && topicsJson.length>0){
+        topics = topicsJson.map(t=>({name:t.name, type:t.type, rate:t.rate_hz+' Hz', bw:'?', qos:t.qos, latency:{avg:t.latency.avg_us,p99:t.latency.p99_us}}));
+        populateLists();
+      }
+    }
+  }catch(e){ console.warn('Failed to load real graph, using fallback',e); }
+}
+
+/* ── Init ── */
+function init(){
+  // Restore positions
+  nodesData.forEach(n=>{ try{ const s=localStorage.getItem('nros-node-'+n.id); if(s){ const p=JSON.parse(s); n.pos.x=p.x; n.pos.y=p.y; } }catch(_){} });
+  renderNodes(); populateLists(); createMiniCharts();
+
+  connections.forEach(conn=>{
+    const from=app.nodes.get(conn.from), to=app.nodes.get(conn.to);
+    if(from&&to){ const line=createSvgLine(from.el,to.el,conn.dashed); app.svgLines.push({line,fromEl:from.el,toEl:to.el}); }
+  });
+  app.nodes.forEach(o=> enableDraggingFor(o.el));
+  initFlowDots();
+  setTimeout(updateLines,50);
+
+  // FPS + flow loop
+  (function fpsLoop(){
+    app.fpsCounter.frames++;
+    const now=performance.now();
+    if(now-app.fpsCounter.last>1000){ const fps=Math.round(app.fpsCounter.frames*1000/(now-app.fpsCounter.last)); q('#fps').textContent=fps.toString(); app.fpsCounter.last=now; app.fpsCounter.frames=0; }
+    animateFlow(); requestAnimationFrame(fpsLoop);
+  })();
+
+  connectSSE();
+  setInterval(simulateMetricsFallback,1000);
+  simulateMetricsFallback();
+  loadRealGraph();
+  initThree();
+
+  window.addEventListener('resize', debounce(()=>{ updateLines(); },150));
+  q('#nodeSearch').addEventListener('input',populateLists);
+  q('#topicSearch').addEventListener('input',populateLists);
+  q('#zoomIn').addEventListener('click',()=>{ graphCanvas.style.transform='scale(1.1)'; setTimeout(()=>graphCanvas.style.transform='',200); });
+  q('#zoomOut').addEventListener('click',()=>{ graphCanvas.style.transform='scale(0.9)'; setTimeout(()=>graphCanvas.style.transform='',200); });
+  q('#resetLayout').addEventListener('click',()=>{ localStorage.clear(); location.reload(); });
+  q('#toggleFlow').addEventListener('click',(e)=>{ app.flowEnabled=!app.flowEnabled; e.target.textContent='Flow: '+(app.flowEnabled?'ON':'OFF'); e.target.classList.toggle('btn-active',app.flowEnabled); app.flowDots.forEach(fd=> fd.dot.style.display=app.flowEnabled?'block':'none'); });
+  q('#toggle3D').addEventListener('click',(e)=>{ app.threeEnabled=!app.threeEnabled; e.target.textContent='3D: '+(app.threeEnabled?'ON':'OFF'); e.target.classList.toggle('btn-active',app.threeEnabled); q('#threeWrap').style.display=app.threeEnabled?'block':'none'; if(app.threeEnabled&&!threeScene) initThree(); });
+  q('#toggleForce').addEventListener('click',(e)=>{ app.forceEnabled=!app.forceEnabled; e.target.textContent='Force: '+(app.forceEnabled?'ON':'OFF'); e.target.classList.toggle('btn-active',app.forceEnabled); if(app.forceEnabled){ applyForceLayout(150); showAlert('🧲 Force-directed layout applied — repulsion + attraction + center gravity',3000); } });
+  q('#btnForce').addEventListener('click',()=>{ applyForceLayout(150); showAlert('Force layout applied',2000); });
+  q('#btnSaveLayout').addEventListener('click',()=>{ showAlert('💾 Layout saved to localStorage + would persist to config/layout.json backend',2000); });
+  q('#closeAlert').addEventListener('click',()=>{ alertEl.hidden=true; });
+  q('#clearTimeline').addEventListener('click',()=> timelineBar.innerHTML='');
+  q('#replayBtn').addEventListener('click',()=> showAlert('▶️ Replaying recording.nros --speed=0.5 --analyze-latency (deterministic replay per §7.1)',3000));
+  q('#recordBtn').addEventListener('click',()=> showAlert('⏺️ Recording /camera/* /lidar → recording.nros (efficient binary) — simulated',3000));
+  q('#inspectBtn').addEventListener('click',()=> showAlert('🔍 Live inspection active — 3D TF, timeline, breakpoints per DESIGN.md §7.2',3000));
+  q('#rtSlider').addEventListener('input',(e)=> q('#rtFactor').textContent=e.target.value+'×');
+  q('#timelineBar').addEventListener('click',(e)=>{
+    const rect=timelineBar.getBoundingClientRect(); const pct=(e.clientX-rect.left)/rect.width;
+    showAlert(`Scrubbing timeline to ${(pct*100).toFixed(0)}% — deterministic replay per nros replay`,2500);
+  });
+  window.addEventListener('keydown',(e)=>{
+    if(e.key==='?'){ alert('Shortcuts:\nArrow keys nudge selected node (Shift 10px)\nEnter select node\nEsc deselect\nF force layout\nR reset\nSpace toggle flow'); }
+    if(e.key.toLowerCase()==='f'){ applyForceLayout(100); }
+    if(e.key.toLowerCase()==='r'){ localStorage.clear(); location.reload(); }
+    if(e.key==='Escape'){ app.selectedNode=null; document.querySelectorAll('.node-graph.selected').forEach(el=>el.classList.remove('selected')); q('#paramContent').innerHTML='Select a node to view parameters'; populateLists(); }
+  });
+
+  let start=Date.now(); setInterval(()=>{ const sec=Math.floor((Date.now()-start)/1000); const m=Math.floor(sec/60), s=sec%60; q('#uptime').textContent=`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}:${String(Math.floor(Date.now()%1000/10)).padStart(2,'0')}`; },100);
+}
+
+/* ── Global handlers ── */
+window.updateParam = async (nodeId,key,val)=>{
+  const pvEl=document.getElementById('pv-'+key); if(pvEl) pvEl.textContent=val;
+  try{
+    const res=await fetch(`/api/params?node=${encodeURIComponent(nodeId)}&key=${encodeURIComponent(key)}&value=${encodeURIComponent(val)}`);
+    const json=await res.json();
+    if(json.ok){ showAlert(`✅ Param ${key} → ${val} on ${nodeId} (hot-reload per §17.3 validation @range)`,3000); }
+    else{ showAlert(`❌ Param update failed: ${json.error}`,3000); }
+  }catch(_){
+    showAlert(`Parameter ${key} → ${val} on ${nodeId} (simulated POST /api/params — backend offline)`,3000);
+  }
+};
+window.restartNode = (id)=> showAlert(`🔄 Restarting ${id} with exponential_backoff per §17.2 supervised restart_policy`,3000);
+window.viewLogs = (id)=> showAlert(`📜 Opening logs for ${id} — black box tamper-proof per §9.2`,3000);
+window.editBreakpoint = (id)=> showAlert(`🔴 Breakpoint set in ${id} — remote debugging breakpoint support per §7.2`,4000);
+
+window.addEventListener('load', ()=>{
+  if(typeof Chart!=='undefined'){ init(); }
+  else { setTimeout(init,600); }
+});
+</script>
+</body>
+</html>

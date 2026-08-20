@@ -1,0 +1,17 @@
+[package]
+name = "nros-studio"
+version.workspace = true
+edition.workspace = true
+description = "NROS Studio - Live monitoring, visualization, debugging dashboard with 3D TF, timeline, metrics, remote breakpoints"
+license.workspace = true
+
+[lib]
+name = "nros_studio"
+path = "src/lib.rs"
+
+[[bin]]
+name = "nros-studio"
+path = "src/main.rs"
+
+[dependencies]
+# Pass 24: removed unused nros-core path dep (studio does not reference nros_core in source).
