@@ -1,7 +1,9 @@
 //! Repository representation validator.
+//! The manifests are normative text; this gate performs repository discovery
+//! without requiring a YAML parser dependency.
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 const ROOT: &str = "docs/representation";
 
@@ -14,12 +16,24 @@ fn read(name: &str) -> String {
 }
 
 fn require(haystack: &str, needle: &str, label: &str, failures: &mut usize) {
-    if haystack.contains(needle) {
-        println!("PASS  {}", label);
-    } else {
-        println!("FAIL  {} — missing `{}`", label, needle);
-        *failures += 1;
-    }
+    if haystack.contains(needle) { println!("PASS  {}", label); }
+    else { println!("FAIL  {} — missing `{}`", label, needle); *failures += 1; }
+}
+
+fn workspace_members() -> Vec<String> {
+    fs::read_to_string("Cargo.toml").unwrap_or_default().lines()
+        .filter_map(|line| {
+            let line = line.trim();
+            if line.starts_with('"') && line.contains("crates/") {
+                Some(line.trim_matches(',').trim_matches('"').to_string())
+            } else { None }
+        }).collect()
+}
+
+fn capability_field(text: &str, id: &str, field: &str) -> Option<String> {
+    let marker = format!("  - id: {}", id);
+    let block = text.split(&marker).nth(1)?.split("\n  - id:").next().unwrap_or("");
+    block.lines().find_map(|line| line.trim().strip_prefix(&format!("{}: ", field)).map(str::to_string))
 }
 
 pub fn run() {
@@ -35,41 +49,53 @@ pub fn run() {
         require(text, "project: NROS", &format!("{} project identity", name), &mut failures);
     }
 
-    let capability_ids = [
-        "CORE-IPC-001", "CORE-IPC-002", "NODE-001", "NODE-002", "HAL-001",
-        "HAL-002", "TRANSPORT-001", "TRANSPORT-002", "DIST-001", "DIST-002",
-        "SIM-001", "STUDIO-001", "STUDIO-002", "CLI-001", "AUDIT-001",
-    ];
-    for id in capability_ids {
+    // Repository discovery: workspace members must be real crates.
+    let members = workspace_members();
+    println!("DISCOVERY workspace members: {}", members.len());
+    for member in &members {
+        let manifest = PathBuf::from(member).join("Cargo.toml");
+        if manifest.exists() { println!("PASS  workspace member {} exists", member); }
+        else { println!("FAIL  workspace member {} has no Cargo.toml", member); failures += 1; }
+    }
+
+    // Capability records must resolve to actual crate directories. A SPECIFIED
+    // capability may still be absent at source level, but its owning subsystem
+    // must exist; implemented states additionally require src/.
+    let ids = ["CORE-IPC-001","CORE-IPC-002","NODE-001","NODE-002","HAL-001","HAL-002","TRANSPORT-001","TRANSPORT-002","DIST-001","DIST-002","SIM-001","STUDIO-001","STUDIO-002","CLI-001","AUDIT-001"];
+    for id in ids {
         require(&capabilities, id, &format!("capability {} declared", id), &mut failures);
+        let Some(crate_name) = capability_field(&capabilities, id, "crate") else {
+            println!("FAIL  {} has no crate mapping", id); failures += 1; continue;
+        };
+        let crate_path = format!("crates/{}", crate_name);
+        if Path::new(&crate_path).is_dir() { println!("PASS  {} → {} exists", id, crate_path); }
+        else { println!("FAIL  {} → {} is missing", id, crate_path); failures += 1; }
+        let state = capability_field(&capabilities, id, "state").unwrap_or_default();
+        if ["IMPLEMENTED","TESTED","BENCHMARKED","INTEGRATION-TESTED","HARDWARE-VALIDATED","PRODUCTION-READY","SAFETY-QUALIFIABLE"].contains(&state.as_str()) && !Path::new(&format!("{}/src", crate_path)).is_dir() {
+            println!("FAIL  {} state={} but source tree is absent", id, state); failures += 1;
+        }
     }
 
-    for id in ["CORE-IPC-001", "HAL-002", "DIST-002", "STUDIO-002"] {
-        require(&evidence, id, &format!("evidence record {}", id), &mut failures);
-    }
-    for id in ["CLAIM-IPC-001", "CLAIM-PERF-001", "CLAIM-HAL-001", "CLAIM-DIST-001", "CLAIM-STUDIO-001", "CLAIM-SAFETY-001", "CLAIM-CI-001", "CLAIM-MIRI-001"] {
-        require(&claims, id, &format!("claim {}", id), &mut failures);
-    }
-
-    require(&evidence, "configured_ci_is_not_passed_ci", "CI execution distinction", &mut failures);
-    require(&evidence, "benchmark_artifact_is_not_independent_validation", "benchmark distinction", &mut failures);
-    require(&evidence, "simulated_implementation_cannot_support_real_backend_claim", "simulation distinction", &mut failures);
-    require(&evidence, "hardware_validation_requires_actual_hardware_evidence", "hardware distinction", &mut failures);
-    require(&claims, "no_claim_without_evidence_record", "claim/evidence linkage", &mut failures);
-    require(&claims, "no_real_claim_from_simulated_backend", "real-vs-simulated invariant", &mut failures);
-    require(&claims, "no_ci_pass_claim_without_executed_successful_run", "CI pass invariant", &mut failures);
-    require(&architecture, "source_of_truth: DESIGN.md", "architecture source", &mut failures);
-    require(&architecture, "architecture_intent_is_not_implementation_evidence", "architecture boundary", &mut failures);
-    require(&architecture, "crate_topology_is_not_runtime_topology", "topology boundary", &mut failures);
+    // Evidence/claim inventory and non-inference invariants.
+    for id in ["CORE-IPC-001","HAL-002","DIST-002","STUDIO-002"] { require(&evidence, id, &format!("evidence record {}", id), &mut failures); }
+    for id in ["CLAIM-IPC-001","CLAIM-PERF-001","CLAIM-HAL-001","CLAIM-DIST-001","CLAIM-STUDIO-001","CLAIM-SAFETY-001","CLAIM-CI-001","CLAIM-MIRI-001"] { require(&claims, id, &format!("claim {}", id), &mut failures); }
+    for (text, needle, label) in [
+        (&evidence,"configured_ci_is_not_passed_ci","CI execution distinction"),
+        (&evidence,"benchmark_artifact_is_not_independent_validation","benchmark distinction"),
+        (&evidence,"simulated_implementation_cannot_support_real_backend_claim","simulation distinction"),
+        (&evidence,"hardware_validation_requires_actual_hardware_evidence","hardware distinction"),
+        (&claims,"no_claim_without_evidence_record","claim/evidence linkage"),
+        (&claims,"no_real_claim_from_simulated_backend","real-vs-simulated invariant"),
+        (&claims,"no_ci_pass_claim_without_executed_successful_run","CI pass invariant"),
+        (&architecture,"source_of_truth: DESIGN.md","architecture source"),
+        (&architecture,"architecture_intent_is_not_implementation_evidence","architecture boundary"),
+        (&architecture,"crate_topology_is_not_runtime_topology","topology boundary"),
+    ] { require(text, needle, label, &mut failures); }
 
     let canonical = fs::read_to_string("docs/REPOSITORY_REPRESENTATION.md").unwrap_or_default();
-    require(&canonical, "docs/representation/", "canonical documentation links representation directory", &mut failures);
-    require(&canonical, "No specification implies implementation.", "canonical specification invariant", &mut failures);
+    require(&canonical,"docs/representation/","canonical representation directory",&mut failures);
+    require(&canonical,"No specification implies implementation.","canonical specification invariant",&mut failures);
 
-    if failures == 0 {
-        println!("REPRESENTATION-GATE: PASS");
-    } else {
-        println!("REPRESENTATION-GATE: FAIL ({} failure(s))", failures);
-        std::process::exit(1);
-    }
+    if failures == 0 { println!("REPRESENTATION-GATE: PASS"); }
+    else { println!("REPRESENTATION-GATE: FAIL ({} failure(s))", failures); std::process::exit(1); }
 }
