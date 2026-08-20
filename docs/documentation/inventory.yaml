@@ -3,12 +3,11 @@ kind: documentation_inventory
 project: NROS
 
 scope:
-  mode: initial_canonical_inventory
+  mode: documentation_rewrite
   note: >-
-    Inventory of the principal repository documentation artifacts identified
-    from the current main tree and the repository's own documentation indexes.
-    Historical audit passes are retained as audit records and are not treated
-    as current implementation authority.
+    Inventory of active, supporting, and historical documentation artifacts.
+    Legacy entry points remain discoverable for traceability but do not retain
+    authority that has been migrated into focused documentation domains.
 
 documents:
   - id: DOC-README
@@ -16,28 +15,28 @@ documents:
     type: guide
     authority: informational
     status: active
-    purpose: Repository overview, user-facing orientation, advertised capabilities, and navigation.
+    purpose: Repository overview, user-facing orientation, and navigation.
 
   - id: DOC-DESIGN
     path: DESIGN.md
-    type: specification
-    authority: canonical
-    status: active
-    purpose: Primary architectural and system design specification.
+    type: legacy-entry-point
+    authority: historical
+    status: migrated
+    purpose: Compatibility entry point for the historical design document; current design authority lives under docs/architecture/ and docs/specifications/.
 
   - id: DOC-COMPARISON
     path: COMPARISON.md
-    type: reference
+    type: comparison
     authority: supporting
     status: active
-    purpose: NROS versus ROS2 technical and performance comparison.
+    purpose: Evidence-bounded NROS versus ROS 2 architectural comparison.
 
   - id: DOC-AUDIT
     path: AUDIT.md
-    type: audit
-    authority: authoritative
-    status: active
-    purpose: Repository-level verification history, findings, risk register, and audit methodology.
+    type: audit-history
+    authority: historical
+    status: migrated
+    purpose: Historical repository verification entry point; current verification authority lives under docs/verification/.
 
   - id: DOC-EVIDENCE
     path: EVIDENCE_REGISTRY.md
@@ -58,123 +57,110 @@ documents:
     type: security
     authority: authoritative
     status: active
-    purpose: Safety and concurrency threat model linking invariants, unsafe boundaries, tests, fixes, and verification gates.
+    purpose: Safety and concurrency threat model.
 
   - id: DOC-CI
     path: docs/ci.yml
     type: verification
     authority: authoritative
     status: active
-    purpose: Version-controlled CI workflow definition and verification contract; execution must be independently observed.
+    purpose: Version-controlled CI workflow definition; execution must be independently observed.
 
   - id: DOC-CORE-SAFETY
     path: crates/nros-core/SAFETY.md
     type: safety
     authority: authoritative
     status: active
-    purpose: nros-core ownership, lifetime, destruction, concurrency, Miri, and benchmark safety gate documentation.
+    purpose: nros-core safety and verification requirements.
 
   - id: DOC-IMPLEMENTATIONS
     path: implementations/README.md
     type: operational
     authority: authoritative
     status: active
-    purpose: Defines the distinction between authoritative crates and archival implementation artifacts.
+    purpose: Distinction between authoritative crates and archival implementation artifacts.
 
-  - id: DOC-AUDIT-PASS-8-12
-    path: AUDIT_PASS_8_12.md
-    type: audit
+  - id: DOC-DOCUMENTATION-INTEGRITY
+    path: docs/verification/documentation-integrity.md
+    type: verification
+    authority: authoritative
+    status: active
+    purpose: Integrity gate for documentation roles, claims, links, revisions, and migration state.
+
+  - id: DOC-MIGRATION
+    path: docs/migration/README.md
+    type: migration
+    authority: authoritative
+    status: active
+    purpose: Legacy-document classification and migration policy.
+
+  - id: DOC-GETTING-STARTED
+    path: docs/getting-started/README.md
+    type: guide
     authority: supporting
-    status: archived
-    purpose: Historical deep verification pass covering early core safety, benchmark, and CI findings.
+    status: active
+    purpose: Practical entry point for installation and first use.
 
-  - id: DOC-AUDIT-PASS-13-19
-    path: AUDIT_PASS_13_19.md
-    type: audit
+  - id: DOC-REFERENCE
+    path: docs/reference/README.md
+    type: reference
+    authority: authoritative
+    status: active
+    purpose: Concrete repository interfaces and reference surfaces.
+
+  - id: DOC-DEVELOPMENT
+    path: docs/development/README.md
+    type: guide
     authority: supporting
-    status: archived
-    purpose: Historical transport, HAL, distributed, zero-copy, and vertical-slice audit.
+    status: active
+    purpose: Developer workflow and contribution guidance.
 
-  - id: DOC-AUDIT-PASS-20-23
-    path: AUDIT_PASS_20_23.md
-    type: audit
+  - id: DOC-SAFETY
+    path: docs/safety/README.md
+    type: safety
+    authority: authoritative
+    status: active
+    purpose: Safety boundaries, invariants, gates, remediation, and threat analysis.
+
+  - id: DOC-OPERATIONS
+    path: docs/operations/README.md
+    type: operations
     authority: supporting
-    status: archived
-    purpose: Historical verification passes covering canonical types, core safety, runtime gaps, and integration strategy.
+    status: active
+    purpose: Deployment, observability, diagnostics, and troubleshooting.
 
-  - id: DOC-AUDIT-PASS-24
-    path: AUDIT_PASS_24.md
-    type: audit
+  - id: DOC-GOVERNANCE
+    path: docs/governance/README.md
+    type: governance
     authority: supporting
+    status: active
+    purpose: Roadmap, status, decisions, and release process.
+
+  - id: DOC-AUDIT-HISTORY
+    path: AUDIT_PASS_*.md
+    type: audit-history
+    authority: historical
     status: archived
-    purpose: Historical remediation audit covering soundness, compile blockers, transport hardening, and simulation honesty.
+    purpose: Historical verification passes retained with their represented revision context.
 
-  - id: DOC-AUDIT-PASS-25
-    path: AUDIT_PASS_25.md
-    type: audit
-    authority: supporting
-    status: archived
-    purpose: Historical stateful transport framing, QoS, code-generation, and invariant remediation audit.
-
-  - id: DOC-AUDIT-PASS-26
-    path: AUDIT_PASS_26.md
-    type: audit
-    authority: supporting
-    status: archived
-    purpose: Historical deterministic simulation, sensor mathematics, and real-time-loop audit.
-
-  - id: DOC-REPRESENTATION-SCHEMA
-    path: docs/representation/schema.yaml
-    type: normative
+  - id: DOC-REPRESENTATION-MANIFESTS
+    path: docs/representation/*.yaml
+    type: machine-readable
     authority: canonical
     status: active
-    purpose: Machine-readable schema for the repository representation manifests.
+    purpose: Repository capability, evidence, claim, and snapshot manifests.
 
-  - id: DOC-REPRESENTATION-ARCH
-    path: docs/representation/architecture.yaml
-    type: architecture
+  - id: DOC-DOCUMENTATION-MANIFESTS
+    path: docs/documentation/*.yaml
+    type: machine-readable
     authority: canonical
     status: active
-    purpose: Machine-readable architectural layer and workspace representation.
-
-  - id: DOC-REPRESENTATION-CAPABILITIES
-    path: docs/representation/capabilities.yaml
-    type: evidence
-    authority: canonical
-    status: active
-    purpose: Machine-readable capability catalog and evidence states.
-
-  - id: DOC-REPRESENTATION-EVIDENCE
-    path: docs/representation/evidence.yaml
-    type: evidence
-    authority: canonical
-    status: active
-    purpose: Machine-readable evidence records for capabilities.
-
-  - id: DOC-REPRESENTATION-CLAIMS
-    path: docs/representation/claims.yaml
-    type: policy
-    authority: canonical
-    status: active
-    purpose: Machine-readable claim classes, scopes, exclusions, and invariants.
-
-  - id: DOC-REPRESENTATION-SNAPSHOT
-    path: docs/representation/snapshot.yaml
-    type: generated
-    authority: canonical
-    status: active
-    purpose: Representation identity and content-integrity snapshot pinned to a repository revision.
-
-  - id: DOC-DOCUMENTATION-SCHEMA
-    path: docs/documentation/schema.yaml
-    type: normative
-    authority: canonical
-    status: active
-    purpose: Machine-readable contract for the documentation representation system itself.
+    purpose: Documentation inventory, authority, relationships, references, and schema.
 
 invariants:
-  - inventory_records_are_document_identity_not_verification_results
-  - historical_audit_passes_do_not_override_current_source_of_truth
+  - inventory_records_document_identity_and_migration_state
+  - historical_documents_do_not_override_current_source_of_truth
   - README_is_not_authoritative_for_implementation_maturity
-  - implementation_artifacts_are_classified_by_their_declared_role
   - documentation_presence_does_not_imply_execution_success
+  - legacy_entry_points_must_link_to_current_authorities
+  - machine_readable_manifests_must_be_regenerated_when_their_represented_revision_changes
