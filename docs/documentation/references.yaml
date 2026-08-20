@@ -3,105 +3,38 @@ kind: documentation_reference_catalog
 project: NROS
 
 purpose: >-
-  Explicit catalog of important documentation-to-document references.
-  Resolution status is recorded without silently converting references into evidence.
+  Explicit catalog of important documentation-to-document references. Every
+  internal target must correspond to an inventory identity; unresolved targets
+  remain visible instead of being inferred.
 
 references:
-  - source: DOC-README
-    target: DOC-ARCHITECTURE
-    status: resolved
-    kind: internal_document
-  - source: DOC-README
-    target: DOC-GETTING-STARTED
-    status: resolved
-    kind: internal_document
-  - source: DOC-README
-    target: DOC-VERIFICATION
-    status: resolved
-    kind: internal_document
-  - source: DOC-DESIGN
-    target: DOC-ARCHITECTURE
-    status: resolved
-    kind: internal_document
-  - source: DOC-DESIGN
-    target: DOC-MIGRATION
-    status: resolved
-    kind: internal_document
-  - source: DOC-COMPARISON
-    target: DOC-EVIDENCE
-    status: resolved
-    kind: internal_document
-  - source: DOC-COMPARISON
-    target: DOC-SAFETY
-    status: resolved
-    kind: internal_document
-  - source: DOC-AUDIT
-    target: DOC-DOCUMENTATION-INTEGRITY
-    status: resolved
-    kind: internal_document
-  - source: DOC-AUDIT
-    target: DOC-VERIFICATION
-    status: resolved
-    kind: internal_document
-  - source: DOC-EVIDENCE
-    target: DOC-VERIFICATION
-    status: resolved
-    kind: internal_document
-  - source: DOC-EVIDENCE
-    target: DOC-REPRESENTATION
-    status: resolved
-    kind: internal_document
-  - source: DOC-REFERENCE
-    target: DOC-IMPLEMENTATIONS
-    status: resolved
-    kind: internal_document
-  - source: DOC-REFERENCE
-    target: DOC-DEVELOPMENT
-    status: resolved
-    kind: internal_document
-  - source: DOC-SAFETY
-    target: DOC-THREAT-MODEL
-    status: resolved
-    kind: internal_document
-  - source: DOC-SAFETY
-    target: DOC-CORE-SAFETY
-    status: resolved
-    kind: internal_document
-  - source: DOC-VERIFICATION
-    target: DOC-EVIDENCE
-    status: resolved
-    kind: internal_document
-  - source: DOC-VERIFICATION
-    target: DOC-CI
-    status: resolved
-    kind: internal_document
-  - source: DOC-MIGRATION
-    target: DOC-DESIGN
-    status: resolved
-    kind: internal_document
-  - source: DOC-MIGRATION
-    target: DOC-AUDIT
-    status: resolved
-    kind: internal_document
-  - source: DOC-MIGRATION
-    target: DOC-COMPARISON
-    status: resolved
-    kind: internal_document
-  - source: DOC-DOCUMENTATION-INTEGRITY
-    target: DOC-DOCUMENTATION-MANIFESTS
-    status: resolved
-    kind: internal_document
-  - source: DOC-DOCUMENTATION-MANIFESTS
-    target: DOC-DOCUMENTATION-SCHEMA
-    status: resolved
-    kind: internal_document
-  - source: DOC-DOCUMENTATION-MANIFESTS
-    target: DOC-REPRESENTATION-MANIFESTS
-    status: resolved
-    kind: internal_document
+  - {source: DOC-README, target: DOC-CONCEPTS, status: resolved, kind: internal_document}
+  - {source: DOC-README, target: DOC-GETTING-STARTED, status: resolved, kind: internal_document}
+  - {source: DOC-README, target: DOC-VERIFICATION, status: resolved, kind: internal_document}
+  - {source: DOC-DESIGN, target: DOC-ARCHITECTURE, status: resolved, kind: internal_document}
+  - {source: DOC-DESIGN, target: DOC-SPECIFICATIONS, status: resolved, kind: internal_document}
+  - {source: DOC-DESIGN, target: DOC-MIGRATION, status: resolved, kind: internal_document}
+  - {source: DOC-COMPARISON, target: DOC-EVIDENCE, status: resolved, kind: internal_document}
+  - {source: DOC-COMPARISON, target: DOC-SAFETY, status: resolved, kind: internal_document}
+  - {source: DOC-AUDIT, target: DOC-DOCUMENTATION-INTEGRITY, status: resolved, kind: internal_document}
+  - {source: DOC-AUDIT, target: DOC-VERIFICATION, status: resolved, kind: internal_document}
+  - {source: DOC-EVIDENCE, target: DOC-VERIFICATION, status: resolved, kind: internal_document}
+  - {source: DOC-EVIDENCE, target: DOC-REPRESENTATION, status: resolved, kind: internal_document}
+  - {source: DOC-REFERENCE, target: DOC-IMPLEMENTATIONS, status: resolved, kind: internal_document}
+  - {source: DOC-REFERENCE, target: DOC-DEVELOPMENT, status: resolved, kind: internal_document}
+  - {source: DOC-SAFETY, target: DOC-THREAT-MODEL, status: resolved, kind: internal_document}
+  - {source: DOC-SAFETY, target: DOC-CORE-SAFETY, status: resolved, kind: internal_document}
+  - {source: DOC-VERIFICATION, target: DOC-EVIDENCE, status: resolved, kind: internal_document}
+  - {source: DOC-VERIFICATION, target: DOC-CI, status: resolved, kind: internal_document}
+  - {source: DOC-MIGRATION, target: DOC-DESIGN, status: resolved, kind: internal_document}
+  - {source: DOC-MIGRATION, target: DOC-AUDIT, status: resolved, kind: internal_document}
+  - {source: DOC-MIGRATION, target: DOC-COMPARISON, status: resolved, kind: internal_document}
+  - {source: DOC-DOCUMENTATION-INTEGRITY, target: DOC-DOCUMENTATION-MANIFESTS, status: resolved, kind: internal_document}
+  - {source: DOC-DOCUMENTATION-MANIFESTS, target: DOC-DOCUMENTATION-SCHEMA, status: resolved, kind: internal_document}
+  - {source: DOC-DOCUMENTATION-MANIFESTS, target: DOC-REPRESENTATION-MANIFESTS, status: resolved, kind: internal_document}
 
 reference_policy:
-  resolved: Reference target is represented by a known repository document or explicit artifact.
+  resolved: Reference target is represented by a known inventory identity and repository artifact.
   unresolved: Reference is known conceptually but its target cannot yet be established.
   external: Reference leaves the repository boundary and requires independent validation.
   intentionally_missing: Absence is deliberate and documented.
@@ -109,6 +42,7 @@ reference_policy:
 
 invariants:
   - references_are_not_implementation_evidence
+  - every_internal_reference_target_must_exist_in_inventory
   - unresolved_references_remain_visible
   - external_references_require_independent_validation
   - reference_status_must_not_be_inferred_from_document_authority
