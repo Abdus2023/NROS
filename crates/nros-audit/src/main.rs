@@ -111,7 +111,10 @@ fn check_ci() {
         } else {
             println!("✅ CI Miri gate hard failure (no || echo) — fixes CI-002");
         }
-        if content.contains("cargo run -p nros-cli --bin nros -- init") {
+        if content.contains("cargo run -p nros-cli --bin nros -- init")
+            || content.contains("/target/debug/nros\" init")
+            || content.contains("/target/debug/nros init")
+        {
             println!("✅ CI nros-init golden test actually runs nros init (fixes CI-001)");
         } else {
             println!("⚠️  CI nros-init test may still be trivial — should run real nros init + cargo check");
