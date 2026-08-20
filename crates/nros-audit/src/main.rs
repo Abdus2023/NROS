@@ -106,10 +106,21 @@ fn check_ci() {
     if ci_path.exists() {
         println!("✅ CI workflow exists at {:?}", ci_path);
         let content = fs::read_to_string(ci_path).unwrap_or_default();
-        if content.contains("|| echo") {
-            println!("❌ CI-002: Miri safety gate suppresses failures via || echo — must be hard failure (no || echo)");
+        // Pass 24: check that the Miri gate specifically doesn't suppress failures.
+        // We must ignore comments and unrelated `|| echo` (e.g. toolchain detection),
+        // so strip comment lines before searching.
+        let code_only: String = content
+            .lines()
+            .filter(|l| !l.trim_start().starts_with('#'))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let miri_suppressed = code_only
+            .lines()
+            .any(|l| l.contains("cargo miri") && l.contains("|| echo"));
+        if miri_suppressed {
+            println!("❌ CI-002: A `cargo miri` invocation is suppressed by `|| echo` — must be a hard failure");
         } else {
-            println!("✅ CI Miri gate hard failure (no || echo) — fixes CI-002");
+            println!("✅ CI Miri gate: no `cargo miri ... || echo` suppression found (hard failure) — fixes CI-002");
         }
         if content.contains("cargo run -p nros-cli --bin nros -- init")
             || content.contains("/target/debug/nros\" init")
