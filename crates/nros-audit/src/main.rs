@@ -15,18 +15,21 @@ fn main() {
         "workspace" => check_workspace_inventory(),
         "ci" => check_ci(),
         "benchmarks" => check_benchmarks(),
+        "safety" => check_safety_invariants(),
         "all" => {
             check_workspace_inventory();
             check_claims();
             check_ci();
             check_benchmarks();
+            check_safety_invariants();
         }
         _ => {
-            println!("Usage: nros-audit [claims|workspace|ci|benchmarks|all]");
+            println!("Usage: nros-audit [claims|workspace|ci|benchmarks|safety|all]");
             println!("  claims      — Check README claims vs EVIDENCE_REGISTRY claim_allowed");
             println!("  workspace   — Check README 8 crates vs Cargo.toml 11 crates (DOC-001)");
             println!("  ci          — Check .github/workflows/ci.yml exists on audited ref");
             println!("  benchmarks  — Check benchmark claims vs artifacts");
+            println!("  safety      — Check Pass 24 soundness invariants in source");
             println!("  all         — Run all checks");
         }
     }
@@ -178,5 +181,129 @@ fn check_benchmarks() {
         }
     } else {
         println!("✅ No obvious as_mut() over uninit in WriteGuard (checked via grep)");
+    }
+}
+
+/// Pass 24 safety-invariants gate (SAFETY-GATE).
+///
+/// Greps the source for the structural markers that establish the soundness fixes
+/// from AUDIT_PASS_24. These are *string* checks, not a compiler — they guard
+/// against accidental regression of the safe-API surface between proper Miri runs.
+/// Each check is a necessary (not sufficient) condition; Miri/trybuild remain the
+/// authoritative evidence.
+fn check_safety_invariants() {
+    println!("\n🔒 SAFETY-GATE: Pass 24 soundness invariants (structural)");
+
+    let core_lib = fs::read_to_string("crates/nros-core/src/lib.rs").unwrap_or_default();
+    let transport_lib = fs::read_to_string("crates/nros-transport/src/lib.rs").unwrap_or_default();
+    let facade_lib = fs::read_to_string("crates/nros/src/lib.rs").unwrap_or_default();
+    let node_lib = fs::read_to_string("crates/nros-node/src/lib.rs").unwrap_or_default();
+
+    let mut failures = 0;
+
+    // I-001 / CORE-011: the safe closure-based initializer must NOT exist.
+    if core_lib.contains("pub fn init_with<F>") {
+        println!("❌ I-001 REGRESSED: safe WriteGuard::init_with() is present again — safe UB (no-op closure -> commit -> deref uninit)");
+        failures += 1;
+    } else {
+        println!("✅ I-001: no safe init_with(); field-by-field init requires unsafe init_with_unchecked()");
+    }
+
+    // I-001: write_value must exist as the 100%-safe initializer.
+    if core_lib.contains("pub fn write_value(self, value: T)") {
+        println!("✅ I-001: write_value(self, T) safe initializer present");
+    } else {
+        println!("❌ I-001: write_value(self, T) missing — no safe path to InitializedWriteGuard");
+        failures += 1;
+    }
+
+    // CORE-011: as_mut_ptr must be declared `unsafe fn`, not a safe fn.
+    // We look for the safe-form `pub fn as_mut_ptr(&self)` which would be unsound.
+    if core_lib.contains("pub fn as_mut_ptr(&self)") {
+        println!("❌ CORE-011 REGRESSED: as_mut_ptr() is a safe fn again — must be `pub unsafe fn`");
+        failures += 1;
+    } else if core_lib.contains("pub unsafe fn as_mut_ptr(&self)") {
+        println!("✅ CORE-011: as_mut_ptr() is `pub unsafe fn` (raw init escape hatch marked unsafe)");
+    }
+
+    // CORE-014: only InitializedWriteGuard exposes commit (structurally: commit is
+    // defined in the InitializedWriteGuard impl, not WriteGuard). We check that the
+    // WriteGuard impl block does not contain `pub fn commit`.
+    if let Some(write_guard_block) = core_lib.split("impl<'a, T> WriteGuard<'a, T>").nth(1) {
+        let block_until_next = write_guard_block.split("// ── InitializedWriteGuard").next().unwrap_or(write_guard_block);
+        if block_until_next.contains("pub fn commit") {
+            println!("❌ CORE-014 REGRESSED: WriteGuard exposes commit() — uninitialized commit possible");
+            failures += 1;
+        } else {
+            println!("✅ CORE-014: WriteGuard has no commit(); only InitializedWriteGuard can commit");
+        }
+    }
+
+    // CORE-015: ReadGuard must NOT implement DerefMut.
+    if core_lib.contains("impl<'a, T> DerefMut for ReadGuard") {
+        println!("❌ CORE-015 REGRESSED: ReadGuard implements DerefMut — consumer can mutate published data");
+        failures += 1;
+    } else {
+        println!("✅ CORE-015: ReadGuard is immutable (Deref only, no DerefMut)");
+    }
+
+    // I-002/I-003: Producer/Consumer must not be Clone (type-enforced SPSC).
+    // We check there is no `impl<T> Clone for Producer` / Consumer.
+    for endpoint in &["Producer", "Consumer"] {
+        let pattern = format!("impl<T> Clone for {}", endpoint);
+        if core_lib.contains(&pattern) {
+            println!("❌ I-002/003 REGRESSED: {} is Clone — SPSC role enforcement broken", endpoint);
+            failures += 1;
+        }
+    }
+    if !core_lib.contains("impl<T> Clone for Producer") && !core_lib.contains("impl<T> Clone for Consumer") {
+        println!("✅ I-002/003: Producer/Consumer are not Clone (single endpoints enforced by type system)");
+    }
+
+    // TRANSPORT-001: MessageHeader::SIZE must be the explicit 36-byte wire size,
+    // NOT size_of (48 due to #[repr(C)] padding). Only inspect code (not comments),
+    // since the remediation comment itself references `size_of`.
+    let uses_sizeof = transport_lib.lines().any(|l| {
+        let code = l.split("//").next().unwrap_or("");
+        code.contains("size_of::<MessageHeader>") && code.contains("SIZE")
+    });
+    if uses_sizeof {
+        println!("❌ TRANSPORT-001 REGRESSED: SIZE uses size_of (48) instead of explicit 36-byte wire size — packets misparse");
+        failures += 1;
+    } else if transport_lib.contains("pub const SIZE: usize = 36") {
+        println!("✅ TRANSPORT-001: MessageHeader::SIZE = 36 (matches to_bytes/from_bytes wire format)");
+    } else {
+        println!("⚠️  TRANSPORT-001: could not confirm SIZE == 36 — inspect MessageHeader");
+    }
+
+    // E0116: nros-node must not inherent-impl the Timestamp alias to a foreign type.
+    // Check only non-comment lines (the audit report explains the removal in a comment).
+    let node_has_impl = node_lib.lines().any(|l| {
+        let code = l.split("//").next().unwrap_or("").trim();
+        code.starts_with("impl Timestamp")
+    });
+    if node_has_impl {
+        println!("❌ E0116 REGRESSED: nros-node has `impl Timestamp` for a foreign type alias");
+        failures += 1;
+    } else {
+        println!("✅ E0116: no foreign-type inherent impl in nros-node");
+    }
+
+    // E0252: nros facade prelude must source canonical types from ONE crate.
+    // Heuristic: it must NOT import Twist/Vector3 from both nros_core and nros_node.
+    let prelude = facade_lib.split("pub mod prelude").nth(1).unwrap_or("");
+    let core_line = prelude.lines().any(|l| l.contains("nros_core::{") && (l.contains("Twist") || l.contains("Vector3")));
+    let node_line = prelude.lines().any(|l| l.contains("nros_node::{") && (l.contains("Twist") || l.contains("Vector3")));
+    if core_line && node_line {
+        println!("❌ E0252 REGRESSED: prelude imports Twist/Vector3 from BOTH nros_core and nros_node");
+        failures += 1;
+    } else if prelude.contains("nros_types") {
+        println!("✅ E0252: prelude sources canonical domain types from nros_types (single source)");
+    }
+
+    println!("\n🔒 SAFETY-GATE result: {} failure(s)", failures);
+    if failures > 0 {
+        // Exit non-zero so CI doc-gate fails on structural regression.
+        std::process::exit(1);
     }
 }

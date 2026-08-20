@@ -13,14 +13,42 @@ pub use nros_macros::{
 // Re-export core types for prelude
 pub mod prelude {
     //! Prelude for `use nros::prelude::*;` per DESIGN.md §3.1
-    pub use crate::node as node_macro; // not needed, but keep
-    pub use crate::{node, subscribe, publish, param, service, callback, time_sync, compute, interrupt, distributed_node, shared_state, task, sim};
+    //!
+    //! Canonical domain types (Twist, Vector3, MotorCommand, Odometry, timestamps, ...)
+    //! are re-exported from `nros-types` ONLY — the single source of truth (Pass 24 fix).
+    //! Previously this prelude glob-imported the same names from BOTH `nros_core` and
+    //! `nros_node`, causing E0252 "the name ... is defined multiple times" and making
+    //! every generated `nros init` project fail to compile.
+    // Import attribute macros directly from nros_macros (not via crate::) to avoid any
+    // ambiguity with the `pub mod node`/`pub mod sim` modules below, which share those names
+    // in the type namespace. Macros live in the macro namespace, but sourcing them directly
+    // keeps the prelude unambiguous.
+    pub use nros_macros::{node, subscribe, publish, param, service, callback, time_sync, compute, interrupt, distributed_node, shared_state, task, sim};
 
-    // Core IPC
-    pub use nros_core::{Publisher, Subscriber, RingBuffer, WriteGuard, ReadGuard, PerformanceStats, MonotonicTimestamp, Timestamp, Vector3, Twist};
+    // Canonical domain types — single source of truth
+    pub use nros_types::{
+        WallTimestamp, MonotonicInstant, Vector3, Twist, MotorCommand, Odometry,
+        Point3D, PointCloud, ImageFormat, Image, ImuData,
+        ExecutionStats as NodeExecutionStats,
+    };
+    /// Backward-compat alias.
+    pub type Timestamp = WallTimestamp;
+    /// Backward-compat alias.
+    pub type MonotonicTimestamp = MonotonicInstant;
 
-    // Node
-    pub use nros_node::{VelocityController, LifecycleState, LifecycleNode, ParameterServer, Parameter, ParameterValue, ExecutionStats, Twist as NodeTwist, Vector3 as NodeVector3, MotorCommand, Odometry};
+    // Core IPC — note: Producer/Consumer are the preferred type-enforced SPSC endpoints;
+    // Publisher/Subscriber remain for backward compatibility.
+    pub use nros_core::{
+        channel, Producer, Consumer, Publisher, Subscriber, RingBuffer,
+        WriteGuard, InitializedWriteGuard, ReadGuard, PerformanceStats,
+        BackpressurePolicy, ChannelConfig, DeliveryPolicy, ExecutionClass,
+    };
+
+    // Node — avoid re-exporting the canonical type names that now come from nros_types.
+    pub use nros_node::{
+        VelocityController, LifecycleState, LifecycleNode,
+        ParameterServer, Parameter, ParameterValue,
+    };
 
     // HAL
     pub use nros_hal::{Sensor, SensorData, SensorConfig, DeviceInfo, SensorCapabilities, CameraDriver, LidarDriver, ImuDriver};
@@ -31,8 +59,8 @@ pub mod prelude {
     // Distributed
     pub use nros_distributed::{RobotId, NodeRole, LeaderElection, DistributedState, TaskScheduler};
 
-    // Sim
-    pub use nros_sim::{SimulationWorld, Vector3 as SimVector3, Quaternion, Transform};
+    // Sim — re-exported under aliases to avoid clashing with canonical Vector3
+    pub use nros_sim::{SimulationWorld, Quaternion, Transform};
 
     // Common
     pub use std::time::Duration;

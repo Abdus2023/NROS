@@ -204,16 +204,13 @@ impl<'a, T> WriteGuard<'a, T> {
         guard
     }
 
-    /// Legacy safe init_with that was unsound — kept for backward compat but now calls unsafe version internally
-    /// Marked unsafe in spirit but kept safe for now with warning — will be removed in next version
-    /// Use write_value() for 100% safe path
-    #[deprecated(note = "Use write_value() for safe initialization, or unsafe init_with_unchecked() if you must initialize field-by-field and can prove full init")]
-    pub fn init_with<F>(self, f: F) -> InitializedWriteGuard<'a, T>
-    where
-        F: FnOnce(&mut MaybeUninit<T>),
-    {
-        unsafe { self.init_with_unchecked(f) }
-    }
+    // NOTE: The previous legacy safe `init_with()` was REMOVED (Pass 24 remediation, CORE-011/CORE-014).
+    // It was unsound: a safe caller could provide a closure that did nothing, then commit the
+    // resulting `InitializedWriteGuard`, causing the consumer to dereference uninitialized memory.
+    // `#[deprecated]` on a safe method does NOT close a soundness hole — safe Rust must never be
+    // allowed to cause UB. Field-by-field initialization is now only possible through the unsafe
+    // `init_with_unchecked()`, whose safety contract makes the initialization proof obligation
+    // explicit. Use `write_value(self, T)` for the 100% safe path.
 
     /// Abandon reservation without committing — slot remains uninitialized, available for retry
     pub fn abort(self) {
@@ -399,6 +396,7 @@ pub struct Subscriber<T> {
 }
 
 impl<T> Subscriber<T> {
+    #[deprecated(note = "Use channel() API for type-enforced SPSC; Subscriber::new takes a raw Arc<RingBuffer> and weakens the SPSC guarantee per CORE-016/019")]
     pub fn new(ring: Arc<RingBuffer<T>>, topic: &str) -> Self {
         Self { ring, topic: topic.to_string() }
     }
@@ -588,8 +586,9 @@ mod tests {
 
     #[test]
     fn test_zero_copy_pubsub_guard_api() {
-        let publisher = Publisher::<Twist>::new("/cmd_vel", 1024);
-        let subscriber = Subscriber::new(publisher.ring.clone(), "/cmd_vel");
+        // Pass 24: use the type-enforced channel() API instead of the deprecated
+        // Publisher::ring() raw-ring escape hatch.
+        let (publisher, subscriber) = channel::<Twist>(1024);
         {
             let guard = publisher.allocate().unwrap();
             let twist = Twist { timestamp: Timestamp::now(), linear: Vector3 { x: 1.0, y: 0.0, z: 0.0 }, angular: Vector3 { x: 0.0, y: 0.0, z: 0.5 } };

@@ -14,5 +14,6 @@ name = "nros-hal-demo"
 path = "src/main.rs"
 
 [dependencies]
-nros-core = { path = "../nros-core" }
-nros-types = { path = "../nros-types" }
+# Pass 24: removed unused nros-core / nros-types path deps. HAL keeps its own local
+# domain types (Timestamp, Vector3, Image, ...) until the canonical migration (I-007).
+

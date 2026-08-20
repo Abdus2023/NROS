@@ -3,7 +3,7 @@
 //! Run: cargo run -p nros-core --bin bench -- --iterations 100000 --output benchmarks/results.json
 //! This separates correctness (cargo test) from performance (cargo bench / artifact)
 
-use nros_core::{Publisher, Subscriber, Twist, Vector3, Timestamp, PerformanceStats, MonotonicTimestamp};
+use nros_core::{channel, Twist, Vector3, Timestamp, PerformanceStats};
 use std::sync::{Arc, atomic::Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -153,8 +153,9 @@ fn main() {
 
     use std::collections::VecDeque;
 
-    let publisher = Publisher::<Twist>::new("/benchmark", capacity);
-    let subscriber = Subscriber::new(publisher.ring(), "/benchmark");
+    // Pass 24: use the type-enforced `channel()` API instead of the deprecated raw-ring
+    // Publisher/Subscriber pair (which exposed Arc<RingBuffer> and weakened SPSC).
+    let (publisher, subscriber) = channel::<Twist>(capacity);
 
     // Shared queue of publish Instants for true end-to-end latency measurement (fixes CORE-012)
     let publish_queue: Arc<std::sync::Mutex<VecDeque<Instant>>> = Arc::new(std::sync::Mutex::new(VecDeque::with_capacity(iterations)));

@@ -37,7 +37,19 @@ pub struct MessageHeader {
 
 impl MessageHeader {
     pub const MAGIC: u32 = 0x4E524F53; // "NROS" ASCII
-    pub const SIZE: usize = std::mem::size_of::<MessageHeader>(); // 36 bytes
+    /// Wire size in bytes.
+    ///
+    /// Pass 24 (TRANSPORT-001): this MUST be the explicit on-wire size produced by
+    /// `to_bytes()`/consumed by `from_bytes()` — NOT `size_of::<MessageHeader>()`.
+    /// The struct is `#[repr(C)]`, so its in-memory layout inserts alignment padding
+    /// before each `u64` field, making `size_of` == 48, while the manually-serialized
+    /// wire format is tightly packed to 36. Using `size_of` here previously made the
+    /// receiver read 48 bytes for a 36-byte header, consuming 12 bytes of payload and
+    /// misaligning every subsequent field. Keep this in sync with `to_bytes()`.
+    ///
+    /// 4 (magic) + 2 (version) + 2 (message_type) + 4 (payload_size)
+    /// + 8 (timestamp_sec) + 4 (timestamp_nsec) + 8 (sequence) + 4 (checksum) = 36.
+    pub const SIZE: usize = 36;
     pub const VERSION: u16 = 1;
 
     pub fn new(message_type: u16, payload_size: u32, sequence: u64) -> Self {
@@ -251,7 +263,10 @@ impl Serializable for LargePayload {
         }
         let id = u64::from_le_bytes(buffer[0..8].try_into().unwrap());
         let len = u32::from_le_bytes(buffer[8..12].try_into().unwrap()) as usize;
-        if buffer.len() < 12 + len {
+        // Pass 24: checked_add guards against `12 + len` wrapping usize on 32-bit targets
+        // and defeating the bounds check (same class as the UDP/TCP payload_size hardening).
+        let needed = 12usize.checked_add(len).ok_or("LargePayload length overflow")?;
+        if buffer.len() < needed {
             return Err("LargePayload incomplete".to_string());
         }
         Ok(Self {
@@ -378,7 +393,7 @@ impl CompressionEngineTrait for Lz4CompressionEngine {
         #[cfg(feature = "real-compression")]
         { false }
         #[cfg(not(feature = "real-compression"))]
-        { false }
+        { true }
     }
     fn name(&self) -> &'static str {
         #[cfg(feature = "real-compression")]
@@ -512,9 +527,13 @@ impl UdpTransport {
                 let header = MessageHeader::from_bytes(&buffer[..MessageHeader::SIZE])?;
                 header.validate()?;
 
-                // Extract payload
+                // Extract payload — use checked arithmetic so a malicious/garbage `payload_size`
+                // cannot wrap `usize` and defeat the bounds check (defensive on 32-bit targets).
                 let payload_start = MessageHeader::SIZE;
-                let payload_end = payload_start + header.payload_size as usize;
+                let payload_end = match payload_start.checked_add(header.payload_size as usize) {
+                    Some(end) => end,
+                    None => return Err("payload_size overflow".to_string()),
+                };
 
                 if payload_end > size {
                     return Err(format!("Incomplete packet: got {}, need {}", size, payload_end));
@@ -666,8 +685,22 @@ impl TcpTransport {
         let header = MessageHeader::from_bytes(&header_buf)?;
         header.validate()?;
 
+        // Pass 24 hardening: bound the payload allocation. `payload_size` comes from the
+        // untrusted network header; without a cap a malicious/buggy peer can advertise a
+        // multi-GB frame and OOM the receiver before a single byte of body is read.
+        // 64 MiB is far above any legitimate NROS frame (images/point clouds) while
+        // preventing pathological allocations.
+        const MAX_PAYLOAD_SIZE: usize = 64 * 1024 * 1024;
+        let payload_len = header.payload_size as usize;
+        if payload_len > MAX_PAYLOAD_SIZE {
+            return Err(format!(
+                "Payload size {} exceeds maximum frame size {} (possible malicious peer)",
+                payload_len, MAX_PAYLOAD_SIZE
+            ));
+        }
+
         // Read payload
-        let mut payload_buf = vec![0u8; header.payload_size as usize];
+        let mut payload_buf = vec![0u8; payload_len];
         stream
             .read_exact(&mut payload_buf)
             .map_err(|e| format!("Failed to read payload: {}", e))?;
@@ -1007,6 +1040,16 @@ mod tests {
         assert_eq!(h.magic, h2.magic);
         assert_eq!(h.payload_size, h2.payload_size);
         assert_eq!(h.sequence, h2.sequence);
+    }
+
+    #[test]
+    fn test_header_wire_size_is_36() {
+        // Pass 24 (TRANSPORT-001): the on-wire header is the tightly-packed 36 bytes
+        // produced by to_bytes(), NOT size_of::<MessageHeader>() (which is 48 due to
+        // #[repr(C)] alignment padding). If this fails, to_bytes/from_bytes and SIZE
+        // have drifted and the receiver will misparse every packet.
+        assert_eq!(MessageHeader::SIZE, 36);
+        assert_eq!(MessageHeader::new(0, 0, 0).to_bytes().len(), 36);
     }
 
     #[test]

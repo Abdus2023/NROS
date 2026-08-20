@@ -463,7 +463,13 @@ impl BuildSystem {
             match profile {
                 BuildProfile::Debug => {},
                 BuildProfile::Release => { cmd.arg("--release"); },
-                BuildProfile::Realtime => { cmd.args(["--profile", "realtime"]).arg("--features").arg("real-time"); },
+                BuildProfile::Realtime => {
+                    // NOTE: the generated/consumer project must define a [profile.realtime]
+                    // section; otherwise cargo errors. `--features real-time` is passed as a
+                    // single `--features <VALUE>` pair (Pass 24: keep VALUE attached so shells
+                    // and older cargo versions don't misparse it).
+                    cmd.args(["--profile", "realtime", "--features", "real-time"]);
+                },
                 BuildProfile::Embedded => { cmd.args(["--profile", "embedded"]); },
             }
             if let Some(t) = target {

@@ -18,4 +18,6 @@ name = "nros-cli-demo"
 path = "src/demo.rs"
 
 [dependencies]
-nros-core = { path = "../nros-core" }
+# Pass 24: removed unused nros-core path dep — CLI only mentions nros_core in a
+# user-facing println string, not as an actual dependency.
+

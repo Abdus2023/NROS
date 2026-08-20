@@ -14,4 +14,4 @@ name = "nros-studio"
 path = "src/main.rs"
 
 [dependencies]
-nros-core = { path = "../nros-core" }
+# Pass 24: removed unused nros-core path dep (studio does not reference nros_core in source).

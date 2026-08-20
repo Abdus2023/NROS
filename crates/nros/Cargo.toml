@@ -6,6 +6,7 @@ description = "NROS facade crate — re-exports core crates + macros, makes `nro
 license.workspace = true
 
 [dependencies]
+nros-types = { path = "../nros-types" }
 nros-core = { path = "../nros-core" }
 nros-node = { path = "../nros-node" }
 nros-hal = { path = "../nros-hal" }

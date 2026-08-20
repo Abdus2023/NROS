@@ -221,10 +221,14 @@ impl LeaderElection {
         }
     }
 
-    fn should_grant_vote(&self, _candidate_id: RobotId, _term: u64) -> bool {
-        // Simplified deterministic probability for demo — real: check log up-to-date + not voted this term
-        // Use pseudo-random to simulate network partitions and split-brain prevention
-        rand::random_bool(0.7)
+    fn should_grant_vote(&self, candidate_id: RobotId, term: u64) -> bool {
+        // SIMULATED vote grant — real Raft checks last-log-index/term and one-vote-per-term.
+        // Pass 24: inline a deterministic ~70%-grant pseudo-random check derived from
+        // (candidate, term) so the simulation is reproducible. (The project also has a
+        // private `mod rand` below; inlining avoids the extra global-state lookup and keeps
+        // the election outcome a pure function of node id + term.)
+        let mix = candidate_id.0.wrapping_mul(2_654_435_761).wrapping_add(term.wrapping_mul(40_503));
+        (mix % 10) < 7
     }
 
     fn become_leader(&self, term: u64) {
@@ -328,7 +332,8 @@ pub trait ElectionEngine {
 }
 
 /// Simulated election — SIMULATED per EVIDENCE_REGISTRY.md
-/// Status: SIMULATED — uses random_bool(0.7) not real RequestVote RPC
+/// Status: SIMULATED — uses an inlined deterministic pseudo-random vote grant,
+/// not real RequestVote RPC / log-up-to-date checks.
 /// Real Raft would: RequestVote RPC with last log index/term, AppendEntries, commit index, majority persistence
 pub type SimulatedElection = LeaderElection;
 
@@ -404,7 +409,13 @@ impl ElectionEngine for RaftElection {
         *self.role.lock().unwrap() == NodeRole::Leader
     }
     fn term(&self) -> u64 { self.current_term.load(Ordering::SeqCst) }
-    fn is_simulated(&self) -> bool { false } // Claims to be real path, but scaffolded
+    fn is_simulated(&self) -> bool {
+        // Pass 24 (I-009): this is SCAFFOLDED (request_vote_rpc/append_entries_rpc are
+        // no-ops and start_election always returns false). It must NOT masquerade as a
+        // real Raft implementation; return true until the RPCs, persistent state, and
+        // majority voting are actually implemented.
+        true
+    }
 }
 
 // ============================================================================
@@ -496,6 +507,10 @@ impl<T: Clone + std::fmt::Debug> DistributedState<T> {
 
     /// Simulated distributed get — checks local shard vs remote
     pub fn consistent_hash_shard(&self, key: &str, total_shards: usize) -> usize {
+        // Pass 24: guard against total_shards == 0 which would panic on `% 0`.
+        if total_shards == 0 {
+            return 0;
+        }
         // Simplified FNV-1a hash
         let mut hash = 2166136261u64;
         for b in key.bytes() {
@@ -923,30 +938,5 @@ mod tests {
         let shard1 = state.consistent_hash_shard("max_speed", 10);
         let shard2 = state.consistent_hash_shard("max_speed", 10);
         assert_eq!(shard1, shard2); // Same key same shard
-    }
-}
-
-// ============================================================================
-// Simple random for demo — deterministic seeded pseudo-random
-// ============================================================================
-
-mod rand {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static SEED: AtomicU64 = AtomicU64::new(0x12345678);
-
-    pub fn random_bool(probability: f64) -> bool {
-        let seed = SEED.load(Ordering::Relaxed);
-        let new_seed = seed.wrapping_mul(1103515245).wrapping_add(12345);
-        SEED.store(new_seed, Ordering::Relaxed);
-        let val = (new_seed % 1000) as f64 / 1000.0;
-        val < probability
-    }
-
-    #[allow(dead_code)]
-    pub fn random_f64() -> f64 {
-        let seed = SEED.load(Ordering::Relaxed);
-        let new_seed = seed.wrapping_mul(1103515245).wrapping_add(12345);
-        SEED.store(new_seed, Ordering::Relaxed);
-        (new_seed % 1000) as f64 / 1000.0
     }
 }
