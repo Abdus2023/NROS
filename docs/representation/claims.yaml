@@ -1,0 +1,69 @@
+schema_version: "0.1"
+kind: claim_policy
+project: NROS
+
+claim_classes:
+  allowed_with_scope:
+    requirement: evidence_supports_the_claim_at_declared_scope
+  allowed_as_scaffolding:
+    requirement: implementation_exists_but_protocol_or_validation_is_incomplete
+  conditional:
+    requirement: implementation_or_test_evidence_exists_but_required_validation_is_missing
+  forbidden:
+    requirement: evidence_is_insufficient_or_implementation_is_specified_only
+
+claims:
+  - id: CLAIM-IPC-001
+    subject: SPSC ring buffer
+    class: allowed_with_scope
+    scope: tested_guard_based_ring_buffer
+    excludes:
+      - MPMC
+      - shared_memory_memfd
+      - production_realtime_guarantee
+
+  - id: CLAIM-PERF-001
+    subject: headline latency and throughput numbers
+    class: conditional
+    scope: repository_reported_measurements_only
+    excludes:
+      - independent_validation
+      - universal_hardware_guarantee
+      - production_realtime_guarantee
+
+  - id: CLAIM-HAL-001
+    subject: real DMA/V4L2 hardware integration
+    class: forbidden
+    reason: implementation_not_hardware_validated
+
+  - id: CLAIM-DIST-001
+    subject: Raft consensus
+    class: forbidden
+    reason: current_election_and_replication_are_not_a_complete_Raft_implementation
+
+  - id: CLAIM-STUDIO-001
+    subject: production live telemetry
+    class: forbidden
+    reason: current_provider_is_demo_or_scaffolded_live_provider
+
+  - id: CLAIM-SAFETY-001
+    subject: ISO 26262 / IEC 61508 qualification
+    class: forbidden
+    reason: qualification_process_and_required_evidence_are_not_complete
+
+  - id: CLAIM-CI-001
+    subject: CI passing
+    class: conditional
+    rule: workflow_configuration_alone_never_establishes_a_pass
+
+  - id: CLAIM-MIRI-001
+    subject: Miri validation passing
+    class: conditional
+    rule: configuration_or_installation_never_establishes_execution_or_pass
+
+invariants:
+  - no_claim_without_evidence_record
+  - no_real_claim_from_simulated_backend
+  - no_hardware_claim_without_hardware_evidence
+  - no_ci_pass_claim_without_executed_successful_run
+  - no_performance_validation_claim_from_non_gating_benchmark_only
