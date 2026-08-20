@@ -107,18 +107,24 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build the CLI
         run: cargo build -p nros-cli
-      - name: Run nros init (basic template)
+      - name: Run nros init (basic template) and cargo check
         run: |
           cd "${RUNNER_TEMP}"
           "${GITHUB_WORKSPACE}/target/debug/nros" init test_robot_basic --template=basic
           ls -la test_robot_basic
+          echo "--- Cargo.toml ---"
           cat test_robot_basic/Cargo.toml
-      - name: Run nros init (mobile_base template)
+          echo "--- cargo check ---"
+          cd test_robot_basic && cargo check
+      - name: Run nros init (mobile_base template) and cargo check
         run: |
           cd "${RUNNER_TEMP}"
           "${GITHUB_WORKSPACE}/target/debug/nros" init test_robot_mobile --template=mobile_base
           ls -la test_robot_mobile
+          echo "--- Cargo.toml ---"
           cat test_robot_mobile/Cargo.toml
+          echo "--- cargo check ---"
+          cd test_robot_mobile && cargo check
 
   benchmarks:
     name: Benchmarks (report-only, non-blocking)
