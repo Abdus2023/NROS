@@ -1,6 +1,13 @@
 name: NROS CI
 
 # Branch-bound CI for the audited lineage (fixes Pass 23 P0-B "CI provenance / branch integrity").
+#
+# DEPLOYMENT NOTE: The CI_GITHUB_TOKEN used by the arena-ai-coding-agent GitHub App
+# lacks the `workflows` permission, so this file cannot be pushed to
+# .github/workflows/ by the bot. It is committed here at docs/ci.yml so the
+# definition is version-controlled and reviewed. A repository admin must copy it
+# to .github/workflows/ci.yml on the branch (or grant the App `workflows` write)
+# to activate the pipeline. See AUDIT_PASS_24.md §6 and §10.
 # The workflow file lives on THIS branch and tests THIS branch's tree, so the audited SHA
 # and the tested SHA are identical. Every job records the commit SHA it ran against.
 #
