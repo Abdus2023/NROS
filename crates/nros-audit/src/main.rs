@@ -70,7 +70,10 @@ fn check_claims() {
     let checks = vec![
         ("Raft implemented", "README says Raft implemented", "SIMULATED", evidence.contains("Raft") && evidence.contains("SIMULATED")),
         ("6.2 μs benchmark", "README 6.2 μs", "repository-reported", evidence.contains("6.2 μs") && evidence.contains("repository-reported")),
-        ("CI added", "README claims CI added", "workflow absent", !Path::new(".github/workflows/ci.yml").exists()),
+        // Pass 24: CI workflow now lives on this branch. If it is absent, flag it;
+        // if present, this check is satisfied (the dedicated check_ci() job does
+        // deeper validation of Miri gating and nros-init).
+        ("CI added", "README claims CI added", "workflow present", Path::new(".github/workflows/ci.yml").exists()),
         ("8 crates", "README 8 crates", "Cargo 10/11 crates", true), // checked in workspace gate
         ("DMA zero-copy", "README DMA zero-copy", "SIMULATED", evidence.contains("Real DMA") && evidence.contains("SPECIFIED")),
     ];

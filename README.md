@@ -87,7 +87,7 @@ nros run --inspect  # http://localhost:8080
 
 *Extended beyond §25 — implements §7.2 Studio, §7.3 Simulation, Phase 2 — now with evidence taxonomy and Safety Gate v0.1 fixes*
 
-**CI Gate:** `.github/workflows/ci.yml` added per AUDIT P0: `cargo fmt --check`, `cargo check --workspace`, `cargo test --workspace` correctness only, `clippy -D warnings`, `cargo test -- --ignored` benchmarks not CI gate, `cargo miri test -p nros-core`, safety gate tests `test_double_reserve_prevention`, `test_read_guard_lifetime`, `test_generic_t_destruction`, `test_abandoned_reservation`, `nros init` golden test. See `AUDIT.md` Pass 5.
+**CI Gate:** `.github/workflows/ci.yml` on the audited branch (Pass 24, branch-bound with SHA manifest): `cargo fmt --check`, `cargo check --workspace --all-targets`, `cargo test --workspace --all-targets`, `cargo clippy --workspace` (report-only until a clippy-clean baseline is established; flip to `-D warnings` once clean), `cargo miri test -p nros-core` + `-p nros-types` as a **hard failure** (no `|| echo`), `nros init` golden test that builds the CLI and runs `cargo check` on both generated templates, and `cargo run -p nros-audit -- safety` as a structural soundness regression gate. Benchmarks are `continue-on-error` and report-only.
 
 **Run demos (requires Rust toolchain):**
 ```bash
