@@ -1,0 +1,26 @@
+schema_version: "0.1"
+kind: representation_snapshot
+project: NROS
+
+identity:
+  repository: Abdus2023/NROS
+  branch: arena/repository-representation
+  commit: "8134625afebfa8cd29a233d8a5aa0c27492ce47b"
+
+representation:
+  schema: "0.1"
+  manifests:
+    - architecture.yaml
+    - capabilities.yaml
+    - evidence.yaml
+    - claims.yaml
+
+purpose: >-
+  Pin the repository representation to an exact source revision. A snapshot
+  is descriptive evidence of repository identity; it does not assert that CI,
+  tests, benchmarks, Miri, or hardware validation succeeded.
+
+non_inference_rules:
+  - snapshot_identity_is_not_execution_success
+  - branch_identity_is_not_release_status
+  - manifest_presence_is_not_implementation_evidence
