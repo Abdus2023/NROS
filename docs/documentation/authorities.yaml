@@ -1,0 +1,77 @@
+schema_version: "0.1"
+kind: documentation_authority_catalog
+project: NROS
+
+authorities:
+  - id: AUTH-DESIGN
+    name: DESIGN.md
+    authority_level: canonical
+    scope: system architecture, requirements intent, design contracts, and target behavior
+    notes: Design intent does not establish implementation or verification success.
+
+  - id: AUTH-REPOSITORY-REPRESENTATION
+    name: docs/REPOSITORY_REPRESENTATION.md
+    authority_level: canonical
+    scope: repository representation model, evidence hierarchy, claim discipline, and representation invariants
+
+  - id: AUTH-REPRESENTATION-MANIFESTS
+    name: docs/representation/*.yaml
+    authority_level: canonical
+    scope: machine-readable repository representation state, capabilities, evidence, claims, and snapshot identity
+
+  - id: AUTH-DOCUMENTATION-SCHEMA
+    name: docs/documentation/schema.yaml
+    authority_level: canonical
+    scope: documentation representation structure, vocabulary, and cross-document invariants
+
+  - id: AUTH-EVIDENCE-REGISTRY
+    name: EVIDENCE_REGISTRY.md
+    authority_level: authoritative
+    scope: capability evidence classification and claim eligibility
+
+  - id: AUTH-AUDIT
+    name: AUDIT.md and AUDIT_PASS_*.md
+    authority_level: authoritative
+    scope: repository audit findings, historical verification observations, remediation findings, and verification gates
+    notes: Later verified observations supersede earlier observations when their represented revision is newer.
+
+  - id: AUTH-CORE-SAFETY
+    name: crates/nros-core/SAFETY.md
+    authority_level: authoritative
+    scope: nros-core safety invariants, unsafe boundaries, lifetime/destruction model, and required safety verification
+
+  - id: AUTH-THREAT-MODEL
+    name: docs/THREAT_MODEL.md
+    authority_level: authoritative
+    scope: safety and concurrency threat model, violation scenarios, fixes, and verification gates
+
+  - id: AUTH-IMPLEMENTATIONS-MAP
+    name: implementations/README.md
+    authority_level: authoritative
+    scope: authoritative-versus-archival source mapping for implementation artifacts
+
+  - id: AUTH-CI-DEFINITION
+    name: docs/ci.yml
+    authority_level: authoritative
+    scope: CI workflow definition and intended verification gates
+    notes: Workflow definition is not execution evidence until GitHub Actions actually runs it.
+
+  - id: AUTH-README
+    name: README.md
+    authority_level: informational
+    scope: user-facing overview, navigation, examples, and project narrative
+    notes: README claims must resolve through evidence and claim policy before being treated as verified.
+
+  - id: AUTH-COMPARISON
+    name: COMPARISON.md
+    authority_level: supporting
+    scope: comparative narrative, benchmarks, and feature comparisons
+    notes: Comparative performance and readiness statements require independent evidence records.
+
+rules:
+  - canonical_design_defines_intent_not_execution
+  - canonical_representation_defines_representation_semantics
+  - evidence_registry_and_audits_constrain_claim_strength
+  - source_revision_and_execution_evidence_take_precedence_over_stale_narrative
+  - informational_documents_must_not_override_authoritative_documents
+  - no_authority_level_implies_implementation_maturity
