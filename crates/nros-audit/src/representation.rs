@@ -2,6 +2,7 @@
 //! The manifests are normative text; this gate performs repository discovery
 //! without requiring a YAML parser dependency.
 
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -36,6 +37,16 @@ fn capability_field(text: &str, id: &str, field: &str) -> Option<String> {
     block.lines().find_map(|line| line.trim().strip_prefix(&format!("{}: ", field)).map(str::to_string))
 }
 
+fn represented_crates(text: &str) -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    for line in text.lines() {
+        if let Some(value) = line.trim().strip_prefix("crate: ") {
+            out.insert(value.trim().to_string());
+        }
+    }
+    out
+}
+
 pub fn run() {
     println!("NROS repository representation gate");
     let architecture = read("architecture.yaml");
@@ -49,7 +60,7 @@ pub fn run() {
         require(text, "project: NROS", &format!("{} project identity", name), &mut failures);
     }
 
-    // Repository discovery: workspace members must be real crates.
+    // Forward direction: representation → repository.
     let members = workspace_members();
     println!("DISCOVERY workspace members: {}", members.len());
     for member in &members {
@@ -58,9 +69,6 @@ pub fn run() {
         else { println!("FAIL  workspace member {} has no Cargo.toml", member); failures += 1; }
     }
 
-    // Capability records must resolve to actual crate directories. A SPECIFIED
-    // capability may still be absent at source level, but its owning subsystem
-    // must exist; implemented states additionally require src/.
     let ids = ["CORE-IPC-001","CORE-IPC-002","NODE-001","NODE-002","HAL-001","HAL-002","TRANSPORT-001","TRANSPORT-002","DIST-001","DIST-002","SIM-001","STUDIO-001","STUDIO-002","CLI-001","AUDIT-001"];
     for id in ids {
         require(&capabilities, id, &format!("capability {} declared", id), &mut failures);
@@ -74,6 +82,28 @@ pub fn run() {
         if ["IMPLEMENTED","TESTED","BENCHMARKED","INTEGRATION-TESTED","HARDWARE-VALIDATED","PRODUCTION-READY","SAFETY-QUALIFIABLE"].contains(&state.as_str()) && !Path::new(&format!("{}/src", crate_path)).is_dir() {
             println!("FAIL  {} state={} but source tree is absent", id, state); failures += 1;
         }
+    }
+
+    // Reverse direction: repository → representation. Every workspace crate
+    // must be represented either by a capability mapping or by an explicit
+    // architecture-level infrastructure declaration.
+    let capability_crates = represented_crates(&capabilities);
+    let architecture_crates = represented_crates(&architecture);
+    for member in &members {
+        let crate_name = member.strip_prefix("crates/").unwrap_or(member);
+        if capability_crates.contains(crate_name) || architecture_crates.contains(crate_name) {
+            println!("PASS  reverse inventory {} represented", member);
+        } else {
+            println!("FAIL  reverse inventory {} has no representation entry", member);
+            failures += 1;
+        }
+    }
+
+    // Detect duplicate capability IDs in the canonical catalog.
+    for id in ids {
+        let count = capabilities.matches(&format!("  - id: {}", id)).count();
+        if count == 1 { println!("PASS  capability {} unique", id); }
+        else { println!("FAIL  capability {} appears {} times", id, count); failures += 1; }
     }
 
     // Evidence/claim inventory and non-inference invariants.
