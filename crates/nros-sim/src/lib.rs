@@ -1077,6 +1077,38 @@ mod tests {
     }
 
     #[test]
+    fn test_degenerate_inputs_do_not_panic() {
+        // Pass 24: zero/NaN/negative/huge inputs must not panic (from_secs_f64,
+        // integer div-by-zero, or overflow). They fall back to sane defaults.
+        let mut phys = PhysicsEngine::new(Vector3::new(0.0, -9.81, 0.0), 0.0);
+        phys.step(Duration::from_millis(10));
+        let mut phys = PhysicsEngine::new(Vector3::zero(), f64::NAN);
+        phys.step(Duration::from_millis(10));
+        let mut phys = PhysicsEngine::new(Vector3::zero(), -1.0);
+        phys.step(Duration::from_millis(10));
+
+        let mut world = SimulationWorld::new();
+        world.set_realtime_factor(f64::NAN);
+        world.set_realtime_factor(-2.0);
+        world.step(Duration::from_millis(10));
+
+        // Zero/huge camera dimensions must not div-by-zero or overflow-alloc.
+        let cam = SimulatedCamera::new(0, 0, 90.0f64.to_radians());
+        let frame = cam.render(&Transform {
+            position: Vector3::zero(),
+            orientation: Quaternion::identity(),
+        }, &HashMap::new());
+        assert!(!frame.is_empty(), "1x1 camera should produce a 3-byte frame");
+
+        let huge = SimulatedCamera::new(u32::MAX, u32::MAX, 1.0);
+        let frame = huge.render(&Transform {
+            position: Vector3::zero(),
+            orientation: Quaternion::identity(),
+        }, &HashMap::new());
+        assert!(frame.is_empty(), "huge resolution must be rejected, not allocated");
+    }
+
+    #[test]
     fn test_deterministic_replay() {
         let mut world = SimulationWorld::new();
         world.enable_recording(true);
