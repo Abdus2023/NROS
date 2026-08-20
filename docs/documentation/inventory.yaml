@@ -16,140 +16,144 @@ documents:
     authority: informational
     status: active
     purpose: Repository overview, user-facing orientation, and navigation.
-
   - id: DOC-DESIGN
     path: DESIGN.md
     type: legacy-entry-point
     authority: historical
     status: migrated
     purpose: Compatibility entry point for the historical design document; current design authority lives under docs/architecture/ and docs/specifications/.
-
   - id: DOC-COMPARISON
     path: COMPARISON.md
     type: comparison
     authority: supporting
     status: active
     purpose: Evidence-bounded NROS versus ROS 2 architectural comparison.
-
   - id: DOC-AUDIT
     path: AUDIT.md
     type: audit-history
     authority: historical
     status: migrated
     purpose: Historical repository verification entry point; current verification authority lives under docs/verification/.
-
   - id: DOC-EVIDENCE
     path: EVIDENCE_REGISTRY.md
     type: evidence
     authority: authoritative
     status: active
     purpose: Feature-to-specification-to-implementation evidence and claim classification.
-
   - id: DOC-REPRESENTATION
     path: docs/REPOSITORY_REPRESENTATION.md
     type: normative
     authority: canonical
     status: active
     purpose: Normative model connecting architecture, implementation, evidence, claims, and repository state.
-
   - id: DOC-THREAT-MODEL
     path: docs/THREAT_MODEL.md
     type: security
     authority: authoritative
     status: active
     purpose: Safety and concurrency threat model.
-
   - id: DOC-CI
     path: docs/ci.yml
     type: verification
     authority: authoritative
     status: active
     purpose: Version-controlled CI workflow definition; execution must be independently observed.
-
   - id: DOC-CORE-SAFETY
     path: crates/nros-core/SAFETY.md
     type: safety
     authority: authoritative
     status: active
     purpose: nros-core safety and verification requirements.
-
   - id: DOC-IMPLEMENTATIONS
     path: implementations/README.md
     type: operational
     authority: authoritative
     status: active
     purpose: Distinction between authoritative crates and archival implementation artifacts.
-
   - id: DOC-DOCUMENTATION-INTEGRITY
     path: docs/verification/documentation-integrity.md
     type: verification
     authority: authoritative
     status: active
     purpose: Integrity gate for documentation roles, claims, links, revisions, and migration state.
-
   - id: DOC-MIGRATION
     path: docs/migration/README.md
     type: migration
     authority: authoritative
     status: active
     purpose: Legacy-document classification and migration policy.
-
   - id: DOC-GETTING-STARTED
     path: docs/getting-started/README.md
     type: guide
     authority: supporting
     status: active
     purpose: Practical entry point for installation and first use.
-
   - id: DOC-REFERENCE
     path: docs/reference/README.md
     type: reference
     authority: authoritative
     status: active
     purpose: Concrete repository interfaces and reference surfaces.
-
   - id: DOC-DEVELOPMENT
     path: docs/development/README.md
     type: guide
     authority: supporting
     status: active
     purpose: Developer workflow and contribution guidance.
-
   - id: DOC-SAFETY
     path: docs/safety/README.md
     type: safety
     authority: authoritative
     status: active
     purpose: Safety boundaries, invariants, gates, remediation, and threat analysis.
-
   - id: DOC-OPERATIONS
     path: docs/operations/README.md
     type: operations
     authority: supporting
     status: active
     purpose: Deployment, observability, diagnostics, and troubleshooting.
-
   - id: DOC-GOVERNANCE
     path: docs/governance/README.md
     type: governance
     authority: supporting
     status: active
     purpose: Roadmap, status, decisions, and release process.
-
+  - id: DOC-CONCEPTS
+    path: docs/concepts/
+    type: guide
+    authority: canonical
+    status: active
+    purpose: Conceptual model, terminology, and design principles.
+  - id: DOC-ARCHITECTURE
+    path: docs/architecture/
+    type: architecture
+    authority: canonical
+    status: active
+    purpose: Architectural structure, boundaries, and system relationships.
+  - id: DOC-SPECIFICATIONS
+    path: docs/specifications/
+    type: specification
+    authority: canonical
+    status: active
+    purpose: Normative contracts, protocols, interfaces, and safety requirements.
+  - id: DOC-VERIFICATION
+    path: docs/verification/
+    type: verification
+    authority: authoritative
+    status: active
+    purpose: Evidence interpretation, claims, testing, benchmarks, validation, and documentation integrity.
   - id: DOC-AUDIT-HISTORY
     path: AUDIT_PASS_*.md
     type: audit-history
     authority: historical
     status: archived
     purpose: Historical verification passes retained with their represented revision context.
-
   - id: DOC-REPRESENTATION-MANIFESTS
     path: docs/representation/*.yaml
     type: machine-readable
     authority: canonical
     status: active
     purpose: Repository capability, evidence, claim, and snapshot manifests.
-
   - id: DOC-DOCUMENTATION-MANIFESTS
     path: docs/documentation/*.yaml
     type: machine-readable
