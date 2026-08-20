@@ -693,6 +693,25 @@ mod tests {
     }
 
     #[test]
+    fn test_drop_drains_all_occupied_slots() {
+        // Pass 24 regression: Drop must iterate by count (wrapping_sub), not by
+        // the raw read..write range, so it drops every occupied T. Fill the ring
+        // without consuming, then drop it; every T must be dropped exactly once.
+        let counter = Arc::new(AtomicUsize::new(0));
+        {
+            let ring = RingBuffer::<DropCounter>::new(4);
+            for _ in 0..4 {
+                ring.try_reserve().unwrap()
+                    .write_value(DropCounter { count: counter.clone() })
+                    .commit();
+            }
+            // Full; none consumed. Drop must run 4 drop_in_place calls.
+            assert_eq!(counter.load(Ordering::Relaxed), 0);
+        }
+        assert_eq!(counter.load(Ordering::Relaxed), 4);
+    }
+
+    #[test]
     fn test_double_init_forbidden_by_type_state() {
         // After write_value, WriteGuard is consumed and returns InitializedWriteGuard
         // So second write_value on same guard is compile-time prevented
