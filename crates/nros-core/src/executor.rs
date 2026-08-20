@@ -15,7 +15,10 @@ impl TaskId {
     pub fn new(id: u64) -> Self { Self(id) }
 }
 
-#[derive(Debug, Clone)]
+// Note: Eq/PartialEq compare ALL fields. The earlier manual impl only compared (priority, id),
+// which was inconsistent with Ord (which also compares deadline) and violated the Ord contract
+// (a == b must imply a.cmp(b) == Equal). That inconsistency could corrupt BinaryHeap ordering.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CallbackDescriptor {
     pub id: TaskId,
     pub name: String,
@@ -25,11 +28,6 @@ pub struct CallbackDescriptor {
     pub period: Option<Duration>,   // e.g., 10ms for 100Hz
     pub cpu_affinity: Option<Vec<usize>>, // Pin to specific cores per DESIGN.md §15.1
 }
-
-impl PartialEq for CallbackDescriptor {
-    fn eq(&self, other: &Self) -> bool { self.priority == other.priority && self.id == other.id }
-}
-impl Eq for CallbackDescriptor {}
 
 impl PartialOrd for CallbackDescriptor {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
@@ -41,10 +39,15 @@ impl Ord for CallbackDescriptor {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         // Higher priority first (BinaryHeap is max-heap, so higher priority should be Greater)
         // Also earlier deadline first for same priority (EDF-like)
+        // Finally tie-break by id to keep ordering total and consistent with Eq.
         match self.priority.cmp(&other.priority) {
             std::cmp::Ordering::Equal => {
                 match (&self.deadline, &other.deadline) {
-                    (Some(a), Some(b)) => b.cmp(a), // Earlier deadline = Greater (pops first)
+                    (Some(a), Some(b)) => match b.cmp(a) {
+                        // Earlier deadline = Greater (pops first)
+                        std::cmp::Ordering::Equal => self.id.cmp(&other.id),
+                        ord => ord,
+                    },
                     (Some(_), None) => std::cmp::Ordering::Greater,
                     (None, Some(_)) => std::cmp::Ordering::Less,
                     (None, None) => self.id.cmp(&other.id),

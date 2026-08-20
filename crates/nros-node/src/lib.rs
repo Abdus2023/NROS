@@ -16,25 +16,17 @@ use std::collections::HashMap;
 // ============================================================================
 
 pub use nros_types::{
-    WallTimestamp, MonotonicInstant, Vector3, Twist, MotorCommand, Odometry,
+    WallTimestamp, Vector3, Twist, MotorCommand, Odometry,
 };
 
 // Backward compatibility aliases — old code used Timestamp, Vector3, etc in nros-node
 pub type Timestamp = WallTimestamp;
 
-impl Timestamp {
-    pub fn to_duration(&self) -> Duration {
-        Duration::new(self.sec, self.nanosec)
-    }
-
-    pub fn elapsed_ns(&self) -> u64 {
-        // Monotonic elapsed via Instant? For wall timestamp, use system time diff
-        // For real-time, should use MonotonicInstant, but keep compatibility
-        let now = Self::now();
-        now.sec.wrapping_sub(self.sec).wrapping_mul(1_000_000_000)
-            + now.nanosec as u64 - self.nanosec as u64
-    }
-}
+// NOTE (Pass 24 remediation): An `impl Timestamp { ... }` block was removed here. It was a hard
+// compile error (E0116): you cannot define an inherent impl for a type alias whose underlying type
+// (`WallTimestamp`) is declared in another crate (`nros-types`). The canonical
+// `WallTimestamp::to_duration()` is available directly. For latency/deadline measurement use
+// `MonotonicInstant`, not wall-clock arithmetic.
 
 // Note: Twist, MotorCommand, Odometry now re-exported from nros-types, no duplication
 

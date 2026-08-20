@@ -281,7 +281,11 @@ impl DmaBufferTrait for SimulatedDmaBuffer {
 impl DmaBufferTrait for RealDmaBuffer {
     fn id(&self) -> usize { self.id }
     fn size(&self) -> usize { self.size }
-    fn is_simulated(&self) -> bool { false }
+    // Pass 24 (I-009): this buffer is currently backed by a Vec<u8>
+    // (`new_scaffolded`), not a real memfd/DMA-BUF, so it must report simulated
+    // until the mmap/dma_buf_attach path is implemented. `is_real_dma()` already
+    // returns false on the concrete type.
+    fn is_simulated(&self) -> bool { true }
 }
 
 // ── DMA Ownership State Machine — per AUDIT Pass 14 DMA-001, CACHE-001 ──────
@@ -439,10 +443,18 @@ impl CameraDriver {
             return Err("Camera not streaming".to_string());
         }
 
-        let width = self.config.resolution.unwrap_or((640, 480)).0;
-        let height = self.config.resolution.unwrap_or((640, 480)).1;
+        let (width, height) = self.config.resolution.unwrap_or((640, 480));
         let format = ImageFormat::RGB8;
-        let expected_size = (width * height * format.bpp() as u32) as usize;
+        // Pass 24: checked multiplication so a pathological (u32) resolution cannot
+        // overflow usize on 32-bit targets and produce a too-small Vec that is then
+        // indexed out of bounds. Cap at 64 MiB like the transport/sim frame caps.
+        let bytes_per_pixel = format.bpp() as u64;
+        let expected_size = (width as u64)
+            .checked_mul(height as u64)
+            .and_then(|px| px.checked_mul(bytes_per_pixel))
+            .filter(|&s| s <= 64 * 1024 * 1024)
+            .ok_or_else(|| format!("Invalid/camera resolution {}x{}: frame too large", width, height))?
+            as usize;
 
         // Simulate frame capture with DMA — real: VIDIOC_DQBUF + memmap pointer
         let (data, dma_id) = if self.config.use_dma && !self.dma_buffers.is_empty() {

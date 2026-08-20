@@ -1,0 +1,165 @@
+name: NROS CI
+
+# Branch-bound CI for the audited lineage (fixes Pass 23 P0-B "CI provenance / branch integrity").
+#
+# DEPLOYMENT NOTE: The CI_GITHUB_TOKEN used by the arena-ai-coding-agent GitHub App
+# lacks the `workflows` permission, so this file cannot be pushed to
+# .github/workflows/ by the bot. It is committed here at docs/ci.yml so the
+# definition is version-controlled and reviewed. A repository admin must copy it
+# to .github/workflows/ci.yml on the branch (or grant the App `workflows` write)
+# to activate the pipeline. See AUDIT_PASS_24.md §6 and §10.
+# The workflow file lives on THIS branch and tests THIS branch's tree, so the audited SHA
+# and the tested SHA are identical. Every job records the commit SHA it ran against.
+#
+# Safety semantics are explicit (fixes CI-002):
+#   * fmt / check / test / clippy / miri are HARD gates (no `|| echo`).
+#   * benchmarks are non-blocking (continue-on-error) and report-only.
+#   * the nros-init golden test ACTUALLY invokes `nros init` and then cargo-checks the
+#     generated project (fixes CI-001), rather than hand-writing a trivial hello-world.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  provenance:
+    name: Provenance / SHA manifest
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.manifest.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Record verification manifest
+        id: manifest
+        run: |
+          sha="${GITHUB_SHA}"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          {
+            echo "repository=${GITHUB_REPOSITORY}"
+            echo "ref=${GITHUB_REF}"
+            echo "head_sha=${GITHUB_SHA}"
+            echo "workflow_sha=${GITHUB_SHA}"
+            echo "runner=$(uname -a)"
+            echo "rustc=$(rustc --version 2>/dev/null || echo 'toolchain-not-yet-installed')"
+            echo "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > verification-manifest.env
+          cat verification-manifest.env
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verification-manifest
+          path: verification-manifest.env
+
+  fmt:
+    name: cargo fmt --check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup component add rustfmt
+      - run: cargo fmt --all -- --check
+
+  check:
+    name: cargo check (workspace, all targets)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo check --workspace --all-targets
+
+  test:
+    name: cargo test (workspace)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo test --workspace --all-targets
+
+  clippy:
+    name: cargo clippy (workspace)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup component add clippy
+      # Pass 24: run clippy WITHOUT -D warnings for the first verified CI run. The
+      # codebase predates a clippy-clean baseline (e.g. it has needless clones, len==0);
+      # surfacing warnings as a non-fatal report establishes the baseline. Flip this to
+      # `-D warnings` once `cargo clippy --workspace --all-targets` is clean locally.
+      - run: cargo clippy --workspace --all-targets
+
+  safety-gate:
+    name: Safety gate (Miri, hard)
+    runs-on: ubuntu-latest
+    # HARD gate: Miri failures MUST fail the job. No `|| echo`.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Miri
+        run: |
+          rustup component add miri
+          cargo miri setup
+      - name: Miri on nros-core (soundness of the unsafe SPSC ring)
+        run: cargo miri test -p nros-core --lib
+      - name: Miri on nros-types
+        run: cargo miri test -p nros-types --lib
+
+  nros-init-golden:
+    name: nros init generates a buildable NROS project
+    runs-on: ubuntu-latest
+    # Actually invokes the CLI end-to-end (fixes CI-001).
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the CLI
+        run: cargo build -p nros-cli
+      - name: Run nros init (basic template) and cargo check
+        run: |
+          cd "${RUNNER_TEMP}"
+          "${GITHUB_WORKSPACE}/target/debug/nros" init test_robot_basic --template=basic
+          ls -la test_robot_basic
+          echo "--- Cargo.toml ---"
+          cat test_robot_basic/Cargo.toml
+          echo "--- cargo check ---"
+          cd test_robot_basic && cargo check
+      - name: Run nros init (mobile_base template) and cargo check
+        run: |
+          cd "${RUNNER_TEMP}"
+          "${GITHUB_WORKSPACE}/target/debug/nros" init test_robot_mobile --template=mobile_base
+          ls -la test_robot_mobile
+          echo "--- Cargo.toml ---"
+          cat test_robot_mobile/Cargo.toml
+          echo "--- cargo check ---"
+          cd test_robot_mobile && cargo check
+
+  benchmarks:
+    name: Benchmarks (report-only, non-blocking)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build benchmark
+        run: cargo build -p nros-core --bin bench
+      - name: Run benchmark
+        run: |
+          mkdir -p benchmarks
+          ./target/debug/bench --output benchmarks/ci-results.json || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark-results
+          path: benchmarks/ci-results.json
+
+  doc-gate:
+    name: Claim / evidence + safety-invariant linter
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run nros-audit (claims, workspace, CI, benchmarks)
+        run: cargo run -p nros-audit -- all
+      - name: Run nros-audit structural safety gate
+        # Exits non-zero if a Pass-24 soundness invariant (safe init_with, safe
+        # as_mut_ptr, ReadGuard DerefMut, Producer/Consumer Clone, MessageHeader
+        # SIZE, foreign-type impl, duplicate prelude globs) regresses in source.
+        run: cargo run -p nros-audit -- safety

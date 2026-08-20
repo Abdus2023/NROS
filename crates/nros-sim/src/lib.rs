@@ -290,10 +290,19 @@ pub struct SimulatedPhysicsEngine {
 
 impl SimulatedPhysicsEngine {
     pub fn new(gravity: Vector3, time_step_hz: f64) -> Self {
+        // Pass 24: validate the tick rate. A non-positive/NaN/inf rate would yield
+        // `1.0 / hz` that is zero, infinite, or NaN; `Duration::from_secs_f64` panics on
+        // NaN/inf and a zero time_step makes the `while accumulated >= time_step` loop
+        // spin forever. Clamp to a sane positive floor.
+        let hz = if time_step_hz.is_finite() && time_step_hz > 0.0 {
+            time_step_hz
+        } else {
+            240.0
+        };
         Self {
             entities: HashMap::new(),
             gravity,
-            time_step: Duration::from_secs_f64(1.0 / time_step_hz),
+            time_step: Duration::from_secs_f64(1.0 / hz),
             accumulated_time: Duration::ZERO,
             entity_counter: 0,
             step_count: 0,
@@ -531,7 +540,10 @@ impl PhysicsEngineTrait for BulletPhysicsEngine {
     }
     fn apply_force(&mut self, id: EntityId, force: Vector3) { self.inner.apply_force(id, force) }
     fn entity_count(&self) -> usize { self.inner.entity_count() }
-    fn is_simulated(&self) -> bool { false } // Claims to be real Bullet path, but scaffolded
+    // Pass 24 (I-009): this engine delegates to SimulatedPhysicsEngine; it is not backed
+    // by a real Bullet integration and must not claim to be. Return true (simulated)
+    // until an actual Bullet backend is wired up.
+    fn is_simulated(&self) -> bool { true }
     fn name(&self) -> &'static str { "BulletPhysicsEngine (SCAFFOLDED — would use bullet crate)" }
 }
 
@@ -548,6 +560,12 @@ pub struct SimulatedCamera {
 
 impl SimulatedCamera {
     pub fn new(width: u32, height: u32, fov_rad: f64) -> Self {
+        // Pass 24: validate dimensions. Zero width/height causes an integer divide-by-zero
+        // panic in render() (`x * 255 / width`), and degenerate FOV produces NaN projections.
+        // Clamp to a 1x1 minimum and a positive finite FOV rather than panicking later.
+        let width = width.max(1);
+        let height = height.max(1);
+        let fov_rad = if fov_rad.is_finite() && fov_rad > 0.0 { fov_rad } else { std::f64::consts::FRAC_PI_2 };
         SimulatedCamera {
             resolution: (width, height),
             fov_rad,
@@ -560,7 +578,18 @@ impl SimulatedCamera {
     pub fn render(&self, transform: &Transform, entities: &HashMap<EntityId, Entity>) -> Vec<u8> {
         // Gradient + entity projection as simple colored boxes for demo
         let (width, height) = self.resolution;
-        let size = (width * height * 3) as usize;
+        // Pass 24: checked arithmetic so a pathological (width*height*3) cannot overflow
+        // usize on 32-bit targets and trigger a capacity/alloc panic. Cap at 64 MiB.
+        const MAX_IMAGE_BYTES: usize = 64 * 1024 * 1024;
+        let size = (width as usize)
+            .checked_mul(height as usize)
+            .and_then(|px| px.checked_mul(3))
+            .filter(|&s| s <= MAX_IMAGE_BYTES)
+            .unwrap_or(0);
+        if size == 0 {
+            // Refuse to allocate for an unreasonable resolution; return an empty frame.
+            return Vec::new();
+        }
         let mut image = vec![0u8; size];
 
         // Base gradient
@@ -771,12 +800,14 @@ impl SimulationWorld {
     }
 
     pub fn with_realtime_factor(mut self, factor: f64) -> Self {
-        self.realtime_factor = factor;
+        self.set_realtime_factor(factor);
         self
     }
 
     pub fn set_realtime_factor(&mut self, factor: f64) {
-        self.realtime_factor = factor;
+        // Pass 24: clamp to a finite, non-negative value. NaN/inf would propagate into
+        // `Duration::from_secs_f64` and panic; a negative factor would rewind the clock.
+        self.realtime_factor = if factor.is_finite() && factor >= 0.0 { factor } else { 1.0 };
     }
 
     pub fn enable_recording(&mut self, enable: bool) {
@@ -1043,6 +1074,38 @@ mod tests {
         let min_range = scan.iter().fold(f64::INFINITY, |a, &b| a.min(b));
         assert!(min_range < 10.0, "should detect obstacle");
         let _ = front;
+    }
+
+    #[test]
+    fn test_degenerate_inputs_do_not_panic() {
+        // Pass 24: zero/NaN/negative/huge inputs must not panic (from_secs_f64,
+        // integer div-by-zero, or overflow). They fall back to sane defaults.
+        let mut phys = PhysicsEngine::new(Vector3::new(0.0, -9.81, 0.0), 0.0);
+        phys.step(Duration::from_millis(10));
+        let mut phys = PhysicsEngine::new(Vector3::zero(), f64::NAN);
+        phys.step(Duration::from_millis(10));
+        let mut phys = PhysicsEngine::new(Vector3::zero(), -1.0);
+        phys.step(Duration::from_millis(10));
+
+        let mut world = SimulationWorld::new();
+        world.set_realtime_factor(f64::NAN);
+        world.set_realtime_factor(-2.0);
+        world.step(Duration::from_millis(10));
+
+        // Zero/huge camera dimensions must not div-by-zero or overflow-alloc.
+        let cam = SimulatedCamera::new(0, 0, 90.0f64.to_radians());
+        let frame = cam.render(&Transform {
+            position: Vector3::zero(),
+            orientation: Quaternion::identity(),
+        }, &HashMap::new());
+        assert!(!frame.is_empty(), "1x1 camera should produce a 3-byte frame");
+
+        let huge = SimulatedCamera::new(u32::MAX, u32::MAX, 1.0);
+        let frame = huge.render(&Transform {
+            position: Vector3::zero(),
+            orientation: Quaternion::identity(),
+        }, &HashMap::new());
+        assert!(frame.is_empty(), "huge resolution must be rejected, not allocated");
     }
 
     #[test]

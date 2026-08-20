@@ -4,7 +4,7 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, Item, ItemStruct, ItemFn, Attribute};
+use syn::{parse_macro_input, ItemStruct};
 
 /// #[nros::node] or #[nros_macros::node] — marks struct as NROS node
 /// Currently passthrough (SCAFFOLDED), real would generate lifecycle impl, parameter handling, etc.

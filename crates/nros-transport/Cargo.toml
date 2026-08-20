@@ -14,8 +14,8 @@ name = "nros-transport-demo"
 path = "src/main.rs"
 
 [dependencies]
-nros-core = { path = "../nros-core" }
-nros-types = { path = "../nros-types" }
+# Pass 24: removed unused nros-core / nros-types path deps; transport defines its
+# own wire types (see AUDIT_PASS_24 §10, canonical migration I-007 remaining).
 lz4_flex = { version = "0.11", optional = true }
 crc32fast = { version = "1.4", optional = true }
 

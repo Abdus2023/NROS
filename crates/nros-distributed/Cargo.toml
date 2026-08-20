@@ -14,5 +14,5 @@ name = "nros-distributed-demo"
 path = "src/main.rs"
 
 [dependencies]
-nros-core = { path = "../nros-core" }
-nros-types = { path = "../nros-types" }
+# Pass 24: removed unused nros-core / nros-types path deps (no references in source).
+

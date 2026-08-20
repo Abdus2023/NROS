@@ -132,15 +132,23 @@ impl<T> RingBuffer<T> {
 
 impl<T> Drop for RingBuffer<T> {
     fn drop(&mut self) {
-        // Drop all remaining initialized elements [read, write)
+        // Drop all remaining initialized elements [read, write).
+        // Pass 24: iterate by *count* (wrapping_sub), not by the raw range
+        // `read..write`. When the 64-bit indices wrap past u64::MAX, the range
+        // `read..write` is empty (start > end), which would leak every occupied
+        // slot. Stepping `count` times from `read` with wrapping addition and
+        // masking drops exactly the live elements regardless of wraparound.
         let write = self.write_idx.0.load(Ordering::Relaxed);
         let read = self.read_idx.0.load(Ordering::Relaxed);
-        for idx in read..write {
+        let count = write.wrapping_sub(read);
+        let mut idx = read;
+        for _ in 0..count {
             let slot_idx = (idx as usize) & (self.capacity - 1);
             unsafe {
                 let ptr = self.buffer.add(slot_idx);
                 ptr::drop_in_place(ptr as *mut T);
             }
+            idx = idx.wrapping_add(1);
         }
         let layout = Layout::array::<MaybeUninit<T>>(self.capacity).unwrap();
         unsafe { dealloc(self.buffer as *mut u8, layout); }
@@ -204,16 +212,13 @@ impl<'a, T> WriteGuard<'a, T> {
         guard
     }
 
-    /// Legacy safe init_with that was unsound — kept for backward compat but now calls unsafe version internally
-    /// Marked unsafe in spirit but kept safe for now with warning — will be removed in next version
-    /// Use write_value() for 100% safe path
-    #[deprecated(note = "Use write_value() for safe initialization, or unsafe init_with_unchecked() if you must initialize field-by-field and can prove full init")]
-    pub fn init_with<F>(self, f: F) -> InitializedWriteGuard<'a, T>
-    where
-        F: FnOnce(&mut MaybeUninit<T>),
-    {
-        unsafe { self.init_with_unchecked(f) }
-    }
+    // NOTE: The previous legacy safe `init_with()` was REMOVED (Pass 24 remediation, CORE-011/CORE-014).
+    // It was unsound: a safe caller could provide a closure that did nothing, then commit the
+    // resulting `InitializedWriteGuard`, causing the consumer to dereference uninitialized memory.
+    // `#[deprecated]` on a safe method does NOT close a soundness hole — safe Rust must never be
+    // allowed to cause UB. Field-by-field initialization is now only possible through the unsafe
+    // `init_with_unchecked()`, whose safety contract makes the initialization proof obligation
+    // explicit. Use `write_value(self, T)` for the 100% safe path.
 
     /// Abandon reservation without committing — slot remains uninitialized, available for retry
     pub fn abort(self) {
@@ -399,6 +404,7 @@ pub struct Subscriber<T> {
 }
 
 impl<T> Subscriber<T> {
+    #[deprecated(note = "Use channel() API for type-enforced SPSC; Subscriber::new takes a raw Arc<RingBuffer> and weakens the SPSC guarantee per CORE-016/019")]
     pub fn new(ring: Arc<RingBuffer<T>>, topic: &str) -> Self {
         Self { ring, topic: topic.to_string() }
     }
@@ -588,8 +594,9 @@ mod tests {
 
     #[test]
     fn test_zero_copy_pubsub_guard_api() {
-        let publisher = Publisher::<Twist>::new("/cmd_vel", 1024);
-        let subscriber = Subscriber::new(publisher.ring.clone(), "/cmd_vel");
+        // Pass 24: use the type-enforced channel() API instead of the deprecated
+        // Publisher::ring() raw-ring escape hatch.
+        let (publisher, subscriber) = channel::<Twist>(1024);
         {
             let guard = publisher.allocate().unwrap();
             let twist = Twist { timestamp: Timestamp::now(), linear: Vector3 { x: 1.0, y: 0.0, z: 0.0 }, angular: Vector3 { x: 0.0, y: 0.0, z: 0.5 } };
@@ -683,6 +690,25 @@ mod tests {
             ring2.try_reserve().unwrap().write_value(DropCounter { count: counter2.clone() }).commit();
         }
         assert_eq!(counter2.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn test_drop_drains_all_occupied_slots() {
+        // Pass 24 regression: Drop must iterate by count (wrapping_sub), not by
+        // the raw read..write range, so it drops every occupied T. Fill the ring
+        // without consuming, then drop it; every T must be dropped exactly once.
+        let counter = Arc::new(AtomicUsize::new(0));
+        {
+            let ring = RingBuffer::<DropCounter>::new(4);
+            for _ in 0..4 {
+                ring.try_reserve().unwrap()
+                    .write_value(DropCounter { count: counter.clone() })
+                    .commit();
+            }
+            // Full; none consumed. Drop must run 4 drop_in_place calls.
+            assert_eq!(counter.load(Ordering::Relaxed), 0);
+        }
+        assert_eq!(counter.load(Ordering::Relaxed), 4);
     }
 
     #[test]

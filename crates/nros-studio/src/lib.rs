@@ -126,7 +126,12 @@ impl DataProvider for DemoDataProvider {
 /// - nros-core PerformanceStats (messages_sent/received, latency)
 /// - nros-node ExecutionStats (callback_count, deadline_misses, avg/max execution)
 /// - OS metrics via procfs / sysinfo crate for CPU/memory
-/// Currently still synthetic but labeled as real path and would use live data
+///
+/// Pass 24 remediation (invariant I-009 "simulation must not masquerade as hardware"):
+/// this currently returns SYNTHETIC data (it delegates to DemoDataProvider / a fixed
+/// formula), so it MUST report is_simulated() == true. The previous implementation
+/// returned false, which would have let studio present fabricated metrics as live
+/// runtime telemetry — a false-evidence risk called out in AUDIT Pass 23 (I-010).
 pub struct LiveNrosDataProvider {
     // In real: Arc<Mutex<PerformanceStats>>, Arc<Mutex<ExecutionStats>>, sysinfo::System
 }
@@ -137,16 +142,17 @@ impl LiveNrosDataProvider {
 
 impl DataProvider for LiveNrosDataProvider {
     fn get_nodes(&self) -> HashMap<String, NodeInfo> {
-        // Real would query nros-node lifecycle states, ExecutionStats, etc.
+        // SCAFFOLDED: real would query nros-node lifecycle states, ExecutionStats, etc.
         DemoDataProvider.get_nodes()
     }
 
     fn get_topics(&self) -> HashMap<String, TopicInfo> {
+        // SCAFFOLDED: real would query the live topic registry.
         DemoDataProvider.get_topics()
     }
 
     fn get_metric(&self, _uptime_sec: u64) -> MetricFrame {
-        // Real would aggregate from nros-core PerformanceStats + OS CPU/memory via sysinfo
+        // SCAFFOLDED: real would aggregate from nros-core PerformanceStats + OS CPU/memory via sysinfo.
         let now_ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
         MetricFrame {
             timestamp_ms: now_ms,
@@ -158,8 +164,9 @@ impl DataProvider for LiveNrosDataProvider {
         }
     }
 
-    fn is_simulated(&self) -> bool { false } // Claims to be real path, but scaffolded
-    fn name(&self) -> &'static str { "LiveNrosDataProvider (SCAFFOLDED — would use real NROS stats)" }
+    // HONEST: synthetic until it actually wires up nros-core/nros-node stats + sysinfo.
+    fn is_simulated(&self) -> bool { true }
+    fn name(&self) -> &'static str { "LiveNrosDataProvider (SCAFFOLDED — currently synthetic; not live telemetry)" }
 }
 
 // ── Shared state ──────────────────────────────────────────────────────────
