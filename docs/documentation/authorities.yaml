@@ -3,11 +3,56 @@ kind: documentation_authority_catalog
 project: NROS
 
 authorities:
-  - id: AUTH-DESIGN
-    name: DESIGN.md
+  - id: AUTH-CONCEPTS
+    name: docs/concepts/
     authority_level: canonical
-    scope: system architecture, requirements intent, design contracts, and target behavior
-    notes: Design intent does not establish implementation or verification success.
+    scope: conceptual model, terminology, and design principles
+
+  - id: AUTH-ARCHITECTURE
+    name: docs/architecture/
+    authority_level: canonical
+    scope: architectural structure, boundaries, and system relationships
+
+  - id: AUTH-SPECIFICATIONS
+    name: docs/specifications/
+    authority_level: canonical
+    scope: normative contracts, protocols, interfaces, and safety requirements
+
+  - id: AUTH-REFERENCE
+    name: docs/reference/
+    authority_level: authoritative
+    scope: concrete repository interfaces and supported reference surfaces
+    notes: Reference entries must correspond to interfaces present in the source tree.
+
+  - id: AUTH-VERIFICATION
+    name: docs/verification/
+    authority_level: authoritative
+    scope: evidence interpretation, claims, testing, benchmarks, validation, and documentation integrity
+
+  - id: AUTH-SAFETY
+    name: docs/safety/
+    authority_level: authoritative
+    scope: safety invariants, gates, remediation, and threat boundaries
+
+  - id: AUTH-DEVELOPMENT
+    name: docs/development/
+    authority_level: supporting
+    scope: contributor workflow and development practices
+
+  - id: AUTH-OPERATIONS
+    name: docs/operations/
+    authority_level: supporting
+    scope: deployment, observability, diagnostics, and troubleshooting
+
+  - id: AUTH-GOVERNANCE
+    name: docs/governance/
+    authority_level: supporting
+    scope: roadmap, status, decisions, and releases
+
+  - id: AUTH-MIGRATION
+    name: docs/migration/
+    authority_level: authoritative
+    scope: migration of legacy documentation and preservation of historical traceability
 
   - id: AUTH-REPOSITORY-REPRESENTATION
     name: docs/REPOSITORY_REPRESENTATION.md
@@ -29,11 +74,11 @@ authorities:
     authority_level: authoritative
     scope: capability evidence classification and claim eligibility
 
-  - id: AUTH-AUDIT
+  - id: AUTH-AUDIT-HISTORY
     name: AUDIT.md and AUDIT_PASS_*.md
-    authority_level: authoritative
-    scope: repository audit findings, historical verification observations, remediation findings, and verification gates
-    notes: Later verified observations supersede earlier observations when their represented revision is newer.
+    authority_level: historical
+    scope: repository audit findings and verification observations at their represented revisions
+    notes: Historical observations do not override current source or current verification.
 
   - id: AUTH-CORE-SAFETY
     name: crates/nros-core/SAFETY.md
@@ -59,19 +104,19 @@ authorities:
   - id: AUTH-README
     name: README.md
     authority_level: informational
-    scope: user-facing overview, navigation, examples, and project narrative
+    scope: user-facing overview and navigation
     notes: README claims must resolve through evidence and claim policy before being treated as verified.
 
   - id: AUTH-COMPARISON
     name: COMPARISON.md
     authority_level: supporting
-    scope: comparative narrative, benchmarks, and feature comparisons
+    scope: evidence-bounded comparative narrative
     notes: Comparative performance and readiness statements require independent evidence records.
 
 rules:
   - canonical_design_defines_intent_not_execution
   - canonical_representation_defines_representation_semantics
-  - evidence_registry_and_audits_constrain_claim_strength
+  - evidence_registry_and_verification_constrain_claim_strength
   - source_revision_and_execution_evidence_take_precedence_over_stale_narrative
   - informational_documents_must_not_override_authoritative_documents
   - no_authority_level_implies_implementation_maturity
