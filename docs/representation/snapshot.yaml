@@ -30,6 +30,14 @@ content_integrity:
     evidence.yaml: "21676bc4f4ae5e8cfdbbd6ba68b4f80fa5ee646c"
     claims.yaml: "f4773c3a2bb30ed025ce1347c07817508340afb1"
 
+verification_contract:
+  mode: source_revision_content_match
+  required_checks:
+    - source_revision_resolves
+    - manifest_exists_at_source_revision
+    - manifest_blob_matches_recorded_fingerprint
+  failure_policy: representation_gate_fails
+
 purpose: >-
   Pin the representation to an explicit source revision and record the Git
   blob identities of its normative manifests. The snapshot is descriptive
