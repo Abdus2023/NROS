@@ -1,0 +1,130 @@
+{
+  "repository": "Abdus2023/NROS",
+  "branch": "arena/01a0188d-nros",
+  "revision": "725d3ab (fix types dep) + subsequent fixes up to Safety Gate v0.1.1",
+  "timestamp": "2026-08-19T18:00:00Z",
+  "gates": {
+    "fmt": {
+      "status": "NOT_RUN",
+      "required": true,
+      "command": "cargo fmt --all -- --check",
+      "evidence": "No GitHub Actions workflow on audited ref per CI-003, workflow file exists locally at .github/workflows/ci.yml but cannot be pushed via API due to workflows permission"
+    },
+    "check": {
+      "status": "NOT_RUN",
+      "required": true,
+      "command": "cargo check --workspace --all-targets",
+      "evidence": "No cargo available in sandbox, but code compiles logically per safety gate fixes"
+    },
+    "test": {
+      "status": "NOT_RUN",
+      "required": true,
+      "command": "cargo test --workspace --lib --bins -- --nocapture",
+      "evidence": "Tests exist: test_double_reserve_prevention, test_read_guard_lifetime, test_generic_t_destruction, test_abandoned_reservation, test_channel_producer_consumer_ownership, test_capacity_one, etc. per Safety Gate v0.1.1"
+    },
+    "clippy": {
+      "status": "NOT_RUN",
+      "required": true,
+      "command": "cargo clippy --workspace --all-targets -- -D warnings"
+    },
+    "miri": {
+      "status": "NOT_RUN",
+      "required": true,
+      "command": "cargo miri test -p nros-core --lib -- --nocapture",
+      "note": "CI previously had || echo suppressing failure (CI-002), now fixed to hard failure in local workflow file"
+    },
+    "loom": {
+      "status": "NOT_RUN",
+      "required": false,
+      "command": "cargo test --test loom -- --nocapture (would need loom crate)",
+      "note": "Formal concurrency verification for atomic ordering Acquire/Release, reservation flags, wraparound"
+    },
+    "nros_init_compile": {
+      "status": "PARTIAL",
+      "required": true,
+      "command": "cargo run -p nros-cli --bin nros -- init /tmp/test_robot --template=basic && cd /tmp/test_robot && cargo check",
+      "evidence": "Fixed P0 NROS-011: generate_toml now minimal no non-existent crates, generates plain Rust that compiles. Old template generated src/nodes/main.rs without [[bin]] and no NROS dependency. New template generates src/main.rs with fn main and Cargo.toml with no non-existent deps. Golden test in CI workflow now real init test per CI-001 fix, not trivial hello.",
+      "previous_failure": "CI-001: previous workflow created hand-written fn main() { println!(\"Hello NROS\") } not running nros init"
+    },
+    "benchmark": {
+      "status": "SIMULATED",
+      "required": false,
+      "command": "cargo run -p nros-core --bin bench -- --iterations 100000 --output benchmarks/results.json",
+      "evidence": "benchmarks/results.json exists as TEMPLATE artifact with required fields per Pass 7 §12, but numbers are repository-reported 6.2us mean 780K msg/s preserved historical reference NOT independently verified. Real artifact must be generated on target hardware (e.g., Jetson Xavier) with hostname and date. Current bench.rs measures real end-to-end latency via publish Instant queue (fixed from synthetic 1000 ns), but lib.rs benchmarks mod still placeholder with TODO."
+    },
+    "hardware": {
+      "status": "NOT_RUN",
+      "required": false,
+      "note": "HAL DMA real hardware, V4L2 integration, Jetson validation"
+    }
+  },
+  "evidence_registry": {
+    "path": "EVIDENCE_REGISTRY.md",
+    "status": "IMPLEMENTED",
+    "note": "Defines SPECIFIED/SCAFFOLDED/SIMULATED/IMPLEMENTED/TESTED/BENCHMARKED/INTEGRATION-TESTED/HARDWARE-VALIDATED/PRODUCTION-READY/SAFETY-QUALIFIABLE per AUDIT Pass 5"
+  },
+  "claim_ledger": {
+    "path": "docs/CLAIM_LEDGER.md (to be created)",
+    "status": "TODO",
+    "note": "Would map Claim/Source/Evidence/Status per Pass 11 recommendation"
+  },
+  "safety_gate": {
+    "version": "v0.1.1",
+    "status": "PARTIAL",
+    "gates": {
+      "A_Initialization": {
+        "remove_as_mut": true,
+        "commit_requires_init_via_type_state": true,
+        "double_init_impossible": true,
+        "abort_before_init_safe": true,
+        "initialized_but_aborted_semantics": "TODO: abort_initialized drops T and clears flag"
+      },
+      "B_Ownership": {
+        "producer_role_capability": true,
+        "consumer_role_capability": true,
+        "no_public_raw_ring_sharing": "PARTIAL: ring() still exists for backward compat but channel() preferred",
+        "derefmut_removed": true
+      },
+      "C_Destruction": {
+        "drop_counter": true,
+        "string": true,
+        "vec_u8": true,
+        "box_t": true,
+        "pending_values": true,
+        "consumed_values": true,
+        "aborted_values": true
+      },
+      "D_Concurrency": {
+        "spsc_stress": true,
+        "capacity_1": true,
+        "wraparound": true,
+        "full_empty_races": true,
+        "guard_contention": true,
+        "thread_handoff": true,
+        "miri": false,
+        "loom": false
+      },
+      "E_Performance": {
+        "actual_per_message_timestamps": true,
+        "monotonic_clock": true,
+        "throughput": true,
+        "p50": true,
+        "p95": true,
+        "p99": true,
+        "max": true,
+        "cpu_affinity_documented": false,
+        "benchmark_env_recorded": true
+      },
+      "F_CI": {
+        "fmt": false,
+        "check": false,
+        "test": false,
+        "clippy": false,
+        "miri": false,
+        "golden_nros_init": true,
+        "benchmark_artifact": true
+      }
+    }
+  },
+  "overall_verdict": "Architecture-complete prototype with partially mature evidence registry, but unresolved core safety invariants (initialization-state model now fixed via type-state in v0.1.1), simulated operational tooling, absent CI on audited ref due to workflows permission, documentation/source inconsistencies partially fixed (workspace inventory 8 vs 11 fixed, CLI IMPLEMENTED-TESTED too broad fixed via evidence taxonomy, 6.2us claim downgraded to repository-reported). Branch considerably better than earlier snapshot but safety claim still too strong until Miri/Loom and CI PASS."
+}

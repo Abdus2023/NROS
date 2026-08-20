@@ -1,0 +1,18 @@
+[package]
+name = "nros-distributed"
+version.workspace = true
+edition.workspace = true
+description = "NROS Distributed: Raft-like leader election, replicated state, task scheduling, fleet coordination"
+license.workspace = true
+
+[lib]
+name = "nros_distributed"
+path = "src/lib.rs"
+
+[[bin]]
+name = "nros-distributed-demo"
+path = "src/main.rs"
+
+[dependencies]
+nros-core = { path = "../nros-core" }
+nros-types = { path = "../nros-types" }

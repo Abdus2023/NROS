@@ -1,0 +1,21 @@
+[package]
+name = "nros-cli"
+version.workspace = true
+edition.workspace = true
+description = "NROS CLI Tools: project management, multi-profile build, topic inspection, profiling, fleet deployment"
+license.workspace = true
+
+[lib]
+name = "nros_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "nros"
+path = "src/main.rs"
+
+[[bin]]
+name = "nros-cli-demo"
+path = "src/demo.rs"
+
+[dependencies]
+nros-core = { path = "../nros-core" }

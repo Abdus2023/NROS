@@ -1,0 +1,12 @@
+[package]
+name = "nros-audit"
+version.workspace = true
+edition.workspace = true
+description = "NROS claim linter — checks README claims vs EVIDENCE_REGISTRY, Cargo.toml workspace inventory, workflow existence, benchmark artifacts per AUDIT Pass 11-12 DOC-GATE and Claim Strength"
+license.workspace = true
+
+[[bin]]
+name = "nros-audit"
+path = "src/main.rs"
+
+[dependencies]

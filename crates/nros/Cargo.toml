@@ -1,0 +1,25 @@
+[package]
+name = "nros"
+version.workspace = true
+edition.workspace = true
+description = "NROS facade crate — re-exports core crates + macros, makes `nros init` generated projects compile with `use nros::prelude::*` per AUDIT P0 NROS-011"
+license.workspace = true
+
+[dependencies]
+nros-core = { path = "../nros-core" }
+nros-node = { path = "../nros-node" }
+nros-hal = { path = "../nros-hal" }
+nros-transport = { path = "../nros-transport" }
+nros-distributed = { path = "../nros-distributed" }
+nros-cli = { path = "../nros-cli" }
+nros-sim = { path = "../nros-sim" }
+nros-studio = { path = "../nros-studio" }
+nros-macros = { path = "../nros-macros" }
+
+# For future MDL codegen, etc.
+# Keep dependencies minimal to maintain dependency-light workspace, but facade aggregates
+
+[features]
+default = []
+real-time = []
+gpu-acceleration = []

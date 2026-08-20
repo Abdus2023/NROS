@@ -1,0 +1,18 @@
+[package]
+name = "nros-sim"
+version.workspace = true
+edition.workspace = true
+description = "NROS Simulation Engine: physics (Bullet), rendering (Vulkan), sensor simulation, deterministic replay, sim-reality parity"
+license.workspace = true
+
+[lib]
+name = "nros_sim"
+path = "src/lib.rs"
+
+[[bin]]
+name = "nros-sim-demo"
+path = "src/main.rs"
+
+[dependencies]
+nros-core = { path = "../nros-core" }
+nros-types = { path = "../nros-types" }

@@ -1,0 +1,25 @@
+[package]
+name = "nros-transport"
+version.workspace = true
+edition.workspace = true
+description = "NROS Network Transport: UDP/TCP, FlatBuffers-style serialization, compression, mDNS discovery, multicast"
+license.workspace = true
+
+[lib]
+name = "nros_transport"
+path = "src/lib.rs"
+
+[[bin]]
+name = "nros-transport-demo"
+path = "src/main.rs"
+
+[dependencies]
+nros-core = { path = "../nros-core" }
+nros-types = { path = "../nros-types" }
+lz4_flex = { version = "0.11", optional = true }
+crc32fast = { version = "1.4", optional = true }
+
+[features]
+default = []
+real-compression = ["lz4_flex"]
+real-checksum = ["crc32fast"]

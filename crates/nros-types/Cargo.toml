@@ -1,0 +1,12 @@
+[package]
+name = "nros-types"
+version.workspace = true
+edition.workspace = true
+description = "NROS canonical types — Twist, Odometry, Vector3, Timestamp, MonotonicTimestamp, MotorCommand, PointCloud — single source of truth per AUDIT Pass 12 INTEGRATION-001"
+license.workspace = true
+
+[lib]
+name = "nros_types"
+path = "src/lib.rs"
+
+[dependencies]

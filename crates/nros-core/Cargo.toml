@@ -1,0 +1,20 @@
+[package]
+name = "nros-core"
+version.workspace = true
+edition.workspace = true
+description = "NROS Core: Lock-free zero-copy IPC, ring buffers, pub/sub with <10us latency target"
+license.workspace = true
+
+[lib]
+name = "nros_core"
+path = "src/lib.rs"
+
+[[bin]]
+name = "nros-core-demo"
+path = "src/main.rs"
+
+[dependencies]
+nros-types = { path = "../nros-types" }
+
+[dev-dependencies]
+trybuild = "1.0"

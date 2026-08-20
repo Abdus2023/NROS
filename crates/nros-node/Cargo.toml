@@ -1,0 +1,18 @@
+[package]
+name = "nros-node"
+version.workspace = true
+edition.workspace = true
+description = "NROS Node Example: Lifecycle, parameter system, real-time velocity controller, safety, deadline monitoring"
+license.workspace = true
+
+[lib]
+name = "nros_node"
+path = "src/lib.rs"
+
+[[bin]]
+name = "nros-node-demo"
+path = "src/main.rs"
+
+[dependencies]
+nros-core = { path = "../nros-core" }
+nros-types = { path = "../nros-types" }
