@@ -814,8 +814,8 @@ impl Profiler {
             println!("{:<30} {:>10.1} {:>10.1} {:>10.1}", name, avg, p99, max);
         }
 
-        println!("\n\n💾 Flamegraph saved to: profile_output.svg");
-        println!("   View with: firefox profile_output.svg");
+        println!("\n\n⚠️  SIMULATED: flamegraph not actually written (profiler backend not implemented)");
+        println!("   Real implementation would write profile_output.svg; view with a browser.");
         println!("   Latency Heatmaps: end-to-end message timing per §4.3");
 
         ProfileResult {
@@ -961,7 +961,10 @@ impl Recorder {
 
         std::thread::sleep(Duration::from_millis(500));
         println!("   Recording... 10 messages captured (simulated)");
-        println!("✅ Saved to {}", output.display());
+        // Pass 24 (I-009): do NOT claim the file was saved — this is a SIMULATED
+        // recorder that writes nothing. Reporting a successful save without creating
+        // the artifact would be false evidence. Label it clearly.
+        println!("⚠️  SIMULATED: no file written at {} (recorder backend not implemented)", output.display());
 
         Ok(())
     }
@@ -1019,7 +1022,8 @@ impl MigrationTools {
         println!("   Converts .msg files to .mdl format with compile-time bounds checking, unit conversions");
         println!("   Publisher/Subscriber: create_publisher<Msg>(topic, qos) → publish<T>(topic) + publish().await");
         std::thread::sleep(Duration::from_millis(300));
-        println!("✅ Conversion complete, verify with `nros test hybrid --ros2-bridge`");
+        // Pass 24 (I-009): this is a SIMULATED conversion that writes nothing.
+        println!("⚠️  SIMULATED: no files converted (migration backend not implemented)");
         Ok(())
     }
 }
