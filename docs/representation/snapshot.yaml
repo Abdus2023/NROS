@@ -5,7 +5,14 @@ project: NROS
 identity:
   repository: Abdus2023/NROS
   branch: arena/repository-representation
+
+source_revision:
   commit: "8134625afebfa8cd29a233d8a5aa0c27492ce47b"
+  relation: represented_repository_state
+
+snapshot_revision:
+  relation: commit_containing_this_snapshot
+  value: "generated_at_commit"
 
 representation:
   schema: "0.1"
@@ -16,11 +23,13 @@ representation:
     - claims.yaml
 
 purpose: >-
-  Pin the repository representation to an exact source revision. A snapshot
-  is descriptive evidence of repository identity; it does not assert that CI,
+  Pin the representation to an explicit source revision while distinguishing
+  that revision from the later Git commit that stores this snapshot. The
+  snapshot is descriptive identity evidence; it does not assert that CI,
   tests, benchmarks, Miri, or hardware validation succeeded.
 
 non_inference_rules:
-  - snapshot_identity_is_not_execution_success
+  - source_revision_is_not_execution_success
+  - snapshot_revision_is_not_release_status
   - branch_identity_is_not_release_status
   - manifest_presence_is_not_implementation_evidence
