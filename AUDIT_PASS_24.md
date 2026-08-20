@@ -354,6 +354,22 @@ the sample to both `src/main.rs` and `src/nodes/main.rs`, and the CI
 makes the "generated app must be buildable" claim (NROS-011) and the Pass 23
 CI-001 ("actually invoke nros init") finding fully true.
 
+### 4.6 `RingBuffer::drop` leaked slots when 64-bit indices wrapped (soundness-adjacent)
+
+`Drop` used `for idx in read..write`, a half-open range. If the producer and
+consumer both ran past `u64::MAX` (astronomically unlikely at realistic rates
+but not impossible over a long-lived queue), `write` would wrap to a small value
+while `read` remained near `u64::MAX`, making `read..write` an **empty range**
+and leaking (not dropping) every occupied `T`. The backing allocation was still
+freed, so this was a leak/double-free-free bug rather than UB, but for a queue
+whose purpose is owning arbitrary `T` it is incorrect.
+
+**Fix:** drop loops `0..write.wrapping_sub(read)` times, stepping `idx` with
+`wrapping_add(1)` and masking each physical slot. Verified that at the boundary
+(write=0, read=2^64−2, capacity=4) it drops the three occupied physical slots in
+order. The rest of the ring already uses `wrapping_sub` for `len()` and
+reservation checks, so this makes `Drop` consistent with that model.
+
 ## 5. P1 — Arithmetic / panic hardening
 
 ### 5.1 `SimulatedPhysicsEngine::new(..., 0.0)` panicked or spun forever

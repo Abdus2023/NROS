@@ -132,15 +132,23 @@ impl<T> RingBuffer<T> {
 
 impl<T> Drop for RingBuffer<T> {
     fn drop(&mut self) {
-        // Drop all remaining initialized elements [read, write)
+        // Drop all remaining initialized elements [read, write).
+        // Pass 24: iterate by *count* (wrapping_sub), not by the raw range
+        // `read..write`. When the 64-bit indices wrap past u64::MAX, the range
+        // `read..write` is empty (start > end), which would leak every occupied
+        // slot. Stepping `count` times from `read` with wrapping addition and
+        // masking drops exactly the live elements regardless of wraparound.
         let write = self.write_idx.0.load(Ordering::Relaxed);
         let read = self.read_idx.0.load(Ordering::Relaxed);
-        for idx in read..write {
+        let count = write.wrapping_sub(read);
+        let mut idx = read;
+        for _ in 0..count {
             let slot_idx = (idx as usize) & (self.capacity - 1);
             unsafe {
                 let ptr = self.buffer.add(slot_idx);
                 ptr::drop_in_place(ptr as *mut T);
             }
+            idx = idx.wrapping_add(1);
         }
         let layout = Layout::array::<MaybeUninit<T>>(self.capacity).unwrap();
         unsafe { dealloc(self.buffer as *mut u8, layout); }
