@@ -334,6 +334,26 @@ caller attach a subscriber to an arbitrary ring — was not marked. It is now
 The core demo binary that intentionally showcases the legacy surface carries
 `#![allow(deprecated)]`; all tests and the bench binary use `channel()`.
 
+### 4.4 CLI false-success claims on simulated operations (I-009)
+
+The CLI `record`, `profile`, and `migrate convert` commands are SIMULATED (they
+sleep and print, writing no files), yet reported success: "✅ Saved to <file>",
+"💾 Flamegraph saved", "✅ Conversion complete". A user or script could trust
+those messages and assume artifacts exist. All three now print `⚠️ SIMULATED: ...`
+and explain that no file was written.
+
+### 4.5 `nros init` did not generate a buildable project (CI-001 fully fixed)
+
+The generator wrote `nros.toml` (NROS metadata) but **no `Cargo.toml`**, and
+placed the sample at `src/nodes/main.rs` with no `src/main.rs`. So a generated
+project could not be `cargo check`-ed, and the CI golden test's
+`cat test_robot/Cargo.toml` would have failed. `init` now also writes a standalone,
+dependency-free `Cargo.toml` with a `[[bin]]` pointing at `src/main.rs`, writes
+the sample to both `src/main.rs` and `src/nodes/main.rs`, and the CI
+`nros-init-golden` job runs **`cargo check`** on both generated templates. This
+makes the "generated app must be buildable" claim (NROS-011) and the Pass 23
+CI-001 ("actually invoke nros init") finding fully true.
+
 ## 5. P1 — Arithmetic / panic hardening
 
 ### 5.1 `SimulatedPhysicsEngine::new(..., 0.0)` panicked or spun forever
