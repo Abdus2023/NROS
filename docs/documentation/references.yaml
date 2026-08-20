@@ -1,0 +1,107 @@
+schema_version: "0.1"
+kind: documentation_reference_catalog
+project: NROS
+
+purpose: >-
+  Explicit catalog of important documentation-to-document and
+  documentation-to-external references. Resolution status is recorded
+  without silently converting unresolved references into evidence.
+
+references:
+  - source: DOC-README
+    target: DOC-DESIGN
+    status: resolved
+    kind: internal_document
+    note: README directs readers toward the repository design and architecture material.
+
+  - source: DOC-README
+    target: DOC-EVIDENCE
+    status: resolved
+    kind: internal_document
+    note: Capability claims are interpreted against the evidence registry.
+
+  - source: DOC-DESIGN
+    target: DOC-REPRESENTATION
+    status: resolved
+    kind: internal_document
+    note: Design is an upstream source for repository representation.
+
+  - source: DOC-AUDIT
+    target: DOC-EVIDENCE
+    status: resolved
+    kind: internal_document
+    note: Audit findings rely on explicit evidence classification.
+
+  - source: DOC-AUDIT
+    target: DOC-THREAT-MODEL
+    status: resolved
+    kind: internal_document
+    note: Safety and security findings are related to the threat model.
+
+  - source: DOC-THREAT-MODEL
+    target: DOC-CORE-SAFETY
+    status: resolved
+    kind: internal_document
+    note: Core safety documentation supplies implementation-specific safety constraints.
+
+  - source: DOC-CI
+    target: DOC-EVIDENCE
+    status: resolved
+    kind: internal_document
+    note: CI execution contributes verification evidence but does not itself prove all capabilities.
+
+  - source: DOC-IMPLEMENTATIONS
+    target: DOC-DESIGN
+    status: resolved
+    kind: internal_document
+    note: Implementation hierarchy is documented in relation to system design.
+
+  - source: DOC-REPRESENTATION-SCHEMA
+    target: DOC-REPRESENTATION-ARCH
+    status: resolved
+    kind: internal_document
+
+  - source: DOC-REPRESENTATION-SCHEMA
+    target: DOC-REPRESENTATION-CAPABILITIES
+    status: resolved
+    kind: internal_document
+
+  - source: DOC-REPRESENTATION-SCHEMA
+    target: DOC-REPRESENTATION-EVIDENCE
+    status: resolved
+    kind: internal_document
+
+  - source: DOC-REPRESENTATION-SCHEMA
+    target: DOC-REPRESENTATION-CLAIMS
+    status: resolved
+    kind: internal_document
+
+  - source: DOC-REPRESENTATION-SCHEMA
+    target: DOC-REPRESENTATION-SNAPSHOT
+    status: resolved
+    kind: internal_document
+
+  - source: DOC-DOCUMENTATION-SCHEMA
+    target: DOC-REPRESENTATION-SCHEMA
+    status: resolved
+    kind: internal_document
+    note: Documentation representation follows the repository representation's evidence-aware model.
+
+  - source: DOC-REPRESENTATION-SNAPSHOT
+    target: DOC-DESIGN
+    status: resolved
+    kind: internal_document
+    note: Snapshot records representation state at a pinned repository revision.
+
+reference_policy:
+  resolved: Reference target is represented by a known repository document or explicit artifact.
+  unresolved: Reference is known to exist conceptually but its target cannot yet be established.
+  external: Reference leaves the repository boundary and requires independent external resolution.
+  intentionally_missing: Absence is deliberate and documented.
+  unknown: Resolution has not yet been established.
+
+invariants:
+  - references_are_not_implementation_evidence
+  - unresolved_references_remain_visible
+  - external_references_require_independent_validation
+  - reference_status_must_not_be_inferred_from_document_authority
