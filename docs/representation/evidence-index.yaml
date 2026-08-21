@@ -1,0 +1,153 @@
+schema_version: "0.1"
+kind: capability_evidence_index
+project: NROS
+
+# This index links capability IDs to repository artifacts that were actually
+# located during the documentation rewrite. It is an index, not a verification
+# result. Presence of an artifact does not promote a claim.
+
+rules:
+  - id: INDEX-001
+    rule: artifact_presence_is_not_verification
+  - id: INDEX-002
+    rule: historical_audit_requires_revision_and_scope_check
+  - id: INDEX-003
+    rule: unknown_evidence_must_remain_unknown
+  - id: INDEX-004
+    rule: no_ci_or_miri_pass_claim_without_observed_execution
+
+capabilities:
+  NODE-001:
+    state: IMPLEMENTED
+    artifacts:
+      source:
+        - crates/nros-node/src/lib.rs
+        - crates/nros-node/src/main.rs
+      tests: []
+      integration: []
+      audit: []
+      ci: []
+      miri: []
+      benchmark: []
+      hardware: []
+    evidence_status: PARTIAL_LINK
+    verification_conclusion: NOT_VERIFIED
+    note: Source artifacts were located; test/CI/Miri/benchmark evidence has not yet been reconciled into this index.
+
+  HAL-001:
+    state: IMPLEMENTED
+    artifacts:
+      source:
+        - crates/nros-hal/src/lib.rs
+      tests: []
+      integration: []
+      audit: []
+      ci: []
+      miri: []
+      benchmark: []
+      hardware: []
+    evidence_status: PARTIAL_LINK
+    verification_conclusion: NOT_VERIFIED
+    note: HAL implementation source was located; stronger verification evidence remains to be reconciled.
+
+  TRANSPORT-001:
+    state: IMPLEMENTED
+    artifacts:
+      source:
+        - crates/nros-transport/src/lib.rs
+      tests: []
+      integration: []
+      audit: []
+      ci: []
+      miri: []
+      benchmark: []
+      hardware: []
+    evidence_status: PARTIAL_LINK
+    verification_conclusion: NOT_VERIFIED
+    note: Transport implementation source was located; stronger verification evidence remains to be reconciled.
+
+  SIM-001:
+    state: TESTED
+    artifacts:
+      source:
+        - crates/nros-sim/src/lib.rs
+        - crates/nros-sim/src/main.rs
+        - implementations/nros-simulation-engine/main.rs
+      tests: []
+      integration: []
+      audit: []
+      ci: []
+      miri: []
+      benchmark: []
+      hardware: []
+    evidence_status: PARTIAL_LINK
+    verification_conclusion: NOT_VERIFIED
+    note: Simulation implementation artifacts were located. Test/audit records still require explicit reconciliation.
+
+  CORE-IPC-001:
+    state: TESTED
+    artifacts:
+      source:
+        - crates/nros-core/src
+      tests:
+        - evidence.yaml: CORE-IPC-001
+      integration: []
+      audit: []
+      ci: []
+      miri: []
+      benchmark:
+        - evidence.yaml: CORE-IPC-001
+      hardware: []
+    evidence_status: LINKED
+    verification_conclusion: NOT_VERIFIED
+    note: Existing evidence.yaml record reports source and tests present, CI/Miri unknown, and benchmark present but non-gating.
+
+  HAL-002:
+    state: SPECIFIED
+    artifacts:
+      source: []
+      tests: []
+      integration: []
+      audit: []
+      ci: []
+      miri: []
+      benchmark: []
+      hardware: []
+    evidence_status: LINKED_NEGATIVE
+    verification_conclusion: NOT_APPLICABLE_TO_CURRENT_FORBIDDEN_CLAIM
+    note: Existing evidence.yaml record explicitly reports source, tests, benchmark, and hardware absent.
+
+  DIST-002:
+    state: SCAFFOLDED
+    artifacts:
+      source: []
+      tests:
+        - evidence.yaml: DIST-002
+      integration: []
+      audit: []
+      ci: []
+      miri: []
+      benchmark: []
+      hardware: []
+    evidence_status: LINKED
+    verification_conclusion: NOT_VERIFIED
+    note: Existing evidence.yaml record reports scaffolded-only source and state-machine-only tests; benchmark and hardware evidence are absent and CI is unknown.
+
+  STUDIO-002:
+    state: SCAFFOLDED
+    artifacts:
+      source: []
+      tests:
+        - evidence.yaml: STUDIO-002
+      integration: []
+      audit: []
+      ci: []
+      miri: []
+      benchmark: []
+      hardware: []
+    evidence_status: LINKED
+    verification_conclusion: NOT_VERIFIED
+    note: Existing evidence.yaml record reports scaffolded-only source and no live-telemetry tests; benchmark and hardware evidence are absent and CI is unknown.
+
+# Capabilities not yet indexed remain intentionally absent from this file.
+# Absence means "not reconciled yet", not "no implementation exists".
