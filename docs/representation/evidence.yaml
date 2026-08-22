@@ -21,7 +21,12 @@ records:
       paths:
         - crates/nros-core/src
     tests:
-      status: present
+      status: executed_passed_offline_mrustc_2026-08-22
+      note: >-
+        20 passed / 0 failed / 1 ignored incl. Pass-27 remediation regressions
+        (ZST zero-size-alloc UB fix, abort_initialized drop-panic double-drop fix);
+        adversarial probes re-run green (exact drop counts, 1M wraparound cap-2).
+        Miri still outstanding.
     ci:
       status: unknown
     miri:
@@ -139,6 +144,11 @@ records:
         - crates/nros-transport/src
     tests:
       status: executed_passed_offline_mrustc_2026-08-22
+      note: >-
+        8/8 incl. new TCP fragmented-delivery regression (Pass 27 §11.C): stream framing
+        defect (nonblocking read_exact consuming partial prefix) found and fixed with
+        per-connection buffered reader; bug->test->fix discrimination proven by splicing
+        the test into the pre-fix code (fails) vs fixed code (passes byte-identical).
     ci:
       status: unknown
     miri:

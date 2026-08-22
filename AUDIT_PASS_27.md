@@ -53,15 +53,15 @@ Result: `mrustc` compiles and links real native binaries against a from-source R
 | Suite | Result | Harness |
 |-------|--------|---------|
 | nros-types lib tests | ✅ 4/4 | mrustc `--test` |
-| nros-core lib tests | ✅ 17 passed / 0 failed / 1 ignored | mrustc `--test` (direct) |
-| nros-node lib tests | ✅ 5/5 | mrustc `--test` |
+| nros-core lib tests | ✅ 20 passed / 0 failed / 1 ignored (17 original + 3 Pass-27 remediation regressions, §11.C) | mrustc `--test` (direct) |
+| nros-node lib tests | ✅ 5/5 (re-run against fixed nros-core) | mrustc `--test` |
 | nros-hal lib tests | ✅ 4/4 | mrustc `--test` |
-| nros-transport lib tests | ✅ 7/7 (incl. UDP loopback) | mrustc `--test` |
+| nros-transport lib tests | ✅ 8/8 (incl. UDP loopback + **new TCP fragmented-delivery regression**, §11.C) | mrustc `--test` |
 | nros-sim lib tests | ✅ 7/7 (incl. degenerate-input hardening) | mrustc `--test` |
 | nros-studio lib tests | ✅ 3/3 | mrustc `--test` |
 | nros-cli lib tests | ✅ 3/3 | mrustc `--test` |
 | nros-distributed lib tests | ✅ logic 5/5 (see note) | probe binary (same code paths) |
-| **Total** | **50 unit tests passed offline + 5 logic probes** | |
+| **Total** | **55 unit tests passed offline + 5 logic probes** | |
 
 Notes:
 - nros-core's ignored test is `benchmark_latency_monotonic` — correctly `#[ignore]`d (benchmark separated from correctness gate per CORE-008).
@@ -77,9 +77,11 @@ The SPSC ring (the only `unsafe`-heavy component: 22 sites) was re-derived line 
 - **Guard protocol**: `try_reserve` → `WriteGuard` (uninit) → `write_value` → `InitializedWriteGuard` → `commit` — commit possible only after init (CORE-014). `write_reserved`/`read_reserved` CAS → single outstanding guard each side (CORE-001/002). Verified hold: producer never overlaps the consumer's slot because `write - read >= capacity` is refused, so `write ≡ read (mod capacity)` is unreachable with live readers.
 - **Orderings**: consumer Acquire-loads `write_idx` (published via Release store in `commit`) → happens-before ⇒ sees initialized T. Producer Acquire-loads `read_idx` (Release store in `ReadGuard::drop`) ⇒ `drop_in_place` ordered before slot reuse. Sound for SPSC.
 - **Drop discipline**: exactly-once via `ReadGuard::drop` + ring draining by *count* (`wrapping_sub`, wraparound-safe) — `test_drop_drains_all_occupied_slots` executed and passes.
-- Documented edge cases (not fixed; low severity, noted for Pass 28+):
-  - `RingBuffer::<ZST>` (zero-sized T) would allocate a zero-size `Layout` → `alloc` on zero-size layouts is UB. Mitigation would be a `size_of::<T>() == 0` guard. No NROS message is a ZST today.
-  - `InitializedWriteGuard::abort_initialized` double-drops if `T::drop` *panics* during the abort's `drop_in_place` (panic-during-drop corner). Documented; exotic.
+- Documented edge cases:
+  - ~~`RingBuffer::<ZST>` zero-size `Layout` → `alloc` UB~~ — **FIXED this pass (F-16, §11.C)**: dangling-pointer ZST branch + dealloc guard + 2 regression tests.
+  - ~~`InitializedWriteGuard::abort_initialized` double-drop on panic-in-`T::drop`~~ — **FIXED this pass (F-17, §11.C)**: guard wrapped in `ManuallyDrop` before `drop_in_place` + regression test.
+  - `init_with_unchecked` leaks (no UB) if the closure panics after partial init — acceptable and documented in-code; only remaining latent item, deferred.
+- Loom-verification still outstanding (loom requires crates.io): ordering argument above is manual.
   - `init_with_unchecked` leaks (no UB) if the closure panics after partial init — acceptable and documented in-code.
 - Loom-verification still outstanding (loom requires crates.io): ordering argument above is manual.
 
@@ -147,8 +149,9 @@ Interpretation (evidence honesty):
 | F-12 | Doc gate | capabilities/architecture | facade crate `nros` not represented (`every_workspace_crate_must_be_represented`) → FAIL | FACADE-001 added |
 | F-13 | Build-blocker | nros/examples/vertical_slice.rs | `motor_cmd.linear_velocity.x`/`angular_velocity.z` — `MotorCommand` is wheel-space `{left,right}_{velocity,torque}` (E0599); found while compiling the facade examples in §11 | route through node's own inverse kinematics (`compute_odometry`) — canonical types, still no ad-hoc shim |
 | F-14 | Build-blocker | nros/examples/vertical_slice.rs | passed `nros_types::Vector3` to `nros_sim::spawn_robot` — nros-sim deliberately keeps its own zero-dep geometry types (tracked migration I-007); type mismatch | use `nros_sim::Vector3` at the sim boundary with I-007 cross-reference comment |
-| Latent (not fixed) | Medium | nros-transport TCP receive | nonblocking socket + `read_exact` → partial header/payload reads on `WouldBlock` desync the stream framing permanently; benign on loopback but incorrect protocol handling | documented; needs buffered frame reader |
-| Latent (not fixed) | Low | nros-core | ZST `RingBuffer<T>` zero-size alloc UB; `abort_initialized` drop-panic double-drop | documented in §4 |
+| F-15 | Correctness (protocol) | nros-transport TCP receive **and send** | nonblocking socket + `read_exact`/`write_all` → partial reads consumed+discarded header/payload bytes on `WouldBlock`, permanently desyncing stream framing; mid-frame `WouldBlock` on send tore frames. Benign on loopback, incorrect on real networks. No TCP test existed — that's how it survived. | per-connection buffered frame reader (`TcpConnection { stream, rx_buf }`) — short reads accumulate, `Ok(None)` consumes nothing, complete frames consumed exactly once; send writes one frame buffer with a bounded WouldBlock retry loop; buffer blow-out guard (≤ 64 MiB + header). Regression test `test_tcp_fragmented_delivery_no_desync` — **discrimination proven**: old code fails it (`Failed to read header: failed to fill whole buffer`), new code passes byte-identical |
+| F-16 | Soundness (UB) | nros-core `RingBuffer<T>` | `RingBuffer::<ZST>` allocates a zero-size `Layout` → `alloc`/`dealloc` on zero-size layouts is UB (documented in §4, now remediated) | well-aligned dangling pointer for ZST payloads (RawVec pattern), dealloc skipped; tests `test_zst_ring_no_zero_size_alloc_ub` + `test_zst_with_drop_dropped_exactly_once` |
+| F-17 | Soundness (UB) | nros-core `InitializedWriteGuard::abort_initialized` | `T::drop` panicking during abort unwound into the guard's `Drop`, double-dropping T | guard held in `ManuallyDrop` before `drop_in_place`; documented leak-not-UB trade-off on drop-panic; test `test_abort_initialized_panic_in_drop_is_not_double_drop` (counter == exactly 1) |
 
 Post-fix gate status (executed locally): `python3 scripts/validate-documentation-representation.py` → **PASS**; `nros-audit claims|workspace|ci|benchmarks|safety` → all ✅; `nros-audit representation` → **PASS** after snapshot re-pin (97 checks). Snapshots re-pinned to the new commits (`content_integrity` fingerprints recomputed from git blob SHA-1s).
 
@@ -219,3 +222,25 @@ Verification after swap:
 | nros-core unit tests rebuilt against the new std | ✅ 17 passed / 0 failed / 1 ignored (same as pre-swap) |
 
 Conclusion: the verification chain no longer contains hand-written stand-ins; it is (mrustc C backend + real rust 1.90.0 `library/` tree + real pinned vendored deps) end-to-end.
+
+### 11.C Sub-addendum — Latent-issue remediation (documented → fixed)
+
+The three latent defects previously documented-but-unfixed were remediated in this session, each with a discriminating regression test:
+
+| ID | Fix | Verification |
+|----|-----|--------------|
+| F-15 | nros-transport: per-connection buffered frame reader for TCP receive; single-frame bounded-retry send; rx buffer blow-out guard (64 MiB) | NEW `test_tcp_fragmented_delivery_no_desync` (header split in two + payload byte-by-byte delivery → frame arrives exactly once, byte-identical). **Discrimination proven**: the same test spliced into the pre-fix code fails with `Failed to read header: failed to fill whole buffer`. Existing 7 tests still green (8/8 total). Transport demo re-run green |
+| F-16 | nros-core: ZST `RingBuffer` uses `NonNull::dangling()` (RawVec pattern), alloc/dealloc skipped for zero-size layouts | NEW `test_zst_ring_no_zero_size_alloc_ub` (SPSC counting semantics incl. full-gate preserved for ZST) + `test_zst_with_drop_dropped_exactly_once` (counter-based: drain + ReadGuard drops exactly once) |
+| F-17 | nros-core: `abort_initialized` wraps the guard in `ManuallyDrop` before `drop_in_place` | NEW `test_abort_initialized_panic_in_drop_is_not_double_drop`: `T::drop` panics mid-abort → propagates via `catch_unwind`, drop counter == exactly 1, reservation intentionally leaked (documented policy), ring drain does not re-drop |
+
+Full-chain regression after the fixes (all against the rebuilt std with real backtrace — §11.B):
+
+| Component | Result |
+|-----------|--------|
+| nros-core `--test` | ✅ 20 passed / 0 failed / 1 ignored |
+| Adversarial ring probes (10k mixed abort/commit/drain exact-drop-count, 1M wraparound cap-2, full/empty invariants) — rebuilt against fixed core | ✅ all PASS, drops exact |
+| nros-node `--test` (depends on nros-core) | ✅ 5/5 re-run |
+| nros-transport lib + demo (`nros-transport-demo` with TCP/UDP paths) | ✅ demo green |
+| Facade tree + examples (real macros) rebuilt against fixed nros-core/nros-transport | ✅ mobile_base + vertical_slice run green |
+
+No remaining latent UB items are known in nros-core; the `init_with_unchecked` partial-init panic *leak* (not UB) stays documented as designed. The TCP transport's remaining scaffold notes (nonblocking tx-queue with backpressure, copy-based (de)serialization path) are tracked as design follow-ups, not defects.

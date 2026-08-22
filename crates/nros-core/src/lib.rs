@@ -57,10 +57,21 @@ impl<T> RingBuffer<T> {
         assert!(capacity.is_power_of_two(), "Capacity must be power of 2");
         assert!(capacity > 0);
         let layout = Layout::array::<MaybeUninit<T>>(capacity).unwrap();
-        let buffer = unsafe { alloc(layout) as *mut MaybeUninit<T> };
-        if buffer.is_null() {
-            std::alloc::handle_alloc_error(layout);
-        }
+        // Pass 27 fix: for zero-sized T the array layout has size 0, and passing a
+        // zero-size layout to alloc() is UB. Use a well-aligned dangling pointer
+        // instead (same pattern as std's RawVec): slot pointer arithmetic on a ZST
+        // layout is the identity (offset 0) and MaybeUninit<ZST> accesses touch no
+        // memory, so the dangling-but-aligned pointer is valid for every operation
+        // RingBuffer performs on it. dealloc is skipped symmetrically in Drop.
+        let buffer = if layout.size() == 0 {
+            std::ptr::NonNull::<MaybeUninit<T>>::dangling().as_ptr()
+        } else {
+            let p = unsafe { alloc(layout) as *mut MaybeUninit<T> };
+            if p.is_null() {
+                std::alloc::handle_alloc_error(layout);
+            }
+            p
+        };
         RingBuffer {
             buffer,
             capacity,
@@ -151,7 +162,11 @@ impl<T> Drop for RingBuffer<T> {
             idx = idx.wrapping_add(1);
         }
         let layout = Layout::array::<MaybeUninit<T>>(self.capacity).unwrap();
-        unsafe { dealloc(self.buffer as *mut u8, layout); }
+        // Pass 27 fix: matches the ZST branch in new() — no allocation was ever made
+        // for a zero-size layout, so dealloc must not be called with one (UB).
+        if layout.size() != 0 {
+            unsafe { dealloc(self.buffer as *mut u8, layout); }
+        }
     }
 }
 
@@ -263,14 +278,19 @@ impl<'a, T> InitializedWriteGuard<'a, T> {
     /// Abort after initialization — drops T and clears reservation, does NOT advance write_idx
     /// For cases where initialized value should be discarded
     pub fn abort_initialized(self) {
+        // Pass 27 fix: place the guard in ManuallyDrop BEFORE running T's destructor.
+        // Previously this mem::forget(self) only happened AFTER drop_in_place; if
+        // T::drop panicked, the unwind ran Drop for this guard and dropped T a SECOND
+        // time (double-drop UB). With ManuallyDrop the guard's own Drop never runs
+        // here. Documented trade-off: if T::drop panics, the write reservation is
+        // intentionally leaked (producer-side wedges: subsequent try_reserve returns
+        // None for this ring) rather than re-entering T::drop on already-destroyed
+        // memory. Degraded-ring beats UB.
+        let this = std::mem::ManuallyDrop::new(self);
         unsafe {
-            ptr::drop_in_place((*self.ptr).as_mut_ptr());
+            ptr::drop_in_place((*this.ptr).as_mut_ptr());
         }
-        // Drop will clear flag without advancing — but we already dropped T, so need to clear flag manually then forget
-        // Instead, let Drop handle clearing, but we already dropped T, so Drop should not drop again
-        // To avoid double drop, we forget after manual drop and clear flag
-        self.ring.write_reserved.0.store(false, Ordering::Release);
-        std::mem::forget(self);
+        this.ring.write_reserved.0.store(false, Ordering::Release);
     }
 }
 
@@ -817,6 +837,77 @@ mod tests {
         ring.try_reserve().unwrap().write_value("hello".to_string()).commit();
         let rg = ring.try_read().unwrap();
         assert_eq!(*rg, "hello");
+    }
+
+    // ── Pass 27 latent-issue remediation regressions ────────────────────────
+
+    #[test]
+    fn test_zst_ring_no_zero_size_alloc_ub() {
+        // Regression: Layout::array::<MaybeUninit<()>> has size 0, and alloc/dealloc
+        // with a zero-size layout is UB. RingBuffer now uses a well-aligned dangling
+        // pointer for ZSTs (RawVec pattern). Also assert SPSC counting semantics are
+        // unchanged for ZST payloads (full gate, guard drop advancing read_idx).
+        let (producer, consumer) = channel::<()>(2);
+        producer.publish_copy(()).unwrap();
+        producer.publish_copy(()).unwrap();
+        assert!(producer.len() == producer.capacity(), "2 outstanding ZST msgs must fill a cap-2 ring");
+        assert!(producer.publish_copy(()).is_err(), "full ring must reject publish");
+        { let g = consumer.try_recv().unwrap(); let _ = *g; }
+        assert_eq!(producer.len(), 1);
+        { let g2 = consumer.try_recv().unwrap(); let _ = *g2; }
+        assert!(producer.is_empty());
+        // Refill so RingBuffer::drop drains one live ZST slot (exercises drain path).
+        producer.publish_copy(()).unwrap();
+    }
+
+    #[test]
+    fn test_zst_with_drop_dropped_exactly_once() {
+        // ZSTs may carry Drop side effects. Each value must be dropped exactly once —
+        // once via ReadGuard::drop, once via RingBuffer drain — and Drop::drop must
+        // receive a live &mut self (the dangling ZST pointer is well-aligned, so this is
+        // valid). Uses a 'static counter because a ZST cannot own an Arc.
+        struct ZDrop;
+        static ZDROPS: AtomicUsize = AtomicUsize::new(0);
+        impl Drop for ZDrop {
+            fn drop(&mut self) { ZDROPS.fetch_add(1, Ordering::SeqCst); }
+        }
+        {
+            let ring = RingBuffer::<ZDrop>::new(2);
+            ring.try_reserve().unwrap().write_value(ZDrop).commit();
+            { let rg = ring.try_read().unwrap(); let _ = &*rg; }   // drop #1 (ReadGuard)
+            ring.try_reserve().unwrap().write_value(ZDrop).commit();
+            // ring drop drains the remaining live slot → drop #2
+        }
+        assert_eq!(ZDROPS.load(Ordering::SeqCst), 2, "each ZST value dropped exactly once");
+    }
+
+    #[test]
+    fn test_abort_initialized_panic_in_drop_is_not_double_drop() {
+        // Regression: abort_initialized used to mem::forget(self) only AFTER
+        // drop_in_place, so a panic in T::drop re-entered the guard's Drop and dropped
+        // T a second time (double-drop UB). The value is now wrapped in ManuallyDrop
+        // first; the drop counter must be exactly 1 even when T::drop panics, and the
+        // ring intentionally wedges producer-side (documented leak-not-UB policy).
+        struct PanicDrop;
+        static PDROPS: AtomicUsize = AtomicUsize::new(0);
+        impl Drop for PanicDrop {
+            fn drop(&mut self) {
+                PDROPS.fetch_add(1, Ordering::SeqCst);
+                std::panic::panic_any("deliberate drop panic for abort_initialized regression");
+            }
+        }
+        let ring = RingBuffer::<PanicDrop>::new(2);
+        let guard = ring.try_reserve().unwrap().write_value(PanicDrop);
+        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            guard.abort_initialized();
+        }));
+        assert!(r.is_err(), "drop panic must propagate");
+        assert_eq!(PDROPS.load(Ordering::SeqCst), 1, "T::drop must run exactly once (no double-drop)");
+        assert!(ring.try_reserve().is_none(), "reservation is intentionally leaked/wedged on drop-panic");
+        // RingBuffer::drop must not re-drop the aborted slot (write_idx never advanced,
+        // drain count = 0): PDROPS stays 1 after the ring is dropped.
+        drop(ring);
+        assert_eq!(PDROPS.load(Ordering::SeqCst), 1);
     }
 
     mod benchmarks {
