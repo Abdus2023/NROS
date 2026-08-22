@@ -162,7 +162,7 @@ Post-fix gate status (executed locally): `python3 scripts/validate-documentation
 4. **trybuild** native run (compile-fail probes were manual here).
 5. **nros-distributed `--test`** under official rustc (mrustc-only harness crash — §3).
 6. `docs/audit/verification.json` still describes an earlier branch's NOT_RUN state; treat this document (plus the new benchmark artifact) as the current execution evidence, and the CI's first green run as the authority going forward.
-7. **mrustc toolchain caveats** (method honesty): the mrustc C backend is not the official rustc codegen; its proc-macro loading links plugin executables into final binaries (worked around by stripping the plugin from the final link line — semantically identical to rustc, which never links proc-macros). `library/backtrace` in the reconstructed 1.90 std tree is an API-faithful stub returning `BacktraceStatus::Unsupported` (backtrace-rs 0.3.76 sources were unfetchable while egress was degraded); no test exercises it, but it must be replaced before any official-toolchain bootstrap claim is reused.
+7. **mrustc toolchain caveats** (method honesty): the mrustc C backend is not the official rustc codegen; its proc-macro loading links plugin executables into final binaries (worked around by stripping the plugin from the final link line — semantically identical to rustc, which never links proc-macros). `library/backtrace` was stubbed during the egress-degraded window; **it was then RESTORED to the real rust-1.90.0-pinned sources** (gitlink `b65ab935f...`, backtrace 0.3.75-era) and the std tree rebuilt — see §11.B.
 
 ---
 
@@ -203,3 +203,19 @@ Executed results:
 | `cargo run --example vertical_slice` equivalent | ✅ compiled after two further pre-existing defects were fixed (F-13 `MotorCommand` field names, F-14 sim-boundary `Vector3`), ran green: 10/10 iterations, 0/10 deadline misses, canonical pipeline `Twist → SPSC → VelocityController → MotorCommand → compute_odometry → Sim`, queue-full backpressure probe ✅, final verdict `Vertical slice PASSED` |
 
 Method notes: (a) examples were compiled with `mrustc --edition 2021 -O` against the facade rlib tree, mirroring `cargo build -p nros --examples`; (b) the mrustc C-backend linker step was completed by re-invoking the emitted link command with the proc-macro plugin removed (rustc never links proc-macros into downstream artifacts — semantically identical); (c) the offline stub proc-macro used earlier in this pass is superseded by the real macro for all facade conclusions.
+
+### 11.B Sub-addendum — `library/backtrace` restored to pinned upstream sources (same session)
+
+The one remaining stub in the verification toolchain was `library/backtrace` in the reconstructed rust 1.90.0 source tree (a codeload tag tarball omits submodule contents). After egress recovered, the exact gitlink commit of rust 1.90.0 was resolved (`rust-lang/backtrace-rs @ b65ab935fb2e0d59dba8966ffca09c9cc5a5f57c`, crate version 0.3.75 — matching the `Cargo.lock` pins the std subset actually resolves with: `addr2line 0.24.2`/`object 0.36.7`/`gimli 0.31.1`, all previously vendored), fetched via codeload, and dropped in. std includes it via `library/std/src/lib.rs` `#[path = "../../backtrace/src/lib.rs"] mod backtrace_rs;` with `backtrace_in_libstd` set by the shipped std build-script override.
+
+Verification after swap:
+
+| Check | Result |
+|-------|--------|
+| `make -f minicargo.mk LIBS` full rebuild against real sources | ✅ exit 0 |
+| `std::backtrace::Backtrace::force_capture().status()` (smoke) | ✅ `Captured` (stub returned `Unsupported`) |
+| Frame rendering in this mrustc codegen environment | 0-frame render (`Backtrace []`), trace-only config — the std `backtrace`/symbolization features (`addr2line`/`object`/`miniz_oxide`) stay feature-gated off exactly as in rust's own default -Zbuild-std trace-only builds; unwind-walk depth under mrustc-generated C frames yields no iterations (toolchain codegen artifact, documented, zero NROS impact: no gate/test/example consumes backtraces) |
+| Panic-hook backtrace printing | compiled out (same feature gating) — behavior unchanged vs. stub |
+| nros-core unit tests rebuilt against the new std | ✅ 17 passed / 0 failed / 1 ignored (same as pre-swap) |
+
+Conclusion: the verification chain no longer contains hand-written stand-ins; it is (mrustc C backend + real rust 1.90.0 `library/` tree + real pinned vendored deps) end-to-end.
