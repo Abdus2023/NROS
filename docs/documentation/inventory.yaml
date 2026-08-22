@@ -123,6 +123,13 @@ documents:
     status: archived
     purpose: Historical deterministic simulation, sensor mathematics, and real-time-loop audit.
 
+  - id: DOC-AUDIT-PASS-27
+    path: AUDIT_PASS_27.md
+    type: audit
+    authority: supporting
+    status: active
+    purpose: First real build/test/gate/golden/benchmark execution evidence (offline source-built toolchain), with defect fixes and snapshot re-pinning.
+
   - id: DOC-REPRESENTATION-SCHEMA
     path: docs/representation/schema.yaml
     type: normative
