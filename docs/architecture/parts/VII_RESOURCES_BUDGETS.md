@@ -2,264 +2,353 @@
 
 > **Series:** NROS Architecture Series  
 > **Part:** VII  
-> **Role:** Resource model, ownership, budgets, admission, accounting, and enforcement  
+> **Role:** Resource identity, ownership, allocation, admission, accounting, budgets, quotas, and enforcement  
 > **Status:** Architectural design document — not implementation evidence
 
 ## 1. Purpose
 
-Part VI defined temporal semantics. Part VII defines how NROS represents finite resources and controls the relationship between workload demand and available capacity.
+Part VI defined temporal semantics. Part VII defines how NROS represents and governs resources consumed by components and activations.
 
 The central rule is:
 
-> **Resource accounting, admission, enforcement, and guarantees are distinct properties and must never be conflated.**
+> **A resource claim is meaningful only when the resource, owner, scope, accounting model, admission policy, and enforcement mechanism are explicit.**
+
+NROS must not collapse these distinct concepts into a single field such as `resource_limit`.
 
 ## 2. Resource Model
 
-A resource is a finite capability required, consumed, shared, or controlled by runtime work.
+A resource is a bounded or governable capability required by an entity or activation.
 
 ```text
 Resource
-├── CPU
-├── Memory
-├── Device
-├── GPU
-├── Network
-├── Storage
-├── Energy
-└── Platform service
+├── identity
+├── class
+├── capacity
+├── unit
+├── owner
+├── scope
+├── allocation state
+├── accounting state
+├── policy
+└── enforcement mechanism
 ```
 
-Resources may be physical, virtual, logical, or externally managed.
+Examples include:
+
+```text
+CPU
+Memory
+Storage
+Network bandwidth
+Network queues
+Device access
+GPU / accelerator time
+DMA / shared-memory regions
+File descriptors
+Energy budget
+Execution slots
+```
+
+A resource does not have to be physical. A scheduler slot or bounded activation budget can also be an architectural resource.
 
 ## 3. Resource Identity
 
-A resource should have an identity within its management scope.
+Resources should have stable identities within their declared scope.
+
+Conceptually:
 
 ```text
 ResourceId
+├── class
 ├── namespace
-├── local_id
-└── generation / incarnation (when required)
+├── instance
+└── generation
 ```
 
-Examples:
+Generation-aware resource identity prevents stale ownership or allocation records from being applied to a reincarnated resource instance.
 
 ```text
-cpu/worker-0
-memory/domain-A
-camera/front
-network/interface-1
+resource = gpu-0 / generation 4
+              ↓ restart
+resource = gpu-0 / generation 5
 ```
 
-Identity does not itself imply ownership or exclusive access.
+An allocation referring to generation 4 must not silently authorize access to generation 5.
 
 ## 4. Resource Classes
 
-Resources can be classified according to their sharing behavior.
+NROS should distinguish at least four broad classes.
+
+### Consumable resources
+
+Use reduces an available quantity.
+
+Examples:
 
 ```text
-Exclusive
-Shared
-Partitionable
-Consumable
-Replenishable
-Persistent
-Ephemeral
+CPU time
+network bandwidth
+energy
+storage capacity
+```
+
+### Exclusive resources
+
+Only one owner may hold the resource or protected region at a time.
+
+Examples:
+
+```text
+device controller
+exclusive peripheral
+hardware execution channel
+```
+
+### Shareable resources
+
+Multiple consumers may use the resource subject to policy.
+
+Examples:
+
+```text
+memory
+network link
+GPU
+shared-memory region
+```
+
+### Capability-like resources
+
+Possession represents permission to access or invoke something.
+
+Examples:
+
+```text
+device handle
+IPC endpoint
+privileged operation
+protected namespace
+```
+
+Capability possession must remain distinct from successful execution.
+
+## 5. Capacity
+
+A resource may expose a capacity:
+
+```text
+capacity = quantity + unit + scope
 ```
 
 Examples:
 
 ```text
-Motor actuator      → typically exclusive
-CPU                 → shared / partitionable
-Memory              → allocatable
-Network bandwidth   → shareable / budgetable
-Battery energy      → consumable
+4 CPU cores
+512 MiB memory
+100 MiB/s bandwidth
+1 device instance
+20 execution slots
 ```
 
-The class determines which allocation semantics are meaningful.
+Capacity is a model of what is available under a defined scope. It is not automatically a guarantee of continuously available performance.
 
-## 5. Ownership
+For example:
 
-Resource ownership must be explicit.
+```text
+CPU capacity = 1 core
+```
+
+does not by itself establish:
+
+```text
+1 core of uninterrupted execution
+```
+
+## 6. Ownership
+
+Ownership identifies the entity responsible for a resource allocation.
+
+Conceptually:
 
 ```text
 Resource
    ↓
 Owner
    ↓
-Lease / allocation
+Allocation
    ↓
+Usage
+```
+
+Ownership may be assigned to:
+
+- component;
+- activation;
+- process/runtime domain;
+- subsystem;
+- deployment unit;
+- system authority.
+
+Ownership must have explicit lifetime semantics.
+
+## 7. Allocation
+
+Allocation establishes that a resource has been assigned to an owner.
+
+```text
+Request
+  ↓
+Admission
+  ↓
+Allocation
+  ↓
 Use
-   ↓
+  ↓
 Release
 ```
 
-Ownership can be:
+Allocation may be:
 
 ```text
-Exclusive
-Shared
-Delegated
-Borrowed
-Leased
-Managed by platform
+exclusive
+shared
+reserved
+lease-based
+on-demand
 ```
 
-Ownership does not necessarily mean the owning component can physically prevent all other use; enforcement depends on the platform.
+An allocation record should identify at least:
 
-## 6. Resource Requirement
+```text
+resource_id
+owner_id
+amount
+scope
+allocation_generation
+policy
+lifetime
+```
 
-A workload may declare resource requirements.
+## 8. Reservation
+
+Reservation establishes an intended future claim on a resource.
+
+```text
+Reservation
+    ≠
+Allocation
+    ≠
+Actual usage
+```
+
+A reservation can support planning and admission without implying that the resource is currently being consumed.
+
+## 9. Admission Control
+
+Admission determines whether a requested operation or entity may enter an execution regime given resource constraints.
 
 Conceptually:
 
 ```text
-Requirement
-├── resource type
-├── quantity
-├── minimum
-├── maximum
-├── duration
-├── exclusivity
-├── affinity
-└── policy
-```
-
-Example:
-
-```text
-CameraProcessor
-    CPU: 1 core
-    Memory: 64 MiB
-    Camera: exclusive
-    Network: ≤ 5 MB/s
-```
-
-Requirements are requests or constraints until the runtime/platform verifies them.
-
-## 7. Allocation
-
-Allocation assigns resource capacity to a workload.
-
-```text
 Request
-   ↓
-Availability
-   ↓
-Policy
-   ↓
-Allocation
-   ↓
-Lease / ownership record
+  ↓
+Resource requirements
+  ↓
+Policy evaluation
+  ↓
+Capacity / reservation check
+  ↓
+ADMIT or REJECT
 ```
 
-Allocation may be static or dynamic.
+Admission should occur before a state transition that depends on the resource guarantee.
 
-## 8. Admission
+This follows the series-wide rule:
 
-Resource admission answers:
+> **No observed prerequisite → no valid state transition.**
 
-> **Can this workload enter the active execution domain under the declared resource constraints?**
+## 10. Accounting
 
-```text
-Workload
-   ↓
-Requirements
-   ↓
-Available capacity
-   ↓
-Policy
-   ↓
-Admission decision
-```
-
-Admission should happen before execution when failure to obtain resources would violate correctness or safety requirements.
-
-## 9. Accounting
-
-Accounting measures or records resource usage.
+Accounting records resource usage.
 
 Examples:
 
 ```text
-CPU time
-Allocated memory
-Peak memory
-Network bytes
-Storage operations
-GPU time
-Energy estimate
-Device usage time
+CPU time consumed
+bytes allocated
+bytes transmitted
+storage occupied
+GPU time consumed
+energy measured
 ```
 
-Accounting can answer:
+Accounting answers:
+
+> **What was observed to be used?**
+
+It does not by itself answer:
+
+> **Was usage prevented from exceeding a limit?**
+
+Therefore:
 
 ```text
-Who consumed what?
-When?
-How much?
-Under which activation?
+Accounting ≠ Enforcement
 ```
 
-But accounting alone does not control consumption.
+## 11. Enforcement
 
-## 10. Enforcement
+Enforcement actively constrains resource use according to a policy.
 
-Enforcement prevents or limits resource use according to policy.
-
-Examples:
+Examples include:
 
 ```text
-CPU quota
-Memory limit
-Bandwidth shaping
-Device access control
-Storage quota
-GPU partition
+reject allocation
+terminate activation
+throttle execution
+block device access
+limit queue depth
+apply memory protection
+shape network traffic
 ```
 
-The platform may provide enforcement mechanisms.
+A resource limit should not be called enforced unless the implementation contains a mechanism capable of preventing or controlling the prohibited behavior.
 
-NROS should expose the semantic contract without assuming that every deployment supports every enforcement mechanism.
-
-## 11. The Four-Way Distinction
+## 12. The Four-Way Separation
 
 NROS explicitly separates:
 
 ```text
-Accounting
-   ↓
-What happened?
-
-Admission
-   ↓
-May this work start?
-
-Enforcement
-   ↓
-Can consumption exceed policy?
-
-Guarantee
-   ↓
-Can a bound be demonstrated under defined assumptions?
+Resource accounting
+        ≠
+Resource admission
+        ≠
+Resource enforcement
+        ≠
+Resource guarantee
 ```
 
-For example:
+These represent progressively stronger claims.
 
-```text
-CPU usage measured
-        ≠
-CPU quota enforced
-        ≠
-CPU budget always respected
-        ≠
-Worst-case CPU demand proven
-```
+### Accounting
 
-## 12. Budgets
+Records observed behavior.
 
-A budget limits resource consumption over a defined scope.
+### Admission
+
+Controls entry based on known policy and available information.
+
+### Enforcement
+
+Actively constrains behavior.
+
+### Guarantee
+
+Requires evidence that the specified bound is maintained under the stated assumptions.
+
+## 13. Budgets
+
+A budget is a bounded allowance assigned to an owner or activation.
 
 Conceptually:
 
@@ -267,403 +356,545 @@ Conceptually:
 Budget
 ├── resource
 ├── amount
-├── interval / lifetime
-├── accounting basis
-├── enforcement policy
-└── exhaustion policy
+├── unit
+├── interval
+├── owner
+├── policy
+└── exhaustion behavior
 ```
-
-Example:
-
-```text
-Activation
-CPU budget = 2 ms
-period     = 10 ms
-```
-
-This is a constraint declaration unless an enforcement mechanism actually exists.
-
-## 13. Budget Exhaustion
-
-When a budget is exhausted, the runtime needs an explicit policy.
-
-Possible policies:
-
-```text
-Throttle
-Suspend
-Cancel
-Defer
-Reject
-Escalate
-Continue but record violation
-```
-
-The appropriate response depends on execution class and safety requirements.
-
-## 14. Quotas
-
-A quota limits aggregate resource use over a scope.
 
 Examples:
 
 ```text
-Component memory quota
-Tenant CPU quota
-Network bandwidth quota
-Storage quota
+CPU: 2 ms / activation
+Memory: 64 MiB / component
+Bandwidth: 10 MiB/s / channel
+Storage: 1 GiB / deployment
+Energy: 5 J / operation
 ```
 
-Budget and quota are related but not identical.
+A budget is meaningful only when the measurement interval and accounting source are defined.
+
+## 14. Budget Exhaustion
+
+When a budget is exhausted, the architecture must specify the resulting policy.
+
+Possible policies include:
 
 ```text
-Budget
-→ constraint for a workload/interval
-
-Quota
-→ allocation limit for a scope
+Reject
+Throttle
+Pause
+Cancel
+Degrade
+Escalate
+Recover
+Continue with overrun accounting
 ```
 
-## 15. Reservations
-
-A reservation pre-allocates or protects capacity for future work.
+The policy must not be inferred from the existence of the budget field.
 
 ```text
-Reservation
-├── resource
-├── capacity
-├── time window
-├── owner
-└── policy
+Budget configured
+      ≠
+Budget observed exhausted
+      ≠
+Budget enforced
+      ≠
+Operation stopped
 ```
 
-Reservations can support predictable scheduling but require platform support to become meaningful guarantees.
+## 15. Temporal Budgets
 
-## 16. Leases
+Part VI introduced temporal budgets.
 
-A lease grants resource use for a bounded validity period.
+Part VII treats them as resource constraints over execution time.
+
+```text
+Activation
+├── release
+├── deadline
+├── execution budget
+└── consumed CPU time
+```
+
+The following must remain distinct:
+
+```text
+wall-clock duration
+CPU time
+scheduler delay
+execution budget
+deadline
+```
+
+An activation running for 10 ms of wall time does not necessarily consume 10 ms of CPU time.
+
+## 16. Memory
+
+Memory resources should distinguish at least:
+
+```text
+virtual address space
+resident memory
+allocated memory
+shared memory
+DMA-capable memory
+pinned memory
+persistent storage
+```
+
+A configured allocation limit does not automatically establish a hard physical-memory guarantee.
+
+Memory policy may include:
+
+```text
+maximum allocation
+reservation
+pool ownership
+allocation failure
+reclamation
+isolation
+```
+
+## 17. CPU
+
+CPU resources can be represented using different policies:
+
+```text
+core affinity
+execution slots
+CPU-time budgets
+priority
+shares
+reservations
+quotas
+```
+
+These policies are not interchangeable.
+
+For example:
+
+```text
+CPU quota ≠ CPU reservation
+CPU reservation ≠ CPU affinity
+CPU affinity ≠ real-time guarantee
+```
+
+Any real-time claim must identify the scheduler, platform, workload assumptions, interference model, and measurement or proof evidence.
+
+## 18. Devices
+
+Device resources require explicit ownership and access semantics.
+
+Conceptually:
+
+```text
+Device
+├── identity
+├── capabilities
+├── ownership
+├── access mode
+├── lifecycle
+└── fault state
+```
+
+Access modes may include:
+
+```text
+exclusive
+shared
+read-only
+write-only
+control
+observe
+```
+
+A device capability does not imply that a command will succeed.
+
+```text
+Capability granted
+      ≠
+Command accepted
+      ≠
+Command executed
+      ≠
+Device effect achieved
+```
+
+## 19. Network Resources
+
+Network resources include more than link bandwidth.
+
+Possible resources include:
+
+```text
+bandwidth
+queue capacity
+socket / endpoint count
+packet rate
+buffer memory
+connection slots
+```
+
+Network accounting must define where measurement occurs.
+
+```text
+application
+   ↓
+transport
+   ↓
+OS/network stack
+   ↓
+interface
+   ↓
+physical link
+```
+
+A measurement at one boundary must not automatically be represented as an end-to-end network guarantee.
+
+## 20. Storage
+
+Storage resources should distinguish:
+
+```text
+capacity
+throughput
+IOPS
+latency
+queue depth
+persistent allocation
+```
+
+For persistent resources, lifecycle and recovery semantics become important.
+
+A storage quota does not by itself establish write-latency or durability guarantees.
+
+## 21. GPU and Accelerators
+
+Accelerator resources may be represented by:
+
+```text
+device
+execution context
+memory
+queue
+compute slots
+transfer bandwidth
+```
+
+Resource ownership should distinguish device access from successful kernel execution and from completion within a requested deadline.
+
+## 22. Resource Hierarchy
+
+Resources may form a hierarchy.
+
+```text
+System
+ ├── CPU pool
+ │    ├── core 0
+ │    ├── core 1
+ │    └── core 2
+ ├── Memory pool
+ ├── Network
+ │    ├── interface
+ │    └── queues
+ └── Devices
+      ├── camera-0
+      └── actuator-0
+```
+
+A child allocation must remain compatible with parent capacity and policy.
+
+Hierarchical accounting can then answer:
+
+```text
+system → deployment → component → activation
+```
+
+## 23. Resource Sharing
+
+Sharing requires an explicit policy.
+
+Examples:
+
+```text
+fair sharing
+weighted sharing
+priority sharing
+time slicing
+quota-based sharing
+reservation-based sharing
+```
+
+The existence of multiple owners does not establish fairness.
+
+A fairness claim requires:
+
+- defined fairness metric;
+- observation interval;
+- workload assumptions;
+- scheduler/resource policy;
+- evidence.
+
+## 24. Resource Leases
+
+A lease associates ownership or access with a validity interval.
 
 ```text
 Lease
 ├── resource
-├── holder
+├── owner
 ├── generation
 ├── expiration
 └── renewal policy
 ```
 
-Expiration should prevent stale holders from retaining logical ownership indefinitely.
+Expiration should invalidate the authority associated with the lease.
 
-## 17. Resource Pools
+Generation and lease identity together prevent stale holders from continuing to act after resource reassignment.
 
-Resources may be grouped into pools:
+## 25. Resource Faults
 
-```text
-CPU Pool
-├── core-0
-├── core-1
-└── core-2
-```
-
-or:
-
-```text
-GPU Pool
-├── device-A
-└── device-B
-```
-
-A pool can expose aggregate capacity and allocation policy.
-
-## 18. Resource Affinity
-
-Some workloads require specific resources or locality.
+Resource failures should be observable separately from component failures.
 
 Examples:
 
 ```text
-CPU affinity
-NUMA locality
-GPU locality
-Device locality
-Network interface affinity
+ResourceUnavailable
+AllocationFailed
+BudgetExceeded
+QuotaExceeded
+DeviceFault
+MemoryExhausted
+StorageFull
+NetworkCapacityExceeded
+LeaseExpired
 ```
 
-Affinity is a scheduling/allocation constraint, not necessarily an exclusive ownership claim.
-
-## 19. Memory
-
-Memory requires particular care because several distinct quantities may matter:
+The runtime may then apply a policy such as:
 
 ```text
-Requested
-Allocated
-Resident
-Peak
-Committed
-Available
+retry
+backoff
+degrade
+isolate
+recover
+restart
+stop
 ```
 
-A memory allocation succeeding does not imply that the workload has a guaranteed future memory budget.
+## 26. Resource Accounting Record
 
-## 20. CPU
-
-CPU resource semantics may include:
-
-```text
-cores
-threads
-CPU time
-quota
-priority
-affinity
-execution budget
-```
-
-A CPU-time budget should specify the accounting domain and enforcement mechanism.
-
-## 21. Devices
-
-Devices are often exclusive or capability-controlled resources.
-
-```text
-Device
-   ↓
-Capability
-   ↓
-Lease / ownership
-   ↓
-Operation
-```
-
-Examples:
-
-```text
-Camera
-LiDAR
-Motor
-GPIO
-Serial port
-CAN interface
-```
-
-Device ownership must not be inferred merely because a component opened a handle.
-
-## 22. Network Resources
-
-Network capacity may be represented as:
-
-```text
-Bandwidth
-Packets/sec
-Connections
-Queues
-Buffer capacity
-```
-
-A bandwidth budget requires a defined measurement point and enforcement mechanism before it can become a hard bound.
-
-## 23. Storage
-
-Storage resources include:
-
-```text
-Capacity
-IOPS
-Bandwidth
-File descriptors
-Write budget
-Persistence lifetime
-```
-
-Storage exhaustion is a resource fault and should be observable through the runtime fault model.
-
-## 24. Energy
-
-For mobile or embedded robotics, energy may be treated as a resource.
-
-Possible measurements include:
-
-```text
-Battery state
-Power
-Energy estimate
-Thermal budget
-```
-
-Energy estimates must identify measurement uncertainty and sampling assumptions.
-
-## 25. Resource Revocation
-
-Resources may need to be revoked.
-
-```text
-ALLOCATED
-   ↓
-REVOCATION REQUEST
-   ↓
-QUIESCE
-   ↓
-RELEASE
-```
-
-Revocation must define what happens to active work:
-
-```text
-cancel
-migrate
-checkpoint
-continue degraded
-fail
-```
-
-Forced revocation is platform-dependent and must not be assumed safe for arbitrary workloads.
-
-## 26. Resource Failure
-
-A resource may become unavailable after admission.
-
-```text
-RUNNING
-   ↓
-RESOURCE FAILURE
-   ↓
-DEGRADED / FAULTED
-   ├── recover
-   ├── substitute
-   ├── migrate
-   └── stop / safe state
-```
-
-The resource manager should expose enough information for the lifecycle and supervision layers to apply policy.
-
-## 27. Resource Contention
-
-Multiple workloads may compete for one resource.
-
-```text
-A ─┐
-B ─┼──→ Resource R
-C ─┘
-```
-
-The runtime must define whether contention is resolved by:
-
-```text
-priority
-fairness
-reservation
-quota
-deadline
-first-come
-explicit arbitration
-```
-
-The policy should be deterministic where the system requires deterministic arbitration.
-
-## 28. Priority Inversion
-
-Shared resources can create priority inversion.
+A resource observation should preserve sufficient context for verification.
 
 Conceptually:
 
 ```text
-High-priority task
-       ↓ waits
-Low-priority task
-       ↑ blocked by
-Medium-priority work
+ResourceRecord
+├── resource_id
+├── owner_id
+├── activation_id
+├── timestamp
+├── clock_domain
+├── amount
+├── unit
+├── measurement_boundary
+├── policy
+├── result
+└── platform_context
 ```
 
-Possible mitigation mechanisms include:
+Derived totals should remain traceable to the underlying measurements where stronger claims depend on them.
+
+## 27. Resource and Lifecycle Interaction
+
+Resource prerequisites can guard lifecycle transitions.
 
 ```text
-Priority inheritance
-Priority ceiling
-Resource partitioning
-Lock-free design
-Scheduling isolation
+CONFIGURED
+    ↓
+resource requirements evaluated
+    ↓
+ADMITTED
+    ↓
+resources allocated
+    ↓
+READY
+    ↓
+RUNNING
 ```
 
-The presence of a mechanism does not by itself prove bounded blocking.
-
-## 29. Resource Transactions
-
-Complex operations may require multiple resources atomically or quasi-atomically.
+If a required resource disappears:
 
 ```text
-Request
- ↓
-CPU + Memory + Device
- ↓
-Admission
- ↓
-Commit
+RUNNING
+   ↓
+ResourceFault
+   ├── Recover
+   ├── Degrade
+   ├── Isolate
+   └── Stop / Safe State
 ```
 
-If partial allocation is possible, rollback semantics must be explicit.
+The lifecycle state must reflect the actual policy outcome rather than merely the requested transition.
 
-## 30. Resource Observability
+## 28. Resource and Scheduling Interaction
 
-Resource events should be observable where useful:
+The scheduler may consume resource metadata when selecting work.
 
 ```text
-ResourceRequested
-ResourceAdmitted
-ResourceAllocated
-ResourceReleased
-BudgetExhausted
-QuotaExceeded
-ResourceRevoked
-ResourceUnavailable
-ResourceRecovered
+Activation
+├── priority
+├── deadline
+├── budget
+├── resource requirements
+└── eligibility
 ```
 
-Records should identify the relevant entity and activation when possible.
+The architecture separates:
+
+```text
+Resource eligibility
+        ≠
+Scheduling selection
+        ≠
+Physical execution capacity
+```
+
+A scheduler selecting an activation does not prove that the requested resource capacity will be available for its complete execution.
+
+## 29. Zero-Copy and Resource Semantics
+
+NROS may use zero-copy mechanisms to reduce copying and allocation overhead.
+
+However:
+
+```text
+zero-copy API
+      ≠
+zero allocation
+      ≠
+zero memory ownership cost
+      ≠
+zero synchronization cost
+      ≠
+zero-copy end-to-end
+```
+
+The current `nros-core` implementation contains a type-state SPSC ring buffer with explicit reservation, initialization, commit, and read-guard ownership semantics. This is implementation evidence for that mechanism only; it does not establish that all NROS communication is zero-copy end-to-end. fileciteturn2file0
+
+## 30. Current Repository Reality
+
+The workspace currently contains dedicated crates including:
+
+```text
+nros-types
+nros-core
+nros-node
+nros-hal
+nros-transport
+nros-distributed
+nros-cli
+nros-sim
+nros-studio
+nros-macros
+nros
+nros-audit
+```
+
+This establishes an actual modular workspace boundary, but crate presence does not prove that the complete resource model described by this Part is implemented. fileciteturn1file0
+
+The older `NROS_COMPONENT_AND_RESOURCE.md` already treats resources as part of the component contract and gives conceptual CPU and memory requirements. Part VII formalizes the resource semantics needed to distinguish declaration, allocation, accounting, enforcement, and guarantee. fileciteturn5file0
 
 ## 31. Verification Matrix
 
 | Property | Verification question |
 |---|---|
-| Identity | Are resources uniquely identifiable within scope? |
-| Ownership | Can unauthorized ownership/use be detected? |
-| Admission | Are unmet requirements rejected before execution where required? |
-| Accounting | Is consumption attributed correctly? |
-| Enforcement | Does the platform actually enforce declared limits? |
-| Budget | Is exhaustion detected at the specified boundary? |
-| Quota | Is aggregate consumption constrained correctly? |
-| Reservation | Is reserved capacity actually protected? |
-| Lease | Are expired leases invalidated? |
-| Revocation | Does revocation produce a defined terminal outcome? |
-| Contention | Is arbitration consistent with policy? |
-| Blocking | Are resource-induced delays measurable? |
-| Memory | Are requested/allocated/peak values distinguished? |
-| Device | Are device capabilities enforced? |
-| Failure | Are resource failures observable and propagated? |
+| Resource identity | Are resource instances uniquely identified within their scope? |
+| Generation | Are stale allocations rejected after resource reincarnation? |
+| Capacity | Is capacity defined with an explicit unit and scope? |
+| Ownership | Is ownership unambiguous and lifetime-bounded? |
+| Allocation | Does successful allocation correspond to an actual resource assignment? |
+| Admission | Are prerequisite resource checks performed before dependent state transitions? |
+| Accounting | Are usage measurements tied to a defined measurement boundary? |
+| Enforcement | Is there an actual mechanism constraining prohibited usage? |
+| Budget | Are amount, unit, interval, owner, and exhaustion policy explicit? |
+| CPU | Are quota, reservation, affinity, and timing guarantees distinguished? |
+| Memory | Are virtual, resident, shared, and persistent resources distinguished where required? |
+| Device | Is capability distinct from successful device effect? |
+| Network | Is the measurement boundary explicit? |
+| Storage | Are capacity and performance/durability claims separated? |
+| Sharing | Is any fairness claim supported by a defined metric and evidence? |
+| Lease | Does expiration invalidate stale authority? |
+| Fault | Are resource failures observable and policy-driven? |
+| Evidence | Can strong resource claims be traced to raw measurements or proofs? |
 
 ## 32. What Part VII Does Not Claim
 
 This Part does not claim that the current NROS implementation already provides:
 
+- complete CPU quotas or reservations;
+- hard memory limits;
+- deterministic resource allocation;
+- guaranteed network bandwidth;
+- guaranteed storage latency;
+- GPU scheduling guarantees;
+- energy guarantees;
+- end-to-end zero-copy behavior;
 - universal resource isolation;
-- hard CPU or memory quotas;
-- deterministic allocation;
-- complete device ownership enforcement;
-- guaranteed bandwidth;
-- energy-aware scheduling;
-- bounded priority inversion;
-- complete resource migration;
-- hardware-level resource guarantees.
+- hard real-time resource guarantees.
 
-Those require implementation and verification evidence.
+Those claims require implementation evidence and, where applicable, measurement, formal analysis, or physical validation.
 
-## 33. Transition to Part VIII
+## 33. Architectural Invariants
+
+### R1 — Resource identity is explicit
+
+Every governed resource has an identifiable scope and lifecycle.
+
+### R2 — Ownership is explicit
+
+Resource authority must identify its owner and lifetime.
+
+### R3 — Admission precedes dependent state claims
+
+A state transition requiring a resource must not be represented as valid before the relevant prerequisite has been established.
+
+### R4 — Accounting does not imply enforcement
+
+Observed usage is not evidence that usage was constrained.
+
+### R5 — Enforcement does not automatically imply guarantee
+
+A mechanism can enforce a policy under defined conditions without proving a universal bound.
+
+### R6 — Budgets have explicit exhaustion semantics
+
+A budget without a defined exhaustion policy is incomplete architecture.
+
+### R7 — Resource failures are observable
+
+Failure of a required resource must be represented distinctly enough for recovery, degradation, or isolation policy.
+
+### R8 — Strong claims require scoped evidence
+
+Resource guarantees must identify platform, workload, measurement boundary, assumptions, and evidence level.
+
+## 34. Canonical Rule
+
+> **NROS treats resources as governed runtime objects: identity, ownership, allocation, admission, accounting, enforcement, and guarantee are distinct architectural layers, and no resource guarantee is claimed without evidence under an explicit scope.**
+
+## 35. Transition to Part VIII
 
 Part VII defines resource semantics.
 
-Part VIII should define **execution scheduling and executor semantics**: how admitted activations compete for execution, how priorities/deadlines/budgets interact, and how scheduling policy remains separate from platform execution mechanisms.
+Part VIII should establish **execution and scheduling semantics** over the runtime primitives introduced so far.
 
 ```text
+Part V
+Communication + transport
+        ↓
 Part VI
 Time + temporal semantics
         ↓
@@ -671,9 +902,7 @@ Part VII
 Resources + budgets
         ↓
 Part VIII
-Scheduling + executor semantics
+Execution + scheduling
 ```
 
-## Canonical rule
-
-> **NROS treats resources as explicit, bounded runtime objects whose requirements, allocation, accounting, admission, enforcement, and guarantees are separate semantics requiring separate evidence.**
+The next Part should reconcile the architectural scheduler/executor separation with the actual NROS execution-related implementation and distinguish scheduling policy, eligibility, dispatch, execution, preemption/cooperative behavior, budgets, deadlines, and observed timing.
