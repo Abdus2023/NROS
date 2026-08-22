@@ -1,6 +1,6 @@
 # NROS Architecture Series — Index
 
-> **Series status:** The consolidated architecture corpus covers Parts **I–CXXX** across 18 architecture documents. A newer **part-level architecture representation** is being developed under `docs/architecture/parts/`; that representation has currently advanced through **Part LXX**.
+> **Series status:** The consolidated architecture corpus covers Parts **I–CXXX** across 18 architecture documents. A newer **part-level architecture representation** is maintained under `docs/architecture/parts/`; it now has an explicit **Part I** and has advanced through **Part LXXIII**.
 >
 > **Purpose:** This file is the canonical reading-order and navigation index for the NROS Architecture Series. The series describes architectural intent and design evolution; it is **not, by itself, evidence that every described capability is implemented or validated**.
 
@@ -27,7 +27,7 @@ The series is an **architecture/design corpus**. Implementation maturity and ver
 
 ---
 
-## 2. Reading Order
+## 2. Reading Order — Consolidated Corpus
 
 | # | File | Parts | Primary theme |
 |---:|---|---|---|
@@ -253,14 +253,25 @@ When a Part makes a strong implementation, performance, safety, or hardware asse
 
 ## 8. Consolidated Corpus vs Part-Level Representation
 
-The repository now contains **two complementary representations** of the architecture series:
+The repository contains **two complementary representations** of the architecture series:
 
 1. the original **18-document consolidated corpus** at the repository root, covering Parts I–CXXX;
 2. the newer **part-level decomposition** under `docs/architecture/parts/`, where individual Parts are represented as separate documents for deeper architectural work.
 
-These are not competing numbering systems. The part-level documents are a **finer-grained representation of the same architectural narrative** and may elaborate, refine, or reorganize concepts already present in the consolidated corpus.
+These are **not competing numbering systems**. The part-level documents are a finer-grained representation of the same architectural narrative. A part-level document should identify its canonical consolidated source when one exists.
 
-The currently established part-level progression is:
+### Part-level navigation
+
+| Part | Part-level artifact | Canonical consolidated source |
+|---:|---|---|
+| I | `docs/architecture/parts/I_ROS_FOUNDATION.md` | `ROS_FOUNDATION.md` |
+| II | `docs/architecture/parts/II_CORE_CONCEPTS.md` | `NROS_CORE_CONCEPTS.md` |
+| III+ | `docs/architecture/parts/` | corresponding consolidated corpus document |
+| LXI–LXXIII | `docs/architecture/parts/` | `NROS_PERSISTENCE_AND_RECOVERY.md` / `NROS_SECURITY_AND_POLICY.md` and related canonical sources |
+
+### Verified part-level frontier
+
+The currently established part-level progression reaches **LXXIII**:
 
 ```text
 LXI
@@ -292,9 +303,16 @@ LXIX
       ↓
 LXX
   Security Governance / Policy / Identity / Authorization / Capabilities
+      ↓
+LXXI
+  Failure Semantics / Mismatch / Fault Containment / Recovery
+      ↓
+LXXII
+  Failure Policy / Retry / Idempotency / Compensation / Recovery Control
+      ↓
+LXXIII
+  State & Resource Reconciliation / Conflict Resolution / Convergence
 ```
-
-This part-level sequence is coherent as an architectural decomposition. It should **not** be interpreted as replacing the consolidated I–CXXX reading order unless the series is deliberately migrated to that representation in a future documentation-reconciliation change.
 
 ### Part-level governance rule
 
@@ -316,15 +334,15 @@ Verification relationship
 Novel architectural contribution
 ```
 
-A Part-level document should be added only when its scope is genuinely useful as a distinct architectural unit. Duplication should be treated as a reconciliation problem, not automatically as a new Part.
+A Part-level document should be added only when its scope is genuinely useful as a distinct architectural unit. Duplication is a reconciliation problem, not automatically a new Part.
 
 ---
 
 ## 9. CXXXI and the Next Series Boundary
 
-The consolidated index still ends at **CXXX**. The old teaser for **Part CXXXI — Agent Runtime & Execution Architecture** must not be treated as a completed Part.
+The consolidated index ends at **CXXX**. Any earlier teaser for **Part CXXXI — Agent Runtime & Execution Architecture** must not be treated as a completed Part.
 
-The part-level sequence currently ends at **LXX**. Therefore **CXXXI and LXXI are different concepts in different documentation layers** and must not be conflated.
+The part-level representation currently ends at **LXXIII**. Therefore **CXXXI and LXXIV are different concepts in different documentation layers** and must not be conflated.
 
 Any future extension must first declare which representation is being extended:
 
@@ -359,9 +377,10 @@ For detailed part-level architectural work, use `docs/architecture/parts/` toget
 Consolidated architecture documents: 18
 Consolidated indexed Parts:          I–CXXX
 Part-level representation:           docs/architecture/parts/
-Latest part-level Part:              LXX
+Part-level Part I:                   I_ROS_FOUNDATION.md
+Latest part-level Part:              LXXIII
 Consolidated next Part:              CXXXI (not yet added)
-Part-level next Part:                LXXI (not yet added)
+Part-level next Part:                LXXIV (not yet added)
 Series role:                         Architectural design corpus
 Evidence role:                       Navigation / design context only
 Verification authority:              docs/verification/
