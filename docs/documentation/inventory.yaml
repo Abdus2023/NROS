@@ -11,6 +11,48 @@ scope:
     as current implementation authority.
 
 documents:
+  - id: DOC-INVENTORY
+    path: docs/documentation/inventory.yaml
+    type: generated
+    authority: canonical
+    status: active
+    purpose: Canonical identity, role, authority, status, and purpose catalog for represented documentation.
+
+  - id: DOC-AUTHORITIES
+    path: docs/documentation/authorities.yaml
+    type: normative
+    authority: canonical
+    status: active
+    purpose: Canonical authority levels and scopes for repository documentation.
+
+  - id: DOC-RELATIONSHIPS
+    path: docs/documentation/relationships.yaml
+    type: generated
+    authority: canonical
+    status: active
+    purpose: Directional relationship graph between represented documents.
+
+  - id: DOC-REFERENCES
+    path: docs/documentation/references.yaml
+    type: generated
+    authority: canonical
+    status: active
+    purpose: Resolution catalog for important internal and external documentation references.
+
+  - id: DOC-SERIES-INDEX
+    path: NROS_SERIES_INDEX.md
+    type: guide
+    authority: canonical
+    status: active
+    purpose: Canonical reading order, status boundary, and part-level contract for the NROS Architecture Series.
+
+  - id: DOC-PART-I
+    path: ROS_FOUNDATION.md
+    type: architecture
+    authority: canonical
+    status: active
+    purpose: Part I foundation, NROS proposition, architectural invariants, and repository evidence reconciliation.
+
   - id: DOC-README
     path: README.md
     type: guide

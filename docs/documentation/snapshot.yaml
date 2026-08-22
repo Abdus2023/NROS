@@ -14,8 +14,8 @@ representation_revision:
   role: documentation_representation_state
   note: >-
     This snapshot records the documentation representation immediately after
-    creation of the documentation reference catalog. A subsequent commit may
-    update this field when the complete representation is regenerated.
+    reconciliation of Architecture Series Part I with the repository evidence
+    and claim model. Blob identities include the rewritten Part and Series Index.
 
 snapshot_semantics:
   source_revision_is_not_representation_revision: true
@@ -26,25 +26,31 @@ snapshot_semantics:
 documents:
   - id: DOC-DOCUMENTATION-SCHEMA
     path: docs/documentation/schema.yaml
-    blob_sha: 1947e2de1367052073ee47a59b9566fb0dde92c8
+    blob_sha: 91ad301a71bb306ea7eb7eb8800277f2bbf389ee
   - id: DOC-INVENTORY
     path: docs/documentation/inventory.yaml
-    blob_sha: 83da00f0f5f1945ac3ad58a6344c2f243fbf1718
+    blob_sha: 56f6a2dd615a988bea0f04d94feede9f0fbe7682
   - id: DOC-AUTHORITIES
     path: docs/documentation/authorities.yaml
-    blob_sha: cb9cb05db6808b99179c6bb41d8910907f2deca0
+    blob_sha: a0fd38dab0f44c6008320cb71e9e4d736d196539
   - id: DOC-RELATIONSHIPS
     path: docs/documentation/relationships.yaml
-    blob_sha: 8c5327df71583b3bffead21d75146bd3463bab20
+    blob_sha: af75f7b146fb65c6e3f0a7e3cf425e8e74c25936
   - id: DOC-REFERENCES
     path: docs/documentation/references.yaml
-    blob_sha: e83ee724ff35530b871a1b0a2f121d534a2ec294
+    blob_sha: 50d4b58cdd9f69fffe0ecc1b828270bb84da0784
+  - id: DOC-SERIES-INDEX
+    path: NROS_SERIES_INDEX.md
+    blob_sha: 9b3b928027c41088005ad333e926a9d057b28ea7
+  - id: DOC-PART-I
+    path: ROS_FOUNDATION.md
+    blob_sha: 41ad60803695c37acec200973fc1d46e53632908
 
 inventory_summary:
-  documents_catalogued: 23
-  canonical_documents: 7
+  documents_catalogued: 29
+  canonical_documents: 15
   authoritative_documents: 6
-  supporting_documents: 2
+  supporting_documents: 7
   informational_documents: 1
   archived_documents: 6
   representation_documents: 7

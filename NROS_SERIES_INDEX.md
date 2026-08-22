@@ -283,9 +283,11 @@ Use this index when entering the series from the beginning.
 For implementation-oriented work, start instead from:
 
 - [Repository Representation](docs/REPOSITORY_REPRESENTATION.md)
-- [Verification](docs/verification/README.md)
-- [Architecture](docs/architecture/README.md)
-- [Reference](docs/reference/README.md)
+- [Capability Evidence](EVIDENCE_REGISTRY.md)
+- [Machine-readable Evidence](docs/representation/evidence.yaml)
+- [Claim Policy](docs/representation/claims.yaml)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Implementation Map](implementations/README.md)
 
 For a specific architectural topic, use the Part map above rather than treating the 130 Parts as one undifferentiated document.
 
@@ -300,8 +302,8 @@ Latest indexed Part:    CXXX
 Next Part:              CXXXI (not yet added)
 Series role:            Architectural design corpus
 Evidence role:          Navigation / design context only
-Verification authority: docs/verification/
-Claim authority:        docs/verification/claims.md
+Evidence authority:     EVIDENCE_REGISTRY.md + docs/representation/evidence.yaml
+Claim authority:        docs/representation/claims.yaml
 Repository model:       docs/REPOSITORY_REPRESENTATION.md
 ```
 

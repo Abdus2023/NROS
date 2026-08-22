@@ -3,6 +3,26 @@ kind: documentation_relationship_graph
 project: NROS
 
 relationships:
+  - source: DOC-SERIES-INDEX
+    relation: governs
+    target: DOC-PART-I
+    rationale: The series index defines the reading order, status boundary, and structural contract applied to Part I.
+
+  - source: DOC-PART-I
+    relation: describes
+    target: DOC-DESIGN
+    rationale: Part I supplies architectural motivation and foundational constraints for the detailed system design.
+
+  - source: DOC-REPRESENTATION
+    relation: constrains
+    target: DOC-PART-I
+    rationale: Repository evidence and claim rules constrain Part I implementation observations and current-state claims.
+
+  - source: DOC-REPRESENTATION-CLAIMS
+    relation: constrains
+    target: DOC-PART-I
+    rationale: Machine-readable claim classes bound the reconciliation snapshot and explicit non-claims in Part I.
+
   - source: DOC-REPRESENTATION
     relation: governs
     target: DOC-REPRESENTATION-SCHEMA

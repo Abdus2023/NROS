@@ -8,6 +8,36 @@ purpose: >-
   without silently converting unresolved references into evidence.
 
 references:
+  - source: DOC-SERIES-INDEX
+    target: DOC-PART-I
+    status: resolved
+    kind: internal_document
+    note: Part I is the first indexed architecture-series artifact.
+
+  - source: DOC-PART-I
+    target: DOC-REPRESENTATION-CAPABILITIES
+    status: resolved
+    kind: internal_document
+    note: Part I's reconciliation table resolves capability identities and represented states through the canonical catalog.
+
+  - source: DOC-PART-I
+    target: DOC-REPRESENTATION-EVIDENCE
+    status: resolved
+    kind: internal_document
+    note: Part I adopts the machine-readable evidence rules without treating them as execution results.
+
+  - source: DOC-PART-I
+    target: DOC-REPRESENTATION-CLAIMS
+    status: resolved
+    kind: internal_document
+    note: Part I's allowed and forbidden assertions are constrained by claim policy.
+
+  - source: DOC-PART-I
+    target: DOC-EVIDENCE
+    status: resolved
+    kind: internal_document
+    note: Detailed human-readable capability status remains in the evidence registry.
+
   - source: DOC-README
     target: DOC-DESIGN
     status: resolved

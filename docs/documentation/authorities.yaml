@@ -3,6 +3,12 @@ kind: documentation_authority_catalog
 project: NROS
 
 authorities:
+  - id: AUTH-ARCHITECTURE-SERIES
+    name: NROS_SERIES_INDEX.md and indexed Part documents
+    authority_level: canonical
+    scope: architecture-series reading order, architectural intent, part contracts, invariants, and design boundaries
+    notes: Architecture-series authority does not establish implementation maturity, verification success, validation, or qualification.
+
   - id: AUTH-DESIGN
     name: DESIGN.md
     authority_level: canonical
