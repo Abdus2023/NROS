@@ -23,8 +23,9 @@ The Part-level documents are a decomposition of the same architecture narrative.
 - **Part LXXI** — Failure Semantics, Mismatch, Containment & Recovery
 - **Part LXXII** — Failure Policy, Retry, Idempotency & Compensation
 - **Part LXXIII** — State & Resource Reconciliation & Convergence
-
-**LXXIV is not yet established.**
+- **Part LXXIV** — Distributed Coordination, Authority, Quorum & Fencing
+- **Part LXXV** — Authority Transition Protocol & Durable Authority State
+- **Part LXXVI** — Distributed Authority-State Dissemination, Freshness & Provenance
 
 ## Part contract
 
@@ -64,6 +65,8 @@ Coordination
   → consensus / membership / leadership
   → state reconciliation
   → authority / fencing / takeover
+  → durable authority transitions
+  → distributed authority-state knowledge
 ```
 
 The audit must distinguish **reuse**, **refinement**, **duplication**, and **forward dependency**.
