@@ -1,0 +1,109 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 9105d8f..c3f36c5 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -23,6 +23,8 @@ jobs:
+     steps:
+       - uses: actions/checkout@v4
+         with:
++          # Full history required: provenance and the representation gate resolve git
++          # objects beyond the checkout tip (see comment on later jobs).
+           fetch-depth: 0
+       - name: Record verification manifest
+         id: manifest
+@@ -49,6 +51,11 @@ jobs:
+     runs-on: ubuntu-latest
+     steps:
+       - uses: actions/checkout@v4
++        with:
++          # Full history required: the representation gate resolves git blobs at the
++          # snapshot's pinned source_revision (HEAD~1 per the dance) — shallow clones
++          # (default depth 1) do not contain those objects (Pass 27 pre-flight, F-20).
++          fetch-depth: 0
+       - run: rustup component add rustfmt
+       - run: cargo fmt --all -- --check
+ 
+@@ -57,6 +64,11 @@ jobs:
+     runs-on: ubuntu-latest
+     steps:
+       - uses: actions/checkout@v4
++        with:
++          # Full history required: the representation gate resolves git blobs at the
++          # snapshot's pinned source_revision (HEAD~1 per the dance) — shallow clones
++          # (default depth 1) do not contain those objects (Pass 27 pre-flight, F-20).
++          fetch-depth: 0
+       - run: cargo check --workspace --all-targets
+ 
+   test:
+@@ -64,6 +76,11 @@ jobs:
+     runs-on: ubuntu-latest
+     steps:
+       - uses: actions/checkout@v4
++        with:
++          # Full history required: the representation gate resolves git blobs at the
++          # snapshot's pinned source_revision (HEAD~1 per the dance) — shallow clones
++          # (default depth 1) do not contain those objects (Pass 27 pre-flight, F-20).
++          fetch-depth: 0
+       - run: cargo test --workspace --all-targets
+ 
+   clippy:
+@@ -71,6 +88,11 @@ jobs:
+     runs-on: ubuntu-latest
+     steps:
+       - uses: actions/checkout@v4
++        with:
++          # Full history required: the representation gate resolves git blobs at the
++          # snapshot's pinned source_revision (HEAD~1 per the dance) — shallow clones
++          # (default depth 1) do not contain those objects (Pass 27 pre-flight, F-20).
++          fetch-depth: 0
+       - run: rustup component add clippy
+       - run: cargo clippy --workspace --all-targets
+ 
+@@ -79,6 +101,11 @@ jobs:
+     runs-on: ubuntu-latest
+     steps:
+       - uses: actions/checkout@v4
++        with:
++          # Full history required: the representation gate resolves git blobs at the
++          # snapshot's pinned source_revision (HEAD~1 per the dance) — shallow clones
++          # (default depth 1) do not contain those objects (Pass 27 pre-flight, F-20).
++          fetch-depth: 0
+       - name: Install Miri
+         run: |
+           rustup default nightly
+@@ -94,6 +121,11 @@ jobs:
+     runs-on: ubuntu-latest
+     steps:
+       - uses: actions/checkout@v4
++        with:
++          # Full history required: the representation gate resolves git blobs at the
++          # snapshot's pinned source_revision (HEAD~1 per the dance) — shallow clones
++          # (default depth 1) do not contain those objects (Pass 27 pre-flight, F-20).
++          fetch-depth: 0
+       - name: Build the CLI
+         run: cargo build -p nros-cli
+       - name: Run nros init (basic template) and cargo-check
+@@ -113,6 +145,11 @@ jobs:
+     continue-on-error: true
+     steps:
+       - uses: actions/checkout@v4
++        with:
++          # Full history required: the representation gate resolves git blobs at the
++          # snapshot's pinned source_revision (HEAD~1 per the dance) — shallow clones
++          # (default depth 1) do not contain those objects (Pass 27 pre-flight, F-20).
++          fetch-depth: 0
+       - name: Build benchmark
+         run: cargo build -p nros-core --bin bench
+       - name: Run benchmark
+@@ -130,6 +167,11 @@ jobs:
+     runs-on: ubuntu-latest
+     steps:
+       - uses: actions/checkout@v4
++        with:
++          # Full history required: the representation gate resolves git blobs at the
++          # snapshot's pinned source_revision (HEAD~1 per the dance) — shallow clones
++          # (default depth 1) do not contain those objects (Pass 27 pre-flight, F-20).
++          fetch-depth: 0
+       - name: Install documentation validator dependency
+         run: python3 -m pip install --disable-pip-version-check --no-input pyyaml
+       - name: Run documentation representation validator

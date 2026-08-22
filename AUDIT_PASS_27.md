@@ -152,6 +152,9 @@ Interpretation (evidence honesty):
 | F-15 | Correctness (protocol) | nros-transport TCP receive **and send** | nonblocking socket + `read_exact`/`write_all` → partial reads consumed+discarded header/payload bytes on `WouldBlock`, permanently desyncing stream framing; mid-frame `WouldBlock` on send tore frames. Benign on loopback, incorrect on real networks. No TCP test existed — that's how it survived. | per-connection buffered frame reader (`TcpConnection { stream, rx_buf }`) — short reads accumulate, `Ok(None)` consumes nothing, complete frames consumed exactly once; send writes one frame buffer with a bounded WouldBlock retry loop; buffer blow-out guard (≤ 64 MiB + header). Regression test `test_tcp_fragmented_delivery_no_desync` — **discrimination proven**: old code fails it (`Failed to read header: failed to fill whole buffer`), new code passes byte-identical |
 | F-16 | Soundness (UB) | nros-core `RingBuffer<T>` | `RingBuffer::<ZST>` allocates a zero-size `Layout` → `alloc`/`dealloc` on zero-size layouts is UB (documented in §4, now remediated) | well-aligned dangling pointer for ZST payloads (RawVec pattern), dealloc skipped; tests `test_zst_ring_no_zero_size_alloc_ub` + `test_zst_with_drop_dropped_exactly_once` |
 | F-17 | Soundness (UB) | nros-core `InitializedWriteGuard::abort_initialized` | `T::drop` panicking during abort unwound into the guard's `Drop`, double-dropping T | guard held in `ManuallyDrop` before `drop_in_place`; documented leak-not-UB trade-off on drop-panic; test `test_abort_initialized_panic_in_drop_is_not_double_drop` (counter == exactly 1) |
+| F-18 | CI feasibility (pre-flight) | ci.yml fmt job vs whole tree | fmt hard gate cannot pass at first run: **377 pre-existing >100-column code lines** repo-wide + compact single-line-fn style in nros-audit → `cargo fmt --all -- --check` reflows them (style predates this session; this pass's diff adds zero >100 code lines). Unverifiable offline: no rustfmt component | documented + owner decision required (run real `cargo fmt --all` once and commit the normalization, or downgrade the gate); deliberately NOT hand-reformatted — manual rustfmt emulation is unreliable and itself unverifiable |
+| F-19 | CI feasibility (pre-flight) | nros-core tests/compile_fail | trybuild cases ship no blessed `.stderr` snapshots → all 4 cases wip-fail at first `cargo test` (and remain toolchain-version-sensitive) | documented: on official rustc run `TRYBUILD=overwrite cargo test -p nros-core --test trybuild` once and commit the blessed files; the rejections themselves already verified offline (§5) |
+| F-20 | CI blocker (pre-flight) | .github/workflows/ci.yml | every job except provenance used default depth-1 shallow checkout; the representation gate resolves git blobs at the snapshot's pinned `source_revision` = HEAD~1 (2-commit dance) → objects absent in shallow clones → doc-gate fails at first run | **fix packaged** as `docs/audit/F-20-ci-fetch-depth.patch` (`git apply` on a checkout; adds `fetch-depth: 0` + explanatory comment to all 9 job checkouts). The sandbox integration token lacks the `workflows` permission, so GitHub refused to push changes under `.github/workflows/` — the patch is applied locally and verified (`yaml.safe_load` parses; all jobs full-depth pre-flight), but it must be applied by CI credentials that carry that scope (see §11.D) |
 
 Post-fix gate status (executed locally): `python3 scripts/validate-documentation-representation.py` → **PASS**; `nros-audit claims|workspace|ci|benchmarks|safety` → all ✅; `nros-audit representation` → **PASS** after snapshot re-pin (97 checks). Snapshots re-pinned to the new commits (`content_integrity` fingerprints recomputed from git blob SHA-1s).
 
@@ -159,7 +162,7 @@ Post-fix gate status (executed locally): `python3 scripts/validate-documentation
 
 ## 9. Residual Verification Debt (handoff)
 
-1. **GitHub Actions has never executed this workspace.** When runner capacity returns, the existing branch-bound CI should be allowed to run `fmt/check/test/clippy/miri/golden/benchmarks/doc-gate` — expected to pass after this pass's fixes (the clippy gate is report-only by design until a baseline).
+1. **GitHub Actions has never executed this workspace.** The workflow was pre-flight audited this pass (§11.D): the F-20 shallow-checkout fix is packaged as `docs/audit/F-20-ci-fetch-depth.patch` (unpushable from this sandbox — token lacks `workflows` permission); the first real execution must clear two one-time blockers — **F-18** (fmt gate vs pre-existing style; needs a rustfmt normalization commit or policy change) and **F-19** (trybuild `.stderr` blessing). All other jobs have verified-offline bases.
 2. **Miri** on `nros-core`/`nros-types` — required for the unsafe code soundness claim; impossible to fetch offline. Manual audit in §4 stands in, but is not a substitute.
 3. ~~**nros-macros / nros facade** compile~~ — **RESOLVED in §11**: real `syn` 2.0.119 / `quote` 1.0.47 / `proc-macro2` 1.0.107 / `unicode-ident` 1.0.24 (dtolnay GitHub release tags, vendored) built with mrustc; real `nros-macros`, facade, and both examples verified green. Official-rustc verification still pending with CI.
 4. **trybuild** native run (compile-fail probes were manual here).
@@ -244,3 +247,21 @@ Full-chain regression after the fixes (all against the rebuilt std with real bac
 | Facade tree + examples (real macros) rebuilt against fixed nros-core/nros-transport | ✅ mobile_base + vertical_slice run green |
 
 No remaining latent UB items are known in nros-core; the `init_with_unchecked` partial-init panic *leak* (not UB) stays documented as designed. The TCP transport's remaining scaffold notes (nonblocking tx-queue with backpressure, copy-based (de)serialization path) are tracked as design follow-ups, not defects.
+
+### 11.D Sub-addendum — CI pre-flight audit (first-run prediction)
+
+`.github/workflows/ci.yml` was walked step-by-step against offline equivalents (it had never executed; "expected to pass" was an unverified claim until now):
+
+| Job | First-run prediction | Basis |
+|-----|----------------------|-------|
+| provenance | green | shell-only |
+| cargo fmt --check | **RED (F-18)** | 377 pre-existing >100-col code lines; rustfmt component unavailable offline |
+| cargo check (workspace, all targets) | green | every lib/bin/example/test target compiled offline (§2, §11) |
+| cargo test (workspace) | **RED (F-19)** | trybuild wip-fails without blessed `.stderr`; all other 55 lib tests + gates verified offline |
+| cargo clippy | green with warnings | no `-D warnings`; warnings non-fatal (clippy itself not runnable offline) |
+| Safety gate (Miri) | green, slow | no `panic=abort` in workspace profiles; in-tree test loops are small |
+| nros-init-golden | green | offline equivalent re-verified (§6); template is dependency-free |
+| benchmarks (report-only) | soft | bin auto-discovered (`src/bin/bench.rs`), `--output` supported, `continue-on-error` |
+| doc-gate | **green after F-20 patch applied** | python validator + all `nros-audit` gates green locally; shallow-clone fix staged as `docs/audit/F-20-ci-fetch-depth.patch` (not pushable from this sandbox — token lacks `workflows` scope) |
+
+CI-side blockers owned by the first real execution: F-18 (rustfmt normalization or gate policy) and F-19 (bless trybuild snapshots). After those two one-time actions, every job has a verified-offline or corrected basis to be green.
