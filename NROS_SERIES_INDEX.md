@@ -1,6 +1,6 @@
 # NROS Architecture Series — Index
 
-> **Series status:** The consolidated architecture corpus covers Parts **I–CXXX** across 18 architecture documents. A newer **part-level architecture representation** is maintained under `docs/architecture/parts/`; it now has an explicit **Part I** and has advanced through **Part LXXIV**.
+> **Series status:** The consolidated architecture corpus covers Parts **I–CXXX** across 18 architecture documents. A newer **part-level architecture representation** is maintained under `docs/architecture/parts/`; it now has an explicit **Part I** and has advanced through **Part LXXV**.
 >
 > **Purpose:** This file is the canonical reading-order and navigation index for the NROS Architecture Series. The series describes architectural intent and design evolution; it is **not, by itself, evidence that every described capability is implemented or validated**.
 
@@ -269,10 +269,11 @@ These are **not competing numbering systems**. The part-level documents are a fi
 | III+ | `docs/architecture/parts/` | corresponding consolidated corpus document |
 | LXI–LXXIII | `docs/architecture/parts/` | `NROS_PERSISTENCE_AND_RECOVERY.md` / `NROS_SECURITY_AND_POLICY.md` and related canonical sources |
 | LXXIV | `docs/architecture/parts/LXXIV_DISTRIBUTED_COORDINATION_AUTHORITY_QUORUM_FENCING.md` | `NROS_SECURITY_AND_POLICY.md` / coordination corpus |
+| LXXV | `docs/architecture/parts/LXXV_AUTHORITY_TRANSITION_PROTOCOL_STATE.md` | `NROS_SECURITY_AND_POLICY.md` / persistence and coordination corpus |
 
 ### Part-level frontier
 
-The currently established part-level progression reaches **LXXIV**:
+The currently established part-level progression reaches **LXXV**:
 
 ```text
 LXXI
@@ -286,35 +287,27 @@ LXXIII
       ↓
 LXXIV
   Distributed Coordination / Authority / Quorum / Fencing
+      ↓
+LXXV
+  Authority Transition Protocol / Durable Authority State
 ```
 
-### LXXIV dependency boundary
-
-LXXIV is intentionally a synthesis layer rather than a replacement for earlier coordination Parts:
+### LXXIV–LXXV dependency boundary
 
 ```text
-XXV
-  Distributed coordination primitives
-      ↓
-XLVII
-  Authoritative coordination / decision authority
-      ↓
-LXVII
-  Distributed state / replication / consistency
-      ↓
-LXXI–LXXIII
-  Failure → policy → reconciliation
-      ↓
 LXXIV
-  Authority enforcement / epochs / leases / quorum / fencing
+  Authority / epochs / leases / quorum / fencing
+      ↓
+LXXV
+  Durable transition record / ordering / replay / propagation / recovery
 ```
 
 The novel boundary is:
 
 ```text
-Reconciled state
+Authority mechanism
     ≠
-Permission to mutate reconciled state
+Durable authority-state protocol
 ```
 
 ### Part-level governance rule
@@ -345,7 +338,7 @@ A Part-level document should be added only when its scope is genuinely useful as
 
 The consolidated index ends at **CXXX**. Any earlier teaser for **Part CXXXI — Agent Runtime & Execution Architecture** must not be treated as a completed Part.
 
-The part-level representation currently ends at **LXXIV**. Therefore **CXXXI and LXXIV are different concepts in different documentation layers** and must not be conflated.
+The part-level representation currently ends at **LXXV**. Therefore **CXXXI and LXXV are different concepts in different documentation layers** and must not be conflated.
 
 Any future extension must first declare which representation is being extended:
 
@@ -381,9 +374,9 @@ Consolidated architecture documents: 18
 Consolidated indexed Parts:          I–CXXX
 Part-level representation:           docs/architecture/parts/
 Part-level Part I:                   I_ROS_FOUNDATION.md
-Latest part-level Part:              LXXIV
+Latest part-level Part:              LXXV
 Consolidated next Part:              CXXXI (not yet added)
-Part-level next Part:                LXXV (not yet added)
+Part-level next Part:                LXXVI (not yet added)
 Series role:                         Architectural design corpus
 Evidence role:                       Navigation / design context only
 Verification authority:              docs/verification/
