@@ -23,7 +23,7 @@ To still produce *real* evidence instead of static reading, the toolchain was bu
 
 Result: `mrustc` compiles and links real native binaries against a from-source Rust 1.90 `std`, `test`, and `proc_macro`. Every "executed" result below ran on this toolchain. Where a result could differ under official rustc (e.g., `mrustc` internal bugs), it is flagged explicitly rather than silently presented as authoritative.
 
-**What was NOT possible offline:** `cargo fmt` (rustfmt component), `cargo clippy` (clippy component), `cargo miri` (Miri component — soundness oracle for `unsafe`), `trybuild` (many crates.io deps), and the `nros-macros`/`nros` facade builds (blocked on `syn`/`quote`/`proc-macro2` while the GitHub egress proxy was degraded). These are listed in §8 (residual verification debt) and are expected to be covered by the existing CI workflow the first time GitHub Actions executes.
+**What was NOT possible offline:** `cargo fmt` (rustfmt component), `cargo clippy` (clippy component), `cargo miri` (Miri component — soundness oracle for `unsafe`), `trybuild` (many crates.io deps). The `nros-macros`/`nros` facade builds were additionally blocked during this session's first hours (degraded GitHub egress); **once codeload.github.com recovered, the facade chain was built and verified with the real `syn`/`quote`/`proc-macro2` — see §11 (Addendum)**. The remaining items are listed in §9 (residual verification debt) and are expected to be covered by the existing CI workflow the first time GitHub Actions executes.
 
 ---
 
@@ -145,6 +145,8 @@ Interpretation (evidence honesty):
 | F-10 | Doc gate | docs/documentation/inventory.yaml | snapshot docs DOC-INVENTORY/-AUTHORITIES/-RELATIONSHIPS/-REFERENCES missing from inventory → FAIL | 4 records added |
 | F-11 | Doc gate | docs/representation/evidence.yaml | 11 capabilities had no evidence record (schema: `one_record_per_capability`) → representation gate FAIL (12 failures) | records added with honest statuses |
 | F-12 | Doc gate | capabilities/architecture | facade crate `nros` not represented (`every_workspace_crate_must_be_represented`) → FAIL | FACADE-001 added |
+| F-13 | Build-blocker | nros/examples/vertical_slice.rs | `motor_cmd.linear_velocity.x`/`angular_velocity.z` — `MotorCommand` is wheel-space `{left,right}_{velocity,torque}` (E0599); found while compiling the facade examples in §11 | route through node's own inverse kinematics (`compute_odometry`) — canonical types, still no ad-hoc shim |
+| F-14 | Build-blocker | nros/examples/vertical_slice.rs | passed `nros_types::Vector3` to `nros_sim::spawn_robot` — nros-sim deliberately keeps its own zero-dep geometry types (tracked migration I-007); type mismatch | use `nros_sim::Vector3` at the sim boundary with I-007 cross-reference comment |
 | Latent (not fixed) | Medium | nros-transport TCP receive | nonblocking socket + `read_exact` → partial header/payload reads on `WouldBlock` desync the stream framing permanently; benign on loopback but incorrect protocol handling | documented; needs buffered frame reader |
 | Latent (not fixed) | Low | nros-core | ZST `RingBuffer<T>` zero-size alloc UB; `abort_initialized` drop-panic double-drop | documented in §4 |
 
@@ -156,10 +158,11 @@ Post-fix gate status (executed locally): `python3 scripts/validate-documentation
 
 1. **GitHub Actions has never executed this workspace.** When runner capacity returns, the existing branch-bound CI should be allowed to run `fmt/check/test/clippy/miri/golden/benchmarks/doc-gate` — expected to pass after this pass's fixes (the clippy gate is report-only by design until a baseline).
 2. **Miri** on `nros-core`/`nros-types` — required for the unsafe code soundness claim; impossible to fetch offline. Manual audit in §4 stands in, but is not a substitute.
-3. **nros-macros / nros facade** compile (needs `syn`/`quote`/`proc-macro2` from crates.io or vendored GitHub copies).
+3. ~~**nros-macros / nros facade** compile~~ — **RESOLVED in §11**: real `syn` 2.0.119 / `quote` 1.0.47 / `proc-macro2` 1.0.107 / `unicode-ident` 1.0.24 (dtolnay GitHub release tags, vendored) built with mrustc; real `nros-macros`, facade, and both examples verified green. Official-rustc verification still pending with CI.
 4. **trybuild** native run (compile-fail probes were manual here).
 5. **nros-distributed `--test`** under official rustc (mrustc-only harness crash — §3).
 6. `docs/audit/verification.json` still describes an earlier branch's NOT_RUN state; treat this document (plus the new benchmark artifact) as the current execution evidence, and the CI's first green run as the authority going forward.
+7. **mrustc toolchain caveats** (method honesty): the mrustc C backend is not the official rustc codegen; its proc-macro loading links plugin executables into final binaries (worked around by stripping the plugin from the final link line — semantically identical to rustc, which never links proc-macros). `library/backtrace` in the reconstructed 1.90 std tree is an API-faithful stub returning `BacktraceStatus::Unsupported` (backtrace-rs 0.3.76 sources were unfetchable while egress was degraded); no test exercises it, but it must be replaced before any official-toolchain bootstrap claim is reused.
 
 ---
 
@@ -176,3 +179,27 @@ bin/minicargo crates/nros-core --output-dir out -L output-1.90.0 --test
 ```
 
 When network is normal, the authoritative path remains: `cargo fmt --check && cargo check --workspace --all-targets && cargo test --workspace --all-targets && cargo clippy --workspace --all-targets && cargo +nightly miri test -p nros-core --lib -p nros-types --lib` + CI golden + doc gates — i.e., exactly `.github/workflows/ci.yml`.
+
+---
+
+## 11. Addendum — Real-Macro Facade Verification (same session, post-egress-recovery)
+
+After 'codeload.github.com' recovered in this session, the macro dependency chain was vendored from the authors' GitHub release tags and the **real** `nros-macros` (syn-based, containing the F-3 fix — not the offline stub used earlier) was built and exercised:
+
+| Component | Version | Source | Build |
+|-----------|---------|--------|-------|
+| unicode-ident | 1.0.24 | dtolnay/unicode-ident tag | ✅ mrustc |
+| proc-macro2 | 1.0.107 | dtolnay/proc-macro2 tag (build.rs executed under minicargo; `[patch.crates-io]` section stripped from vendored manifest — minicargo TODO) | ✅ mrustc |
+| quote | 1.0.47 | dtolnay/quote tag | ✅ mrustc |
+| syn (`full`) | 2.0.119 | dtolnay/syn tag | ✅ mrustc |
+| nros-macros | workspace (real source, F-3 applied) | this repo | ✅ real proc-macro plugin |
+| nros (facade) | workspace | this repo | ✅ libnros.rlib against real macro |
+
+Executed results:
+
+| Target | Result |
+|--------|--------|
+| `cargo check --example mobile_base` equivalent (real `#[nros::node]` stripping `#[subscribe]/#[publish]/#[param]` field attrs) | ✅ compiled, ran green — **validates F-3 against the real macro** |
+| `cargo run --example vertical_slice` equivalent | ✅ compiled after two further pre-existing defects were fixed (F-13 `MotorCommand` field names, F-14 sim-boundary `Vector3`), ran green: 10/10 iterations, 0/10 deadline misses, canonical pipeline `Twist → SPSC → VelocityController → MotorCommand → compute_odometry → Sim`, queue-full backpressure probe ✅, final verdict `Vertical slice PASSED` |
+
+Method notes: (a) examples were compiled with `mrustc --edition 2021 -O` against the facade rlib tree, mirroring `cargo build -p nros --examples`; (b) the mrustc C-backend linker step was completed by re-invoking the emitted link command with the proc-macro plugin removed (rustc never links proc-macros into downstream artifacts — semantically identical); (c) the offline stub proc-macro used earlier in this pass is superseded by the real macro for all facade conclusions.

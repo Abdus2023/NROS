@@ -249,7 +249,12 @@ records:
         - crates/nros/src
         - crates/nros-macros/src
     tests:
-      status: blocked_offline_syn_quote_proc_macro2_unavailable_2026-08-22
+      status: executed_passed_offline_mrustc_real_syn_2026-08-22
+      note: >-
+        Real nros-macros (syn 2.0.119 / quote 1.0.47 / proc-macro2 1.0.107 vendored from
+        dtolnay GitHub tags) built with mrustc; facade rlib built against it; examples
+        mobile_base and vertical_slice compiled and ran green (Pass 27 §11). Official
+        rustc confirmation still pending with first CI execution.
     ci:
       status: unknown
     miri:
