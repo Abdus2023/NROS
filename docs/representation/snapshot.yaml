@@ -4,10 +4,10 @@ project: NROS
 
 identity:
   repository: Abdus2023/NROS
-  branch: arena/repository-representation
+  branch: arena/01a02a3e-nros
 
 source_revision:
-  commit: "8134625afebfa8cd29a233d8a5aa0c27492ce47b"
+  commit: "969fdb25fd2bcb15288a6bbfe1718c9eba3d997c"
   relation: represented_repository_state
 
 snapshot_revision:
@@ -26,8 +26,8 @@ content_integrity:
   algorithm: git_blob_sha1
   source_revision_blobs:
     architecture.yaml: "04d3a0b15f27d335a64a82de6110344481d87d54"
-    capabilities.yaml: "78c21edaedfe5b491a738bbbdbd8552a5e39f45e"
-    evidence.yaml: "21676bc4f4ae5e8cfdbbd6ba68b4f80fa5ee646c"
+    capabilities.yaml: "075ca21cb52d3b85713ec981f97cc175c8d3d9c9"
+    evidence.yaml: "4f37bce1fd2f0fa80684b1964c2fda1a0b2be791"
     claims.yaml: "f4773c3a2bb30ed025ce1347c07817508340afb1"
 
 verification_contract:

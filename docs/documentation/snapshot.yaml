@@ -7,7 +7,7 @@ repository:
   branch: main
 
 source_revision:
-  commit: de38a6c089024a7af77b0a2fa03d15674f478ec3
+  commit: 969fdb25fd2bcb15288a6bbfe1718c9eba3d997c
   role: repository_state_represented
 
 representation_revision:
@@ -26,10 +26,10 @@ snapshot_semantics:
 documents:
   - id: DOC-DOCUMENTATION-SCHEMA
     path: docs/documentation/schema.yaml
-    blob_sha: 1947e2de1367052073ee47a59b9566fb0dde92c8
+    blob_sha: 91ad301a71bb306ea7eb7eb8800277f2bbf389ee
   - id: DOC-INVENTORY
     path: docs/documentation/inventory.yaml
-    blob_sha: 83da00f0f5f1945ac3ad58a6344c2f243fbf1718
+    blob_sha: 77c36475885e8c9c0a869c18e8c484891bea72e5
   - id: DOC-AUTHORITIES
     path: docs/documentation/authorities.yaml
     blob_sha: cb9cb05db6808b99179c6bb41d8910907f2deca0
@@ -41,7 +41,7 @@ documents:
     blob_sha: e83ee724ff35530b871a1b0a2f121d534a2ec294
 
 inventory_summary:
-  documents_catalogued: 23
+  documents_catalogued: 27
   canonical_documents: 7
   authoritative_documents: 6
   supporting_documents: 2
