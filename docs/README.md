@@ -1,87 +1,88 @@
 # NROS Documentation
 
-> **Status:** Documentation hub for the NROS repository.
+> **Status:** Repository documentation hub.
+>
+> This hub separates **intent, normative requirements, implementation, usage, and evidence**. Each layer has a different purpose and authority.
 
-NROS documentation is organized by purpose rather than by the historical order in which material was written. The goal is to keep **intent, specification, implementation, usage, and evidence** distinguishable.
+## Start here
 
-## Start Here
-
-| If you want to... | Start with... |
+| Goal | Start with |
 |---|---|
 | Understand NROS concepts | [Concepts](./concepts/README.md) |
-| Understand the system architecture | [Architecture](./architecture/README.md) |
-| Build or run the repository | [Getting Started](./getting-started/README.md) |
+| Understand system architecture | [Architecture](./architecture/README.md) |
+| Build or run NROS | [Getting Started](./getting-started/README.md) |
 | Find APIs, crates, and commands | [Reference](./reference/README.md) |
 | Develop NROS | [Development](./development/README.md) |
-| Understand what is actually demonstrated | [Verification](./verification/README.md) |
-| Understand safety constraints | [Safety](./safety/README.md) |
-| Deploy or operate NROS | [Operations](./operations/README.md) |
-| Follow project decisions and direction | [Governance](./governance/README.md) |
+| Determine what is actually demonstrated | [Verification](./verification/README.md) |
+| Understand safety boundaries | [Safety](./safety/README.md) |
+| Deploy and operate NROS | [Operations](./operations/README.md) |
+| Follow project decisions | [Governance](./governance/README.md) |
 
-Some sections are still being established as part of the documentation rewrite. Existing material remains available during migration and is explicitly identified below.
-
-## Documentation Model
-
-NROS documentation uses complementary layers with different authority and purpose:
+## Documentation model
 
 ```text
 Concepts
    │
    ▼
-Architecture ──────► Design intent and system boundaries
+Architecture ──────► system structure and design intent
    │
    ▼
-Specifications ────► Normative requirements
+Specifications ────► normative requirements
    │
    ▼
-Implementation ────► What exists in the repository
+Implementation ────► repository state
    │
    ├───────────────► Reference / usage
    │
    ▼
-Verification ──────► What has actually been demonstrated
+Verification ──────► demonstrated properties
    │
    ▼
-Validation / Qualification
+Validation ────────► use-case acceptance
+   │
+   ▼
+Qualification ─────► explicit acceptance decision
 ```
 
-A specification describes what should be true. Source describes what is implemented. Tests and other evidence demonstrate defined properties under defined conditions. Documentation MUST NOT use one layer as implicit proof of another.
+These layers MUST NOT be treated as interchangeable evidence.
 
-## Documentation authority
+A specification says what should be true. Source establishes what exists. Tests establish only the behavior they execute. Benchmarks establish measurements under stated conditions. Validation establishes acceptance within stated scope.
 
-When documents disagree, resolve the conflict by checking their scope and authority:
+## Authority model
+
+When documents disagree, determine which statement is authoritative for the question being asked:
 
 1. **Normative specification** — defines required behavior.
 2. **Current implementation** — establishes repository state.
-3. **Executable evidence** — establishes observed behavior for its stated environment and revision.
-4. **Historical/audit material** — preserves prior findings and context but does not automatically describe the current state.
+3. **Executable evidence** — establishes observed behavior for its revision and environment.
+4. **Historical/audit material** — preserves previous findings and context.
 
-A README, architecture diagram, or roadmap cannot upgrade implementation or verification status.
+A README, diagram, roadmap, or design statement MUST NOT upgrade implementation or verification status.
 
 ## Status vocabulary
 
-NROS uses two related but distinct vocabularies.
+NROS uses two deliberately separate vocabularies.
 
 ### Capability maturity
 
-These describe implementation/evidence maturity and must not be treated as automatic proof chains:
+These describe implementation/evidence maturity:
 
-- `PROPOSED` — future direction or idea.
-- `SPECIFIED` — explicitly defined by a specification.
-- `SCAFFOLDED` — structural implementation exists, but the capability is incomplete.
-- `SIMULATED` — behavior is represented in a model or development environment.
-- `IMPLEMENTED` — functional implementation exists within its stated scope.
-- `TESTED` — automated tests provide evidence for defined behavior.
-- `BENCHMARKED` — performance has been measured under defined conditions.
-- `INTEGRATION-TESTED` — multiple components have been exercised together.
-- `HARDWARE-VALIDATED` — the defined capability has been validated on identified physical hardware.
-- `PRODUCTION-READY` — explicit project-defined production criteria have been satisfied.
+- `PROPOSED`
+- `SPECIFIED`
+- `SCAFFOLDED`
+- `SIMULATED`
+- `IMPLEMENTED`
+- `TESTED`
+- `BENCHMARKED`
+- `INTEGRATION-TESTED`
+- `HARDWARE-VALIDATED`
+- `PRODUCTION-READY`
 
-A capability may have a mixed status across dimensions. For example, code can be `IMPLEMENTED` while hardware support remains `NOT VERIFIED`.
+These are not automatic proof chains. A capability can be implemented while its integration, performance, or hardware behavior remains unverified.
 
-### Verification conclusions
+### Evidence conclusions
 
-These describe the conclusion for a specific evidence record or claim:
+These describe a specific claim/evidence result:
 
 - `OBSERVED`
 - `VERIFIED`
@@ -91,11 +92,24 @@ These describe the conclusion for a specific evidence record or claim:
 - `FAILED`
 - `STALE`
 
-`PASS` is not a universal maturity state.
+`PASS` is an execution result, not a universal documentation maturity state.
 
-## Evidence rule
+### Validation conclusions
 
-The core documentation invariant is:
+Validation adds use-case scope:
+
+- `VALIDATED`
+- `PARTIALLY VALIDATED`
+- `BLOCKED`
+- `FAILED`
+- `NOT VALIDATED`
+- `STALE`
+
+`VALIDATED` MUST refer to an explicit acceptance criterion.
+
+## Evidence invariant
+
+Significant claims should follow this chain:
 
 ```text
 Claim
@@ -115,11 +129,22 @@ Conclusion
 Limitations
 ```
 
-If evidence is missing, blocked, stale, or outside the claim's scope, the documentation must say so.
+If a link is missing, the documentation must expose the gap rather than infer it.
+
+## Verification navigation
+
+The verification layer is intentionally split into focused contracts:
+
+- [Verification overview](./verification/README.md)
+- [Evidence model](./verification/evidence-model.md)
+- [Claims](./verification/claims.md)
+- [Test strategy](./verification/test-strategy.md)
+- [Benchmarks](./verification/benchmarks.md)
+- [Validation](./verification/validation.md)
 
 ## Existing authoritative material
 
-During migration, existing documents remain part of the knowledge base:
+During migration, historical and specialized documents remain available:
 
 - [Architecture](./ARCHITECTURE.md)
 - [Repository Representation](./REPOSITORY_REPRESENTATION.md)
@@ -129,7 +154,7 @@ During migration, existing documents remain part of the knowledge base:
 - [Repository representation material](./representation/)
 - [CI specification](./ci.yml)
 
-At the repository root, important historical/specification sources include:
+Important root-level sources include:
 
 - [Design](../DESIGN.md)
 - [Comparison](../COMPARISON.md)
@@ -137,22 +162,22 @@ At the repository root, important historical/specification sources include:
 - [Evidence Registry](../EVIDENCE_REGISTRY.md)
 - [Core Safety](../crates/nros-core/SAFETY.md)
 
-These sources retain their historical or specialized role until explicitly migrated or superseded.
+These remain historical or specialized until explicitly migrated or superseded.
 
-## Documentation migration
+## Migration policy
 
-The rewrite follows this sequence:
+Documentation migration follows this order:
 
-1. Establish documentation entry points.
-2. Inventory and classify existing material.
+1. Establish entry points.
+2. Inventory existing material.
 3. Assign authority and scope.
 4. Split broad documents into focused topics.
 5. Add cross-references and evidence links.
-6. Validate technical claims against repository state.
+6. Verify technical claims against repository state.
 7. Reconcile terminology and status vocabulary.
-8. Retire or redirect obsolete documents only after their information has been preserved.
+8. Retire or redirect obsolete documents only after their information is preserved.
 
-Migration is intentionally incremental. Historical audit and evidence records are preserved rather than rewritten as if they were current normative specifications.
+Historical evidence MUST NOT be rewritten as current evidence merely to make the documentation cleaner.
 
 ## Navigation principle
 
@@ -161,7 +186,7 @@ Prefer the smallest document that answers the question:
 - **What and why?** → Concepts
 - **How is it structured?** → Architecture
 - **What MUST be true?** → Specifications
-- **What exists?** → Reference / implementation documentation
+- **What exists?** → Reference / implementation
 - **How do I use it?** → Getting Started
 - **How do I change it?** → Development
 - **What proves it?** → Verification
