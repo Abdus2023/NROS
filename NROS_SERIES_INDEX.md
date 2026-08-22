@@ -1,6 +1,6 @@
 # NROS Architecture Series — Index
 
-> **Series status:** Parts **I–CXXX** are currently indexed across 18 architecture documents.
+> **Series status:** The consolidated architecture corpus covers Parts **I–CXXX** across 18 architecture documents. A newer **part-level architecture representation** is being developed under `docs/architecture/parts/`; that representation has currently advanced through **Part LXX**.
 >
 > **Purpose:** This file is the canonical reading-order and navigation index for the NROS Architecture Series. The series describes architectural intent and design evolution; it is **not, by itself, evidence that every described capability is implemented or validated**.
 
@@ -251,34 +251,96 @@ When a Part makes a strong implementation, performance, safety, or hardware asse
 
 ---
 
-## 8. CXXXI and the Next Series Boundary
+## 8. Consolidated Corpus vs Part-Level Representation
 
-The previous index ended with a teaser for **Part CXXXI — Agent Runtime & Execution Architecture**.
+The repository now contains **two complementary representations** of the architecture series:
 
-That teaser should no longer be treated as a completed Part. The current indexed series ends at **CXXX** until a new Part is actually added as a repository artifact.
+1. the original **18-document consolidated corpus** at the repository root, covering Parts I–CXXX;
+2. the newer **part-level decomposition** under `docs/architecture/parts/`, where individual Parts are represented as separate documents for deeper architectural work.
 
-The next Part should therefore be created only when its architecture is sufficiently distinct from CXXI–CXXX to justify extending the series.
+These are not competing numbering systems. The part-level documents are a **finer-grained representation of the same architectural narrative** and may elaborate, refine, or reorganize concepts already present in the consolidated corpus.
 
-Candidate continuation themes include:
+The currently established part-level progression is:
 
 ```text
-CXXXI
-  Agent Runtime & Execution Architecture
-       ↓
-CXXXII+
-  Runtime/Kernel convergence
-  executable contracts
-  evidence-native execution
-  deployment/qualification boundaries
+LXI
+  Isolation / Sandboxing / Privilege / Capability / Trust Domains
+      ↓
+LXII
+  Runtime Lifecycle / Supervision / Failure Containment / Recovery
+      ↓
+LXIII
+  Resource Ownership / Leases / Allocation / Quotas / Reclamation
+      ↓
+LXIV
+  Time / Clocks / Deadlines / Timers / Temporal Consistency
+      ↓
+LXV
+  Scheduling / Queues / Priorities / Fairness / Admission / Dispatch
+      ↓
+LXVI
+  Messaging / Delivery / Ordering / Acknowledgement / Retry / Deduplication
+      ↓
+LXVII
+  Distributed State / Replication / Consistency / Convergence
+      ↓
+LXVIII
+  Storage / Persistence / Durability / Crash Consistency / Transactions
+      ↓
+LXIX
+  Observability / Telemetry / Tracing / Evidence / Diagnostics / Audit
+      ↓
+LXX
+  Security Governance / Policy / Identity / Authorization / Capabilities
 ```
 
-These are roadmap concepts, not current implementation claims.
+This part-level sequence is coherent as an architectural decomposition. It should **not** be interpreted as replacing the consolidated I–CXXX reading order unless the series is deliberately migrated to that representation in a future documentation-reconciliation change.
+
+### Part-level governance rule
+
+Before adding a new Part-level document, verify:
+
+```text
+Existing Part
+    ↓
+Canonical theme
+    ↓
+Existing consolidated coverage
+    ↓
+Existing specification / reference coverage
+    ↓
+Implementation relationship
+    ↓
+Verification relationship
+    ↓
+Novel architectural contribution
+```
+
+A Part-level document should be added only when its scope is genuinely useful as a distinct architectural unit. Duplication should be treated as a reconciliation problem, not automatically as a new Part.
 
 ---
 
-## 9. Navigation Rules
+## 9. CXXXI and the Next Series Boundary
 
-Use this index when entering the series from the beginning.
+The consolidated index still ends at **CXXX**. The old teaser for **Part CXXXI — Agent Runtime & Execution Architecture** must not be treated as a completed Part.
+
+The part-level sequence currently ends at **LXX**. Therefore **CXXXI and LXXI are different concepts in different documentation layers** and must not be conflated.
+
+Any future extension must first declare which representation is being extended:
+
+```text
+Consolidated corpus
+        OR
+Part-level decomposition
+```
+
+Only then should numbering and navigation be changed.
+
+---
+
+## 10. Navigation Rules
+
+Use this index when entering the consolidated series from the beginning.
 
 For implementation-oriented work, start instead from:
 
@@ -287,22 +349,24 @@ For implementation-oriented work, start instead from:
 - [Architecture](docs/architecture/README.md)
 - [Reference](docs/reference/README.md)
 
-For a specific architectural topic, use the Part map above rather than treating the 130 Parts as one undifferentiated document.
+For detailed part-level architectural work, use `docs/architecture/parts/` together with this index and verify each Part against the consolidated corpus.
 
 ---
 
-## 10. Current Series Summary
+## 11. Current Series Summary
 
 ```text
-Architecture documents: 18
-Indexed Parts:          I–CXXX
-Latest indexed Part:    CXXX
-Next Part:              CXXXI (not yet added)
-Series role:            Architectural design corpus
-Evidence role:          Navigation / design context only
-Verification authority: docs/verification/
-Claim authority:        docs/verification/claims.md
-Repository model:       docs/REPOSITORY_REPRESENTATION.md
+Consolidated architecture documents: 18
+Consolidated indexed Parts:          I–CXXX
+Part-level representation:           docs/architecture/parts/
+Latest part-level Part:              LXX
+Consolidated next Part:              CXXXI (not yet added)
+Part-level next Part:                LXXI (not yet added)
+Series role:                         Architectural design corpus
+Evidence role:                       Navigation / design context only
+Verification authority:              docs/verification/
+Claim authority:                     docs/verification/claims.md
+Repository model:                    docs/REPOSITORY_REPRESENTATION.md
 ```
 
 > **Canonical rule:** The Architecture Series explains the architecture. The repository, evidence, verification, and validation records determine what NROS can currently claim about that architecture.
