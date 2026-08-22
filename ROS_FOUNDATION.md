@@ -1,597 +1,413 @@
-# ROS Foundation & NROS Proposition
+# Part I — ROS Foundation & NROS Proposition
 
-**Robot Operating System** (**ROS** or **ros**) is an [open-source](https://en.wikipedia.org/wiki/Open-source_software) [robotics middleware](https://en.wikipedia.org/wiki/Robotics_middleware) suite. Although ROS is not an [operating system](https://en.wikipedia.org/wiki/Operating_system) (OS) but a set of [software frameworks](https://en.wikipedia.org/wiki/Software_framework) for [robot software](https://en.wikipedia.org/wiki/Robot_software) [development](https://en.wikipedia.org/wiki/Software_development), it provides services designed for a heterogeneous [computer cluster](https://en.wikipedia.org/wiki/Computer_cluster) such as [hardware abstraction](https://en.wikipedia.org/wiki/Hardware_abstraction), low-level [device control](https://en.wikipedia.org/wiki/Device_driver), implementation of commonly used functionality, [message-passing between processes](https://en.wikipedia.org/wiki/Inter-process_communication), and [package management](https://en.wikipedia.org/wiki/Package_manager). Running sets of ROS-based processes are represented in a [graph](https://en.wikipedia.org/wiki/Graph_theory) architecture where processing takes place in nodes that may receive, post, and [multiplex](https://en.wikipedia.org/wiki/Multiplexing) sensor data, control, state, planning, actuator, and other messages.
+> **Series:** NROS Architecture Series  
+> **Part:** I  
+> **Role:** Foundational architecture and motivation  
+> **Status:** Architectural design document — not implementation evidence
 
-Despite the importance of reactivity and [low latency](https://en.wikipedia.org/wiki/Low_latency) in robot control, ROS is not a [real-time operating system](https://en.wikipedia.org/wiki/Real-time_operating_system) (RTOS). However, it is possible to integrate ROS with [real-time computing](https://en.wikipedia.org/wiki/Real-time_computing) code.[3] The lack of support for real-time systems has been addressed in the creation of ROS 2,[4][5][6] a major revision of the ROS API which will take advantage of modern libraries and technologies for core ROS functions and add support for real-time code and [embedded system](https://en.wikipedia.org/wiki/Embedded_system) hardware.
+## 1. Purpose
 
-Software in the ROS [ecosystem](https://en.wikipedia.org/wiki/Software_ecosystem)[7] can be separated into three groups:
+NROS begins with a simple architectural question:
 
-- language- and platform-independent tools used for building and distributing ROS-based software;
-- ROS client library implementations such as roscpp,[8] rospy,[9] and roslisp;[10]
-- packages containing application-related code that uses one or more ROS client libraries.[11]
+> **What should a robotics runtime become if execution, communication, state, resources, timing, safety, and distributed coordination are treated as first-class runtime concerns?**
 
-Both the language-independent tools and the main client libraries ([C++](https://en.wikipedia.org/wiki/C++), [Python](https://en.wikipedia.org/wiki/Python_(programming_language)), and [Lisp](https://en.wikipedia.org/wiki/Lisp_(programming_language))) are released under the terms of the [BSD license](https://en.wikipedia.org/wiki/BSD_license), and as such are [open-source software](https://en.wikipedia.org/wiki/Open-source_software) and free for both commercial and research use. The majority of other packages are licensed under a variety of [open-source licenses](https://en.wikipedia.org/wiki/Open-source_license). These other packages implement commonly used functionality and applications such as hardware drivers, robot models, datatypes, planning, [perception](https://en.wikipedia.org/wiki/Robotic_sensing), [simultaneous localization and mapping](https://en.wikipedia.org/wiki/Simultaneous_localization_and_mapping) (SLAM), [simulation tools](https://en.wikipedia.org/wiki/Robotics_simulator), and other [algorithms](https://en.wikipedia.org/wiki/Algorithm).
+The answer is not to reproduce ROS with a different programming language. NROS uses the strengths of a Rust-native systems foundation to reconsider the runtime boundary itself.
 
-The main ROS client libraries are geared toward a [Unix-like](https://en.wikipedia.org/wiki/Unix-like) system, mostly because of their dependence on large sets of open-source software dependencies. For these client libraries, [Ubuntu Linux](https://en.wikipedia.org/wiki/Ubuntu_(operating_system)) is listed as "Supported" while other variants such as [Fedora Linux](https://en.wikipedia.org/wiki/Fedora_Linux), [macOS](https://en.wikipedia.org/wiki/MacOS), and [Microsoft Windows](https://en.wikipedia.org/wiki/Microsoft_Windows) are designated "experimental" and are supported by the community.[12] The native Java ROS client library, rosjava,[13] however, does not share these limitations and has enabled ROS-based software to be written for the [Android OS](https://en.wikipedia.org/wiki/Android_(operating_system)).[14] rosjava has also enabled ROS to be integrated into an officially supported [MATLAB](https://en.wikipedia.org/wiki/MATLAB) toolbox which can be used on [Linux](https://en.wikipedia.org/wiki/Linux), macOS, and Microsoft Windows.[15] A [JavaScript](https://en.wikipedia.org/wiki/JavaScript) client library, roslibjs[16] has also been developed which enables integration of software into a ROS system via any standards-compliant web browser.
+This Part establishes the historical and conceptual foundation from which the later NROS architecture series develops.
 
-ROS was designed to be open source, intending that users would be able to choose the configuration of tools and libraries that interacted with the core of ROS so that users could shift their software stacks to fit their robot and application area. As such, there is very little which is core to ROS, beyond the general structure within which programs must exist and communicate. In one sense, ROS is the underlying plumbing behind nodes and message passing. However, in reality, ROS is not only plumbing, but a rich and mature set of tools, a wide-ranging set of robot-agnostic abilities provided by packages, and a greater ecosystem of additions to ROS.
+## 2. What ROS Provides
 
-### Computation graph model
+The Robot Operating System (ROS) is a robotics software framework and middleware ecosystem. Despite its name, ROS is not an operating system.
 
-ROS processes are represented as nodes in a graph structure, connected by edges called topics.[66] ROS nodes can pass messages to one another through topics, make service calls to other nodes, provide a service for other nodes, or set or retrieve shared data from a communal database called the parameter server. A process called the ROS1 Master[66] makes all of this possible by registering nodes to themselves, setting up node-to-node communication for topics, and controlling parameter server updates. Messages and service calls do not pass through the master, rather the master sets up peer-to-peer communication between all node processes after they register themselves with the master. This decentralized architecture lends itself well to robots, which often consist of a subset of networked computer hardware, and may communicate with off-board computers for heavy computing or commands.
+ROS provides abstractions and tooling for building distributed robot software, including:
 
-#### Nodes
+- computational nodes;
+- message-based communication;
+- services and actions;
+- parameters and configuration;
+- discovery and graph introspection;
+- hardware and device integration;
+- package/build tooling;
+- recording and replay;
+- visualization and debugging;
+- simulation integration;
+- a broad ecosystem of robotics algorithms and packages.
 
-A node represents one process running the ROS graph. Every node has a name, which registers with the ROS1 master before it can take any other actions. Multiple nodes with different names can exist under different [namespaces](https://en.wikipedia.org/wiki/Namespace), or a node can be defined as anonymous, in which case it will randomly generate an additional identifier to add to its given name. Nodes are at the center of ROS programming, as most ROS client code is in the form of a ROS node which takes actions based on information received from other nodes, sends information to other nodes, or sends and receives requests for actions to and from other nodes.
+The central contribution is an architectural vocabulary that allows independently developed software components to cooperate as a robotic system.
 
-#### Topics
+## 3. ROS as a Distributed Runtime Model
 
-Topics are named [buses](https://en.wikipedia.org/wiki/Software_bus) over which nodes send and receive messages.[67] Topic names must be unique within their namespace as well. To send messages to a topic, a node must publish to said topic, while to receive messages it must subscribe. The publish/subscribe model is anonymous: no node knows which nodes are sending or receiving on a topic, only that it is sending/receiving on that topic. The types of messages passed on a topic vary widely and can be user-defined. The content of these messages can be sensor data, motor control commands, state information, actuator commands, or anything else.
-
-#### Services
-
-A node may also advertise services.[68] A service represents an action that a node can take which will have a single result. As such, services are often used for actions that have a defined start and end, such as capturing a one-frame image, rather than processing velocity commands to a wheel motor or odometer data from a wheel encoder. Nodes advertise services and call services from one another.
-
-#### Parameter server
-
-The parameter server[68] is a database shared between nodes which allows for communal access to static or semi-static information. Data that does not change frequently and as such will be infrequently accessed, such as the distance between two fixed points in the environment, or the weight of the robot, are good candidates for storage in the parameter server.
-
-ROS's core functionality is augmented by a variety of tools that allow developers to visualize and record data, easily navigate the ROS package structures, and create scripts automating complex configuration and setup processes. The addition of these tools greatly increases the abilities of systems using ROS by simplifying and providing solutions to several common robotics development problems. These tools are provided in packages like any other algorithm, but rather than providing implementations of hardware drivers or algorithms for various robotic tasks, these packages provide task and robot-agnostic tools that come with the core of most modern ROS installations.
-
-### rviz
-
-rviz[69] (Robot Visualization tool) is a three-dimensional visualizer used to visualize robots, the environments they work in, and sensor data. It is a highly configurable tool, with many different types of visualizations and plugins. Unified Robot Description Format ([URDF](https://en.wikipedia.org/wiki/URDF)) is an [XML](https://en.wikipedia.org/wiki/XML) file format for robot model description.
-
-### rosbag
-
-rosbag[70] is a command line tool used to record and playback ROS message data. rosbag uses a file format called bags,[71] which log ROS messages by listening to topics and recording messages as they come in. Playing messages back from a bag is largely the same as having the original nodes that produced the data in the ROS computation graph, making bags a useful tool for recording data to be used in later development. While rosbag is a command line only tool, rqt_bag[72] provides a GUI interface to rosbag.
-
-### catkin
-
-catkin[73] is the ROS1 build system, having replaced rosbuild[74] as of ROS Groovy. catkin is based on [CMake](https://en.wikipedia.org/wiki/CMake) and is similarly cross-platform, open-source, and language-independent. As of ROS2 catkin is no longer in use, but still maintained for legacy support.[75]
-
-### rosbash
-
-The rosbash[76] package provides a suite of tools which augment the functionality of the [bash shell](https://en.wikipedia.org/wiki/Bash_(Unix_shell)). These tools include rosls, roscd, and roscp, which replicate the functionalities of [ls](https://en.wikipedia.org/wiki/Ls), [cd](https://en.wikipedia.org/wiki/Cd_(command)), and [cp](https://en.wikipedia.org/wiki/Cp_(Unix)) respectively. The ROS versions of these tools allow users to use ros package names in place of the file path where the package is located. The package also adds tab-completion to most ROS utilities and includes rosed, which edits a given file with the chosen default text editor, as well rosrun, which runs executables in ROS packages. rosbash supports the same functionalities for [zsh](https://en.wikipedia.org/wiki/Z_shell) and [tcsh](https://en.wikipedia.org/wiki/Tcsh), to a lesser extent.
-
-### roslaunch
-
-roslaunch[77] is a tool used to launch multiple ROS nodes both locally and remotely, as well as setting parameters on the ROS parameter server. roslaunch configuration files, which are written using [XML](https://en.wikipedia.org/wiki/XML) can easily automate a complex startup and configuration process into a single command. roslaunch scripts can include other roslaunch scripts, launch nodes on specific machines, and even restart processes that die during execution.
-
-ROS contains many open-source implementations of common robotics functionality and algorithms. These open-source implementations are organized into packages. Many packages are included as part of ROS distributions, while others may be developed by individuals and distributed through code-sharing sites such as github. Some packages of note include:
-
-### Systems and tools
-
-- *actionlib*[78] provides a standardized interface for interfacing with preemptable tasks.
-- *nodelet*[79] provides a way to run multiple algorithms in a single process.
-- *rosbridge*[80] provides a JSON API to ROS functionalities for non-ROS programs.
-
-### Mapping and localization
-
-- *slam toolbox*[81] provides full 2D [simultaneous localization and mapping](https://en.wikipedia.org/wiki/Simultaneous_localization_and_mapping) (SLAM) and localization system.
-- *gmapping*[82] provides a wrapper for [OpenSlam's](https://en.wikipedia.org/wiki/OpenSlam?action=edit&redlink=1) [Gmapping](https://en.wikipedia.org/wiki/Gmapping?action=edit&redlink=1) algorithm for SLAM.
-- *cartographer*[83] provides real-time 2D and 3D SLAM algorithms developed at [Google](https://en.wikipedia.org/wiki/Google).
-- *amcl*[84] provides an implementation of [adaptive Monte-Carlo localization.](https://en.wikipedia.org/wiki/Monte_Carlo_localization)
-
-### Navigation
-
-- *navigation*[85] provides the capability of navigating a mobile robot in a planar environment.
-
-### Manipulation
-
-- *MoveIt!*[86] provides motion planning capabilities for [robot manipulators](https://en.wikipedia.org/wiki/Manipulator_(device)). Its default planning library is the [Open Motion Planning Library (OMPL)](https://ompl.kavrakilab.org/).[87]
-
-### Perception
-
-- *vision_opencv*[88] is a meta-package which provides packages for integrating ROS with [OpenCV](https://en.wikipedia.org/wiki/OpenCV).
-
-### Coordinate frame representation
-
-- *tf*[89] provided a system for representing, tracking and transforming coordinate frames until ROS Hydro, when it was deprecated in favor of tf2.
-- *tf2*[90] is the second generation of the tf library, and provides the same abilities for ROS versions after Hydro.
-
-### Simulation
-
-- *gazebo_ros_pkgs*[91] is a meta-package which provides packages for integrating ROS with the [Gazebo simulator](https://en.wikipedia.org/wiki/Gazebo_simulator).
-- *stage*[92] provides an interface for the 2D [Stage simulator](https://en.wikipedia.org/wiki/Player_Project).
-
----
-
-This description captures the **ROS 1 architecture** well, but it mixes ROS 1 concepts with ROS 2 and contains several historical statements that should be separated if you're using it as technical reference.
-
-The most important conceptual distinction is:
-
-**ROS is middleware/framework infrastructure, not an operating system.**
-
-A useful architectural decomposition is:
+A useful abstraction is:
 
 ```text
-┌─────────────────────────────────────────────────────────────┐
-│                    ROBOT APPLICATIONS                       │
-│  Navigation │ Manipulation │ Perception │ SLAM │ Planning │
-├─────────────────────────────────────────────────────────────┤
-│                    ROS PACKAGES                             │
-│  Drivers │ Algorithms │ Robot Models │ Interfaces │ Tools  │
-├─────────────────────────────────────────────────────────────┤
-│                  ROS COMMUNICATION                           │
-│  Topics │ Services │ Actions │ Parameters │ Discovery       │
-├─────────────────────────────────────────────────────────────┤
-│                 ROS CLIENT LIBRARIES                         │
-│       rclcpp / rclpy / other language bindings              │
-├─────────────────────────────────────────────────────────────┤
-│             DDS / RMW / TRANSPORT LAYER                     │
-│       Discovery │ QoS │ Serialization │ Networking          │
-├─────────────────────────────────────────────────────────────┤
-│                     HOST OS                                  │
-│       Linux │ Windows │ macOS │ RTOS / Embedded targets     │
-├─────────────────────────────────────────────────────────────┤
-│                    HARDWARE                                 │
-│       CPU │ GPU │ Sensors │ Actuators │ Networks            │
-└─────────────────────────────────────────────────────────────┘
+Applications
+     │
+     ▼
+Robotics Components / Nodes
+     │
+     ▼
+Communication + Discovery + Execution APIs
+     │
+     ▼
+Middleware / Transport
+     │
+     ▼
+Host OS / Runtime
+     │
+     ▼
+Hardware
 ```
 
-### ROS 1 vs ROS 2
+ROS therefore occupies a middleware/runtime layer above the operating system and below most robot applications.
 
-The text you've supplied is predominantly describing **ROS 1**.
+The exact implementation differs between ROS generations.
 
-| Concept | ROS 1 | ROS 2 |
+## 4. ROS 1 and ROS 2 Must Be Distinguished
+
+The historical ROS 1 architecture should not be generalized to ROS as a whole.
+
+| Concern | ROS 1 | ROS 2 |
 |---|---|---|
-| Discovery | ROS Master + XMLRPC | DDS-based discovery |
-| Core communication | ROS transport | DDS/RTPS through RMW |
-| Topics | ✓ | ✓ |
-| Services | ✓ | ✓ |
+| Discovery | ROS Master + XML-RPC | DDS-based discovery |
+| Core transport model | ROS-specific transports | DDS/RTPS through RMW |
+| Topics | Yes | Yes |
+| Services | Yes | Yes |
 | Actions | `actionlib` | First-class ROS 2 actions |
 | Parameters | Central parameter server | Node-local parameter model |
 | QoS | Limited | Extensive DDS QoS |
-| Real-time | Not designed as RT system | Designed with real-time support in mind |
-| Build | catkin | ament + colcon |
-| C++ API | roscpp | rclcpp |
-| Python API | rospy | rclpy |
-| Launch | XML | Python/XML/YAML |
-| Node composition | nodelets | composable nodes |
-| Embedded/RTOS | Limited | substantially better support |
-| Security | Limited | DDS-Security integration |
+| Build ecosystem | catkin | ament + colcon |
+| C++ client | roscpp | rclcpp |
+| Python client | rospy | rclpy |
+| Launch | XML-oriented | Python/XML/YAML support |
+| Composition | nodelets | composable nodes |
+| Real-time support | External integration required | Designed with real-time use cases in mind |
 
-One particularly important correction is this statement:
+This distinction matters because NROS is inspired by the **problem domain and architectural lessons of ROS**, not by a requirement to preserve ROS 1 implementation mechanisms.
 
-> "ROS processes are represented as nodes ... connected by edges called topics."
+## 5. The ROS Computation Graph
 
-That's a useful **ROS 1 conceptual simplification**, but technically topics are communication interfaces, not simply graph edges. A ROS graph can contain publishers, subscriptions, services, clients, actions, parameters, and discovery relationships.
-
-Likewise, the **ROS 1 Master** should not be generalized to ROS itself. ROS 2 deliberately removed the ROS Master architecture and uses DDS discovery.
-
-### The deeper architectural idea
-
-ROS can be understood as a **robotic distributed-systems middleware**.
-
-Its fundamental abstraction is:
+The ROS graph provides a useful mental model:
 
 ```text
-                ┌───────────────┐
-                │     Node      │
-                │               │
-                │  computation  │
-                └───────┬───────┘
-                        │
-             ┌──────────┼──────────┐
-             │          │          │
-          publish     service    action
-             │          │          │
-             ▼          ▼          ▼
-          Topic      Service     Action
-             │          │          │
-             ▼          ▼          ▼
-        ┌─────────┐ ┌─────────┐ ┌─────────┐
-        │Subscriber│ │ Client  │ │ Server  │
-        └─────────┘ └─────────┘ └─────────┘
+        ┌─────────┐             ┌─────────┐
+        │ Node A  │── publish ─▶│ Topic X │
+        └─────────┘             └────┬────┘
+                                     │
+                                  subscribe
+                                     │
+                                     ▼
+                                ┌─────────┐
+                                │ Node B  │
+                                └─────────┘
 ```
 
-This is why ROS became so powerful: it separates **robot computation** from the mechanisms required to connect that computation.
+But the graph is richer than topic edges alone. A complete robotics graph can include:
 
-For example:
+- publishers/subscribers;
+- service servers/clients;
+- action servers/clients;
+- parameters;
+- discovery relationships;
+- lifecycle state;
+- component composition;
+- hardware interfaces.
+
+The graph abstraction is therefore a useful **logical model**, not a complete description of runtime execution.
+
+## 6. Why the ROS Model Is Valuable
+
+ROS established several durable architectural ideas:
+
+### 6.1 Componentization
+
+Robot functionality can be decomposed into independently developed components.
+
+### 6.2 Message-oriented communication
+
+Data exchange can be modeled through typed interfaces rather than direct function coupling.
+
+### 6.3 Distributed execution
+
+Components can execute on different processes and machines while participating in one logical system.
+
+### 6.4 Hardware abstraction
+
+Applications can interact with standardized interfaces instead of depending directly on every device implementation.
+
+### 6.5 Tooling around execution
+
+Recording, replay, visualization, introspection, simulation, and launch/configuration tooling are part of the practical robotics development environment.
+
+These principles remain important to NROS.
+
+## 7. Where the NROS Question Begins
+
+The NROS proposition starts where a conventional middleware abstraction becomes insufficient for the desired runtime model.
+
+The architecture asks whether the runtime should treat the following as first-class concerns rather than external conventions:
 
 ```text
-Camera Driver
-      │
-      │ Image messages
-      ▼
-Image Processing
-      │
-      │ detected objects
-      ▼
-Perception
-      │
-      │ world state
-      ▼
-Planning
-      │
-      │ trajectory
-      ▼
-Controller
-      │
-      │ actuator commands
-      ▼
-Robot Hardware
+Execution
+Lifecycle
+Scheduling
+Communication
+Time
+State
+Resources
+Capabilities
+Authority
+Persistence
+Recovery
+Security
+Observability
+Evidence
+Distributed coordination
+Hardware boundaries
 ```
 
-Each component can be independently developed, replaced, tested, simulated, distributed across machines, or implemented in different languages.
-
-### ROS's major conceptual layers
-
-I'd therefore model the ecosystem as roughly:
-
-**1. Computation**
-
-- Nodes
-- Components
-- Executors
-- Callback processing
-
-**2. Communication**
-
-- Topics
-- Services
-- Actions
-- Parameters
-- Events
-
-**3. Distributed systems**
-
-- Discovery
-- Serialization
-- Transport
-- QoS
-- Networking
-
-**4. Robot semantics**
-
-- TF / TF2
-- URDF
-- Robot state
-- Sensors
-- Actuators
-- Frames
-
-**5. Algorithms**
-
-- SLAM
-- Navigation
-- Perception
-- Planning
-- Control
-- Manipulation
-
-**6. Development infrastructure**
-
-- Build systems
-- Package management
-- Launch
-- CLI
-- Visualization
-- Logging
-- Recording/playback
-- Simulation
-
-### And this distinction is especially important
-
-ROS itself does **not** provide the deterministic control loop that an industrial robot controller or RTOS normally provides.
-
-A typical architecture is closer to:
+The objective is therefore broader than:
 
 ```text
-                High-level autonomy
-                       │
-                 ROS 2 nodes
-                       │
-              commands / trajectories
-                       │
-              ┌────────▼────────┐
-              │ Real-time layer │
-              │                 │
-              │ RT controller   │
-              │ RT executor     │
-              │ EtherCAT/CAN    │
-              └────────┬────────┘
-                       │
-                 Servo/control
-                       │
-              ┌────────▼────────┐
-              │ Robot hardware  │
-              └─────────────────┘
+ROS + Rust
 ```
 
-That distinction matters enormously for **industrial robotics**: ROS/ROS 2 can provide the orchestration, perception, planning, coordination and higher-level control, while a dedicated deterministic control layer handles hard real-time actuator loops.
-
-So, if you're using this material as the foundation for studying or designing a **ROS-like architecture**, the most useful abstraction is:
-
-> **ROS is a distributed robotic middleware ecosystem whose core purpose is to provide standardized computation, communication, discovery, tooling, and robot-oriented interfaces—not to replace the host OS or necessarily provide the hard-real-time control layer.**
-
----
-
-If by **NROS** you mean your **NROS repository/project**, then the interesting direction is not simply "rewrite ROS in Rust." It is to treat ROS as the architectural predecessor and ask:
-
-> **What would a ROS-like middleware look like if it were designed today around Rust, deterministic execution, safety, embedded systems, and agentic workloads?**
-
-### ROS → NROS conceptual evolution
+A better formulation is:
 
 ```text
-ROS
-│
-├── Nodes
-├── Topics
-├── Services
-├── Actions
-├── Parameters
-├── ROS Graph
-├── DDS / transport
-├── Executors
-├── Packages
-├── Launch
-├── Bags / recording
-├── TF / robot state
-└── Simulation / tooling
-        │
-        │ redesign
-        ▼
+ROS architectural lessons
+        +
+Rust-native systems foundation
+        +
+explicit execution semantics
+        +
+stronger state/resource/authority models
+        +
+verification-aware architecture
+        ↓
 NROS
-│
-├── Components / Actors
-├── Typed channels
-├── Request / Response
-├── Actions / Tasks
-├── State & configuration
-├── Runtime graph
-├── Transport abstraction
-├── Deterministic scheduler
-├── Rust-native crates
-├── Declarative orchestration
-├── Event / trace recording
-├── Resource & capability model
-└── Embedded / RT integration
 ```
 
-The key change is **architectural rather than linguistic**.
+## 8. NROS Proposition
 
-### 1. ROS Node → NROS Component
+NROS is proposed as a **Rust-native robotics and distributed execution architecture** in which the runtime itself provides stronger foundations for deterministic execution, communication, state management, resource control, lifecycle management, distributed coordination, and evidence-aware operation.
 
-ROS traditionally makes the **node** the fundamental computational unit.
+The proposition is architectural. It does not imply that every capability described by the series currently exists in the repository.
 
-NROS can make the unit more explicit:
+The repository's implementation and verification documentation determines the current state of those capabilities.
+
+## 9. Architectural Shift
+
+The conceptual shift can be summarized as:
 
 ```text
-NROS Component
-    │
-    ├── Inputs
-    ├── Outputs
-    ├── Requests
-    ├── Responses
-    ├── Actions
-    ├── State
-    ├── Resources
-    └── Lifecycle
+ROS-centric view
+
+Application
+    ↓
+Nodes
+    ↓
+Middleware
+    ↓
+Operating System
+    ↓
+Hardware
 ```
 
-A component becomes a typed participant in the runtime rather than simply a process registered in a graph.
-
-### 2. ROS Topic → Typed NROS Channel
-
-Instead of thinking primarily in terms of anonymous topic buses:
+versus the broader NROS target model:
 
 ```text
-Publisher ─── Topic ───> Subscriber
+Applications / Agents
+          ↓
+     Workflows / APIs
+          ↓
+   Runtime Execution Model
+          ↓
+ ┌─────────────────────────┐
+ │ Scheduling              │
+ │ Communication           │
+ │ Lifecycle               │
+ │ State                   │
+ │ Resources               │
+ │ Capabilities / Authority│
+ │ Persistence / Recovery  │
+ │ Security / Policy       │
+ │ Observability / Evidence│
+ └─────────────────────────┘
+          ↓
+     Hardware / OS
 ```
 
-NROS can model communication as typed channels:
+The second model makes runtime semantics explicit instead of leaving many of them to application conventions or external infrastructure.
+
+## 10. Rust as a Systems Foundation
+
+NROS uses Rust because its systems-level properties are relevant to the intended runtime boundary, including:
+
+- ownership and borrowing;
+- strong type checking;
+- explicit concurrency models;
+- memory-safety guarantees without a tracing garbage collector;
+- predictable resource ownership;
+- low-level control suitable for embedded and systems programming;
+- a modern package/build ecosystem.
+
+Rust does **not** automatically provide determinism, real-time guarantees, safety qualification, or correct distributed behavior.
+
+Those properties still require architectural constraints, implementation discipline, measurement, and verification.
 
 ```text
-Producer<T>
-     │
-     ▼
-Channel<T>
-     │
-     ▼
-Consumer<T>
+Rust
+  ≠
+Real-time guarantee
+
+Rust
+  ≠
+Distributed correctness
+
+Rust
+  ≠
+Safety qualification
 ```
 
-Rust then gives NROS an opportunity to make message contracts substantially stronger at compile time.
+This distinction is fundamental to NROS claim discipline.
 
-### 3. ROS Master/Graph → Runtime
+## 11. NROS Runtime Boundary
 
-ROS 1 has:
+The NROS architecture progressively moves functionality that is essential to execution correctness toward an explicit runtime boundary.
+
+Conceptually:
 
 ```text
-             ROS Master
-             /   |   \
-            /    |    \
-         Node  Node   Node
+┌───────────────────────────────────────────┐
+│ Applications / Robotics Algorithms        │
+├───────────────────────────────────────────┤
+│ NROS APIs / Nodes / Components / Agents   │
+├───────────────────────────────────────────┤
+│ NROS Runtime                               │
+│                                           │
+│ execution │ scheduling │ lifecycle        │
+│ communication │ state │ resources         │
+│ capabilities │ authority │ recovery       │
+├───────────────────────────────────────────┤
+│ OS / HAL / Drivers / Hardware             │
+└───────────────────────────────────────────┘
 ```
 
-NROS can instead have a runtime-oriented model:
+This is a design boundary, not a statement that every box is already implemented.
+
+## 12. Core Architectural Questions
+
+The subsequent Parts of the series progressively answer questions such as:
+
+1. What is the fundamental execution unit?
+2. How are workloads scheduled?
+3. How are lifecycle transitions represented?
+4. How is time modeled?
+5. How do components communicate?
+6. How is state persisted and recovered?
+7. How are resources represented and allocated?
+8. How are capabilities and authority constrained?
+9. How does distributed coordination work?
+10. How are failures detected and recovered?
+11. How are security and policy enforced?
+12. How is runtime behavior observed?
+13. How is evidence attached to system behavior?
+14. How are hardware-specific properties separated from portable abstractions?
+15. How can architectural claims be verified rather than merely described?
+
+These questions motivate the Parts that follow.
+
+## 13. Architectural Invariants
+
+Part I establishes the following principles for the series:
+
+### A1 — Middleware is not an operating system
+
+NROS should not reproduce the historical ambiguity of the ROS name. The runtime boundary must be explicit.
+
+### A2 — Architecture is not implementation
+
+A design document describes intended behavior; source code establishes what exists.
+
+### A3 — Implementation is not verification
+
+A feature existing in source does not establish that its behavior is correct.
+
+### A4 — Measurement is not a universal guarantee
+
+A benchmark establishes measured behavior under defined conditions. It does not automatically establish a worst-case property.
+
+### A5 — Simulation is not physical validation
+
+A simulated hardware or distributed environment must not be represented as equivalent to physical execution without appropriate evidence.
+
+### A6 — Rust is a foundation, not a guarantee
+
+Memory safety and type safety do not eliminate the need for real-time, concurrency, distributed-systems, or safety analysis.
+
+### A7 — Claims require scope
+
+Every strong technical claim must identify the evidence and scope that justify it.
+
+## 14. Relationship to the Repository
+
+Part I is architectural context.
+
+Current implementation status must be established from repository artifacts and verification records:
 
 ```text
-              NROS Runtime
-                   │
-        ┌──────────┼──────────┐
-        │          │          │
-     Component  Component  Component
-        │          │          │
-        └────── Channels ─────┘
+Architecture Series
+        ↓
+Design intent
+        ↓
+Repository source
+        ↓
+Tests / CI / benchmarks / simulation / hardware
+        ↓
+Verification
+        ↓
+Validation
+        ↓
+Claim
 ```
 
-Discovery, scheduling, lifecycle, resources and communication can therefore become coordinated parts of one runtime model.
+The authoritative verification framework is documented under `docs/verification/`.
 
-### 4. ROS Executor → NROS Scheduler
+The repository-wide representation model is `docs/REPOSITORY_REPRESENTATION.md`.
 
-This is potentially one of the biggest opportunities.
+## 15. What Part I Does Not Claim
 
-ROS traditionally revolves around callbacks and executors.
+This Part does **not** by itself claim that NROS currently provides:
 
-NROS could make scheduling explicit:
+- a production real-time runtime;
+- a certified safety system;
+- production-grade distributed consensus;
+- universal zero-copy execution;
+- complete hardware support;
+- production telemetry;
+- deterministic execution under all workloads;
+- qualification for any particular robotic platform.
+
+Those claims require implementation-specific evidence.
+
+## 16. Transition to Part II
+
+Part I establishes the proposition.
+
+The next stage is to define the **NROS core execution model**: what executes, what owns execution state, how runtime entities interact, and where lifecycle and scheduling semantics begin.
 
 ```text
-                Scheduler
-                    │
-        ┌───────────┼───────────┐
-        ▼           ▼           ▼
-     Sensor      Planner     Controller
-      1 kHz         20 Hz       1 kHz
-        │           │           │
-        └───────────┴───────────┘
-                    │
-              deterministic
-                execution
+Part I
+ROS foundation + NROS proposition
+          ↓
+Part II
+NROS core concepts
+          ↓
+Part III+
+Execution, lifecycle, communication,
+time, safety, distribution, and runtime fabrics
 ```
 
-That opens the door to:
+## Canonical Rule
 
-- priorities
-- deadlines
-- budgets
-- affinity
-- periodic execution
-- event-driven execution
-- real-time classes
-- resource constraints
-- deterministic replay
-
-### 5. ROS Package → NROS Crate
-
-ROS:
-
-```text
-package
- ├── nodes
- ├── messages
- ├── services
- ├── launch
- └── dependencies
-```
-
-NROS:
-
-```text
-crate
- ├── components
- ├── messages
- ├── channels
- ├── services
- ├── actions
- ├── runtime integration
- └── Cargo dependencies
-```
-
-This gives NROS direct access to the Rust ecosystem:
-
-```text
-Cargo
- │
- ├── crates.io
- ├── workspace
- ├── features
- ├── dependency resolution
- ├── rustc
- ├── rustfmt
- └── clippy
-```
-
-### 6. ROS message passing → NROS protocol
-
-ROS's message model becomes something more fundamental:
-
-```text
-Message
-   │
-   ├── Type
-   ├── Schema
-   ├── Version
-   ├── Encoding
-   ├── QoS
-   └── Metadata
-```
-
-NROS could therefore treat communication contracts as first-class protocol objects.
-
-For example:
-
-```text
-Message<T>
-
-T = LaserScan
-T = Pose
-T = JointState
-T = Trajectory
-T = SensorEvent
-T = AgentCommand
-```
-
-### 7. ROS tools → NROS observability
-
-ROS has tools such as:
-
-- `rosnode`
-- `rostopic`
-- `rosservice`
-- `rosbag`
-- `rviz`
-- `rqt`
-
-NROS can evolve this into a unified runtime observability model:
-
-```text
-nros
- ├── graph
- ├── node/component
- ├── topic/channel
- ├── service
- ├── action
- ├── state
- ├── trace
- ├── record
- ├── replay
- ├── inspect
- └── diagnose
-```
-
-The important idea is that **observability becomes part of the runtime contract**, rather than a collection of loosely coupled utilities.
-
-## The deeper NROS proposition
-
-The most interesting interpretation of NROS is therefore:
-
-```text
-                 ROS
-                  │
-       distributed robotics middleware
-                  │
-                  ▼
-                 NROS
-                  │
-       ┌──────────┼──────────┐
-       │          │          │
-     Safety    Real-time   Systems
-       │          │          │
-       └──────────┼──────────┘
-                  │
-                  ▼
-           Rust-native runtime
-                  │
-                  ▼
-       deterministic computation
-                  │
-                  ▼
-        robotics + autonomous systems
-```
-
-So the evolution is not:
-
-**ROS → Rust ROS**
-
-but rather:
-
-**ROS → a new runtime model for robotic/autonomous computation.**
-
-And that gives NROS a much stronger identity:
-
-> **NROS = a Rust-native, safety-oriented, deterministic distributed runtime for robotic and autonomous systems.**
-
-That is the architectural lens I would use when analyzing the NROS repository: **map every ROS primitive to its NROS equivalent, then identify which primitives should be preserved, redesigned, or deliberately eliminated.**
+> **NROS is not defined by reproducing ROS mechanisms. It is defined by the runtime semantics and system guarantees the architecture intends to make explicit, composable, and verifiable.**
