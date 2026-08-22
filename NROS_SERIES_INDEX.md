@@ -1,6 +1,6 @@
 # NROS Architecture Series — Index
 
-> **Series status:** The consolidated architecture corpus covers Parts **I–CXXX** across 18 architecture documents. A newer **part-level architecture representation** is maintained under `docs/architecture/parts/`; it now has an explicit **Part I** and has advanced through **Part LXXV**.
+> **Series status:** The consolidated architecture corpus covers Parts **I–CXXX** across 18 architecture documents. A newer **part-level architecture representation** is maintained under `docs/architecture/parts/`; it now has an explicit **Part I** and has advanced through **Part LXXVI**.
 >
 > **Purpose:** This file is the canonical reading-order and navigation index for the NROS Architecture Series. The series describes architectural intent and design evolution; it is **not, by itself, evidence that every described capability is implemented or validated**.
 
@@ -270,10 +270,11 @@ These are **not competing numbering systems**. The part-level documents are a fi
 | LXI–LXXIII | `docs/architecture/parts/` | `NROS_PERSISTENCE_AND_RECOVERY.md` / `NROS_SECURITY_AND_POLICY.md` and related canonical sources |
 | LXXIV | `docs/architecture/parts/LXXIV_DISTRIBUTED_COORDINATION_AUTHORITY_QUORUM_FENCING.md` | `NROS_SECURITY_AND_POLICY.md` / coordination corpus |
 | LXXV | `docs/architecture/parts/LXXV_AUTHORITY_TRANSITION_PROTOCOL_STATE.md` | `NROS_SECURITY_AND_POLICY.md` / persistence and coordination corpus |
+| LXXVI | `docs/architecture/parts/LXXVI_DISTRIBUTED_AUTHORITY_STATE_DISSEMINATION.md` | `NROS_SECURITY_AND_POLICY.md` / persistence, coordination and state corpus |
 
 ### Part-level frontier
 
-The currently established part-level progression reaches **LXXV**:
+The currently established part-level progression reaches **LXXVI**:
 
 ```text
 LXXI
@@ -290,9 +291,12 @@ LXXIV
       ↓
 LXXV
   Authority Transition Protocol / Durable Authority State
+      ↓
+LXXVI
+  Distributed Authority-State Dissemination / Freshness / Provenance
 ```
 
-### LXXIV–LXXV dependency boundary
+### LXXIV–LXXVI dependency boundary
 
 ```text
 LXXIV
@@ -300,14 +304,19 @@ LXXIV
       ↓
 LXXV
   Durable transition record / ordering / replay / propagation / recovery
+      ↓
+LXXVI
+  Distributed observation / freshness / provenance / stale-state rejection
 ```
 
-The novel boundary is:
+The novel boundaries are:
 
 ```text
 Authority mechanism
     ≠
 Durable authority-state protocol
+    ≠
+Distributed knowledge of authority state
 ```
 
 ### Part-level governance rule
@@ -338,7 +347,7 @@ A Part-level document should be added only when its scope is genuinely useful as
 
 The consolidated index ends at **CXXX**. Any earlier teaser for **Part CXXXI — Agent Runtime & Execution Architecture** must not be treated as a completed Part.
 
-The part-level representation currently ends at **LXXV**. Therefore **CXXXI and LXXV are different concepts in different documentation layers** and must not be conflated.
+The part-level representation currently ends at **LXXVI**. Therefore **CXXXI and LXXVI are different concepts in different documentation layers** and must not be conflated.
 
 Any future extension must first declare which representation is being extended:
 
@@ -374,9 +383,9 @@ Consolidated architecture documents: 18
 Consolidated indexed Parts:          I–CXXX
 Part-level representation:           docs/architecture/parts/
 Part-level Part I:                   I_ROS_FOUNDATION.md
-Latest part-level Part:              LXXV
+Latest part-level Part:              LXXVI
 Consolidated next Part:              CXXXI (not yet added)
-Part-level next Part:                LXXVI (not yet added)
+Part-level next Part:                LXXVII (not yet added)
 Series role:                         Architectural design corpus
 Evidence role:                       Navigation / design context only
 Verification authority:              docs/verification/
