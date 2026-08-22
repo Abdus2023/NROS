@@ -12,12 +12,20 @@ fn main() {
 
     // Demo: Init project
     println!("=== Command: nros init my_robot --template=mobile_base ===\n");
+    // Pass 27 fix (first real CI run, 2026-08-22): previously the demo passed an absolute
+    // temp path as the project NAME. `ProjectInitializer::is_valid_project_name` rejects
+    // absolute paths (they contain '/'), so `nros-cli-demo` always panicked at this
+    // `.unwrap()` — the advertised `cargo run -p nros-cli --bin nros-cli-demo` could never
+    // complete. Create the temp dir, chdir into it, and use a plain relative name instead.
     let tmp_dir = std::env::temp_dir().join(format!("nros_demo_init_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis()));
-    let demo_proj_name = tmp_dir.join("my_robot").to_string_lossy().to_string();
+    std::fs::create_dir_all(&tmp_dir).expect("create demo temp dir");
+    std::env::set_current_dir(&tmp_dir).expect("chdir into demo temp dir");
+    let demo_proj_name = "my_robot".to_string();
     CLI::run(Command::Init {
         name: demo_proj_name.clone(),
         template: Some("mobile_base".to_string()),
     }).unwrap();
+    println!("   (demo project generated under {})", tmp_dir.display());
 
     std::thread::sleep(Duration::from_millis(800));
 

@@ -8,11 +8,29 @@ use syn::{parse_macro_input, ItemStruct};
 
 /// #[nros::node] or #[nros_macros::node] — marks struct as NROS node
 /// Currently passthrough (SCAFFOLDED), real would generate lifecycle impl, parameter handling, etc.
+///
+/// Pass 27 fix (first real CI run, 2026-08-22): strip field-level helper attributes
+/// (`#[subscribe(...)]`, `#[publish(...)]`, `#[param(...)]`, ...) when re-emitting the
+/// struct. Rustc does not permit invoking attribute proc-macros in field position
+/// ("expected non-macro attribute, found attribute macro"), so re-emitting them
+/// verbatim broke `cargo check --workspace --all-targets` via `examples/mobile_base.rs`.
+/// Real framework codegen would CONSUME these attributes to generate wiring — stripping
+/// them here mirrors that contract and is the correct passthrough semantics: fields keep
+/// their types, the annotation data is (for now) discarded after syntactic validation.
 #[proc_macro_attribute]
 pub fn node(attr: TokenStream, item: TokenStream) -> TokenStream {
     let _attr = attr;
-    // Parse as struct to ensure it's valid, then return unchanged (passthrough)
-    let input = parse_macro_input!(item as ItemStruct);
+    // Parse as struct to ensure it's valid, then re-emit with framework field attributes consumed
+    let mut input = parse_macro_input!(item as ItemStruct);
+    const FIELD_HELPER_ATTRS: &[&str] = &[
+        "subscribe", "publish", "param", "time_sync", "compute", "interrupt",
+        "shared_state", "task", "service", "telemetry",
+    ];
+    for field in input.fields.iter_mut() {
+        field
+            .attrs
+            .retain(|a| !FIELD_HELPER_ATTRS.iter().any(|n| a.path().is_ident(*n)));
+    }
     let output = quote! { #input };
     output.into()
 }

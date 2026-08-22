@@ -172,6 +172,34 @@ documents:
     status: active
     purpose: Machine-readable contract for the documentation representation system itself.
 
+  - id: DOC-INVENTORY
+    path: docs/documentation/inventory.yaml
+    type: generated
+    authority: canonical
+    status: active
+    purpose: Machine-readable document inventory for the documentation representation system.
+
+  - id: DOC-AUTHORITIES
+    path: docs/documentation/authorities.yaml
+    type: policy
+    authority: canonical
+    status: active
+    purpose: Machine-readable catalog of document authority levels, scopes, and precedence rules.
+
+  - id: DOC-RELATIONSHIPS
+    path: docs/documentation/relationships.yaml
+    type: reference
+    authority: canonical
+    status: active
+    purpose: Machine-readable relationship graph between documented artifacts.
+
+  - id: DOC-REFERENCES
+    path: docs/documentation/references.yaml
+    type: reference
+    authority: canonical
+    status: active
+    purpose: Machine-readable bibliography of internal and external references with resolution status.
+
 invariants:
   - inventory_records_are_document_identity_not_verification_results
   - historical_audit_passes_do_not_override_current_source_of_truth

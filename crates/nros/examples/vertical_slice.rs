@@ -69,7 +69,9 @@ fn main() {
 
         // Verify ownership transfer, no copy: received_guard Derefs to &T, Drop will drop and advance
         assert!((received_guard.linear.x - twist.linear.x).abs() < 1e-9, "Message correctness");
-        assert_eq!(received_guard.frame_id(), 0); // Twist doesn't have frame_id, but for generic test
+        // Note: canonical `Twist` has no frame_id accessor — a previous `received_guard.frame_id()`
+        // assertion here was a stale copy from the HAL Image path and does not compile (E0599).
+        // Found by the first real CI execution (arena deep-analysis session, 2026-08-22).
 
         // 5. Node callback — real VelocityController::on_cmd_vel (not placeholder)
         let callback_start = Instant::now();

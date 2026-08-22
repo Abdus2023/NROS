@@ -38,6 +38,7 @@ fn check_workspace_inventory() {
     println!("Cargo.toml workspace members: {}", cargo_crates.len());
     if readme.contains("8 crates") && cargo_crates.len() >= 10 {
         println!("❌ DOC-001: stale README crate inventory");
+        std::process::exit(1);
     } else {
         println!("✅ Workspace inventory does not show the known stale-8-crates mismatch");
     }
@@ -88,5 +89,13 @@ fn check_safety_invariants() {
     let mut failures = 0;
     if core.contains("pub fn init_with<F>") { failures += 1; println!("❌ safe init_with regression"); }
     if core.contains("pub fn as_mut_ptr(&self)") && !core.contains("pub unsafe fn as_mut_ptr(&self)") { failures += 1; println!("❌ safe as_mut_ptr regression"); }
-    if failures == 0 { println!("✅ structural safety checks passed"); } else { println!("❌ {} safety regression(s)", failures); }
+    if failures == 0 {
+        println!("✅ structural safety checks passed");
+    } else {
+        println!("❌ {} safety regression(s)", failures);
+        // Pass 27 fix (first real CI run, 2026-08-22): the gate previously printed the
+        // failure but always exited 0, so a soundness regression could never fail CI.
+        // Now a hard gate, matching the semantics documented in docs/ci.yml and AUDIT.
+        std::process::exit(1);
+    }
 }

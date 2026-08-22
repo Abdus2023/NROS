@@ -279,6 +279,12 @@ pub trait PhysicsEngineTrait {
 /// Simulated physics engine — IMPLEMENTED per EVIDENCE_REGISTRY.md
 /// Status: IMPLEMENTED — custom semi-implicit Euler, fixed timestep, ground collision
 /// Real NROS would have option to use Bullet per nros.toml physics_engine=bullet
+///
+/// Pass 27 fix (first real compile of this crate, 2026-08-22): `#[derive(Debug)]` added —
+/// `BulletPhysicsEngine` derives Debug and has `inner: SimulatedPhysicsEngine`, so this type
+/// must implement Debug for the crate to compile (E0277 otherwise). Found by the offline
+/// mrustc-based verification session; this crate had never been compiled before.
+#[derive(Debug)]
 pub struct SimulatedPhysicsEngine {
     pub entities: HashMap<EntityId, Entity>,
     pub gravity: Vector3,

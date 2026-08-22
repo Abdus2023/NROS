@@ -67,6 +67,198 @@ records:
     hardware:
       status: absent
 
+  # Pass 27 (2026-08-22): records completed for every capability per schema
+  # invariant `every_capability_must_be_evidence_linked`. Test statuses marked
+  # executed_passed_offline_mrustc_2026-08-22 were run by the offline verification
+  # session (source-built compiler; independent of cargo). CI statuses remain
+  # unknown/queued because GitHub Actions runs were queued but never executed.
+  - capability: CORE-IPC-002
+    source:
+      status: absent
+    tests:
+      status: absent
+    ci:
+      status: unknown
+    miri:
+      status: not_applicable
+    benchmark:
+      status: absent
+    hardware:
+      status: absent
+
+  - capability: NODE-001
+    source:
+      status: present
+      paths:
+        - crates/nros-node/src
+    tests:
+      status: executed_passed_offline_mrustc_2026-08-22
+    ci:
+      status: unknown
+    miri:
+      status: not_run
+    benchmark:
+      status: unit_level_timing_assert_only
+    hardware:
+      status: not_applicable
+
+  - capability: NODE-002
+    source:
+      status: absent
+    tests:
+      status: absent
+    ci:
+      status: unknown
+    miri:
+      status: not_applicable
+    benchmark:
+      status: not_applicable
+    hardware:
+      status: not_applicable
+
+  - capability: HAL-001
+    source:
+      status: present
+      paths:
+        - crates/nros-hal/src
+    tests:
+      status: executed_passed_offline_mrustc_2026-08-22
+    ci:
+      status: unknown
+    miri:
+      status: not_run
+    benchmark:
+      status: absent
+    hardware:
+      status: absent
+
+  - capability: TRANSPORT-001
+    source:
+      status: present
+      paths:
+        - crates/nros-transport/src
+    tests:
+      status: executed_passed_offline_mrustc_2026-08-22
+    ci:
+      status: unknown
+    miri:
+      status: not_run
+    benchmark:
+      status: absent
+    hardware:
+      status: not_applicable_udp_loopback_only
+
+  - capability: TRANSPORT-002
+    source:
+      status: scaffolded_only
+    tests:
+      status: absent
+    ci:
+      status: unknown
+    miri:
+      status: not_run
+    benchmark:
+      status: absent
+    hardware:
+      status: not_applicable
+
+  - capability: DIST-001
+    source:
+      status: present
+      paths:
+        - crates/nros-distributed/src
+    tests:
+      status: executed_passed_offline_mrustc_2026-08-22
+    ci:
+      status: unknown
+    miri:
+      status: not_run
+    benchmark:
+      status: absent
+    hardware:
+      status: not_applicable
+
+  - capability: SIM-001
+    source:
+      status: present
+      paths:
+        - crates/nros-sim/src
+    tests:
+      status: executed_passed_offline_mrustc_2026-08-22
+    ci:
+      status: unknown
+    miri:
+      status: not_run
+    benchmark:
+      status: absent
+    hardware:
+      status: not_applicable
+
+  - capability: STUDIO-001
+    source:
+      status: present
+      paths:
+        - crates/nros-studio/src
+    tests:
+      status: executed_passed_offline_mrustc_2026-08-22
+    ci:
+      status: unknown
+    miri:
+      status: not_run
+    benchmark:
+      status: absent
+    hardware:
+      status: not_applicable
+
+  - capability: CLI-001
+    source:
+      status: present
+      paths:
+        - crates/nros-cli/src
+    tests:
+      status: executed_passed_offline_mrustc_2026-08-22_unit_and_golden_init_compile
+    ci:
+      status: unknown
+    miri:
+      status: not_applicable
+    benchmark:
+      status: absent
+    hardware:
+      status: not_applicable
+
+  - capability: AUDIT-001
+    source:
+      status: present
+      paths:
+        - crates/nros-audit/src
+    tests:
+      status: gates_executed_locally_2026-08-22
+    ci:
+      status: unknown
+    miri:
+      status: not_applicable
+    benchmark:
+      status: not_applicable
+    hardware:
+      status: not_applicable
+
+  - capability: FACADE-001
+    source:
+      status: present
+      paths:
+        - crates/nros/src
+        - crates/nros-macros/src
+    tests:
+      status: blocked_offline_syn_quote_proc_macro2_unavailable_2026-08-22
+    ci:
+      status: unknown
+    miri:
+      status: not_applicable
+    benchmark:
+      status: not_applicable
+    hardware:
+      status: not_applicable
+
 verification_state:
   workflow_definition: present_or_staged
   workflow_execution: must_be_observed
