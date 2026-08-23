@@ -7,7 +7,7 @@ identity:
   branch: arena/01a02a3e-nros
 
 source_revision:
-  commit: "0124a734d0dd70164d2f497beccd2cdf15482071"
+  commit: "cad07569e6512a517827147ae633e1f04b4ec718"
   relation: represented_repository_state
 
 snapshot_revision:
