@@ -658,6 +658,14 @@ impl TaskScheduler {
                 return Err(format!("Task {} assigned to {:?} not this node {}", task_id.0, task.assigned_to, self.node_id.0));
             }
 
+            // Pass 27 fix (F-21): guard the state transition. Previously any non-foreign
+            // task — Pending (never assigned... unreachable), Running, Completed, Failed —
+            // could be silently driven to Running again, so a completed task re-ran and
+            // stats/lifecycle double-counted. Only Assigned -> Running is legal.
+            if task.status != TaskStatus::Assigned {
+                return Err(format!("Task {} not assigned (status {}) — only Assigned tasks can start", task_id.0, task.status));
+            }
+
             task.status = TaskStatus::Running;
         }
 
@@ -934,9 +942,36 @@ mod tests {
 
     #[test]
     fn test_consistent_hash() {
-        let state = DistributedState::new(RobotId::new(1), 3);
+        // Pass 27 fix (F-22): explicit type annotation — T is never constrained here
+        // (only consistent_hash_shard is called), so real rustc rejects this with E0282
+        // under --all-targets compiles. First observed failing job: NROS CI run
+        // 32601114459 (cargo check/test/clippy/Miri all cascade on this one line).
+        // mrustc masked it: its typechecker crashed on this crate's test harness
+        // ("spare rules left" inference instability at this exact test), so the suite
+        // was previously verified via probe binaries instead.
+        let state: DistributedState<i32> = DistributedState::new(RobotId::new(1), 3);
         let shard1 = state.consistent_hash_shard("max_speed", 10);
         let shard2 = state.consistent_hash_shard("max_speed", 10);
         assert_eq!(shard1, shard2); // Same key same shard
+    }
+
+    /// Pass 27 regression (F-21): execute_task must reject every state except Assigned.
+    /// Found by adversarial probe: a completed task previously re-ran silently.
+    #[test]
+    fn test_execute_task_state_guard() {
+        let scheduler = TaskScheduler::new(RobotId::new(1), NodeCapabilities::high_end());
+        let task_id = scheduler.submit_task("misc".to_string(), 1, TaskRequirements::default());
+
+        // Pending (never assigned) must not run (assigned_to is None ≠ this node)
+        assert!(scheduler.execute_task(task_id).is_err());
+
+        scheduler.assign_task(task_id, RobotId::new(1)).unwrap();
+        scheduler.execute_task(task_id).unwrap(); // Assigned -> Running -> Completed
+
+        // Completed must NOT silently re-run (previously this returned Ok — F-21)
+        assert!(scheduler.execute_task(task_id).is_err());
+
+        let stats = scheduler.task_stats();
+        assert_eq!(stats.completed, 1, "guarded re-execution must not double-count");
     }
 }
