@@ -149,6 +149,10 @@ records:
         defect (nonblocking read_exact consuming partial prefix) found and fixed with
         per-connection buffered reader; bug->test->fix discrimination proven by splicing
         the test into the pre-fix code (fails) vs fixed code (passes byte-identical).
+        Pass 27 §11.E adds executed robustness probes (210k+ adversarial inputs):
+        header truncation sweep 0..36B, 100k garbage + 100k mutated headers, deserializer
+        truncation/garbage, TCP 64MiB-payload-starvation trap and 256KiB junk storm —
+        zero panics, zero phantom frames, no payload pre-allocation.
     ci:
       status: unknown
     miri:
@@ -179,6 +183,14 @@ records:
         - crates/nros-distributed/src
     tests:
       status: executed_passed_offline_mrustc_2026-08-22
+      note: >-
+        5 in-crate tests exist but the libtest harness hits an mrustc typechecker
+        crash (toolchain-only, documented §11.E); the same test bodies were executed
+        as probe binaries (PASS) plus 6 extended adversarial probes (election/timeout
+        discipline, CRUD+version+hash determinism+spread, scheduler lifecycle with
+        negative transitions, capability matrix, wrong-node refusal). Probe session
+        FOUND a real defect: execute_task accepted any status (completed task re-ran
+        silently) — fixed as F-21 with state-guard + regression test.
     ci:
       status: unknown
     miri:
