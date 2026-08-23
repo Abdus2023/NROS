@@ -330,3 +330,16 @@ discipline, the indeterminate-harness-crash protocol, the snapshot dance + fetch
 rationale, and the pin table for every upstream source). Compiled binaries are
 deliberately excluded — the recipe is fully deterministic from source (github/codeload
 only), and binary blobs don't belong in this repo per its storage conventions.
+
+### 11.H Sub-addendum — Second CI execution (post-F-22) and the masked-checks problem
+
+GitHub connection remained up; the heavy queue cleared. Run **32645327060** (tip `cad0756..7eb9d67`, which *includes* the F-22 fix) executed in minutes. Job matrix: provenance ✅, nros-init golden ✅; check ❌, test ❌, clippy ❌, fmt ❌ (F-18), doc-gate ❌ (F-20 unapplied), Miri ❌, benchmarks ❌ (continue-on-error).
+
+Facts extracted despite blocked logs (see below):
+
+1. **The F-22 fix did NOT clear `cargo check --workspace --all-targets`.** So a *second* masked defect exists — something mrustc accepted that real rustc rejects.
+2. **Workspace dependency resolution works on runners**: the green golden job performs `cargo build -p nros-cli`, which forces resolution of the ENTIRE workspace graph (virtual workspace, no committed Cargo.lock). So the residue is a compile-phase failure, not resolution.
+3. **mrustc performs type-checking but NOT borrow-checking** — the single biggest offline-verification blind spot made explicit. A borrowck-only rejection anywhere among the 12 crates is invisible to every offline check this pass ran, and is the leading candidate class for the residual check/clippy failures. Miri (`cargo miri setup` + scoped nros-core tests) and the scoped benchmark build could also be hit by the same class (nros-core is the rustc-strictest crate in the tree); their steps remain indeterminate from here.
+4. **Log retrieval is hard-blocked, not just flaky**: `api.github.com` 302s run/job logs to Azure blob hosts (`results-receiver.actions.githubusercontent.com`, `productionresultssa*.blob.core.windows.net`) and the sandbox egress severs TLS to them (`SSL_ERROR_SYSCALL` — same egress class as crates.io). Check-run annotations carry only `Process completed with exit code 101`, so exact error text requires a human with normal GitHub access. **Owner action, highest value for least effort: open the failing `cargo check` job log and paste the first compiler error** — one line of rustc output would localize the residual masked defect immediately.
+
+Honest status correction: §11.F's "expected next-run shape: check/clippy green" did not materialize; the prediction record is updated here rather than silently. The offline chain's guarantees remain exactly what was claimed in §1–§11.G (typeck-level equivalence verified crate-by-crate, behavior verified by execution); borrowck-equivalence was never among its guarantees and is now explicitly catalogued as the next verification gap. Two concrete paths: (a) the human-pasted log line, or (b) a future session with a real cargo/rustc toolchain fetched through an allowed egress path this sandbox doesn't have.
