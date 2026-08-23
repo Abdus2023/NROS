@@ -313,3 +313,20 @@ The sandbox's GitHub connection recovered (2026-08-23) and revealed that Actions
 **F-22 (new finding, root-caused without logs).** All three `--workspace --all-targets` jobs fail at nros-distributed's test target: `test_consistent_hash` binds `DistributedState::new(RobotId::new(1), 3)` without a type annotation and never constrains `T` (only `consistent_hash_shard` is called) → rustc `E0282: type annotations needed`. Present identically on `main` (`86bbfb5`) — pre-existing, caught here by the very first real CI run. The offline process failure is also documented: §2/§11 recorded the mrustc typechecker crash on this crate's test harness as "toolchain-only". That crash was mrustc *at this very test* — inference-spare-rules instability — i.e., the offline signal existed and was misattributed. The taxonomy is updated accordingly: a harness crash at a specific inference site must be treated as an *indeterminate* result, not a toolchain shrug. Fix: explicit `DistributedState<i32>` annotation (trivially unambiguous under cargo — inference succeeds the moment `T` is named; no other call sites are affected — verified by whole-file audit of the test module: all other tests use concrete types).
 
 **Status after this addendum's commits:** F-22 fixed and pushed. F-20's workflow edit **cannot be pushed from this sandbox** — the integration token lacks the `workflows` scope (push refusing any commit that touches `.github/workflows/`, re-verified on this addendum's own push attempt); the fix remains delivered as `docs/audit/F-20-ci-fetch-depth.patch` for a credential that carries that scope. Expected next-run shape: check/clippy green; test blocked only by F-19 (trybuild blessing — needs a human-run `TRYBUILD=overwrite` commit of `.stderr` goldens, deliberately NOT fabricated offline); fmt still owner-gated by F-18; doc-gate red until the F-20 patch lands; Miri/benchmarks verdicts await reachable job logs.
+
+### 11.G Sub-addendum — Toolchain/skill backed up into the repository
+
+The `/home/user/toolchain` build root (mrustc binaries, std tree, built NROS artifacts) is
+its second reincarnation — sandbox storage deleted the first in `/tmp` and then the whole
+persistent copy too. What CANNOT die with a sandbox is now checked in at
+**`tools/offline-mrustc/`**: the full three-stage bootstrap recipe
+(`stage1-bootstrap.sh` → `stage2-vendor-stdlib.sh` → `stage3-build-nros.sh`), the whole
+probe suite (`probes/ring-probe.rs`, `dist-probe.rs`, `microbench.rs`, `fuzz-head.rs`,
+`compile-fail.sh`), the repo-hygiene `snapshot-dance.sh`, and a README distilling every
+hard-won trick (target-version env, RUSTCSRC tarball naming, minicargo C++ patches, the
+compiler_builtins↔core scheduling edge, `-L` stdlib for downstream builds, exact
+script-override contents for the real macro chain, proc-macro-as-executable linking
+discipline, the indeterminate-harness-crash protocol, the snapshot dance + fetch-depth
+rationale, and the pin table for every upstream source). Compiled binaries are
+deliberately excluded — the recipe is fully deterministic from source (github/codeload
+only), and binary blobs don't belong in this repo per its storage conventions.
