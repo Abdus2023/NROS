@@ -343,3 +343,40 @@ Facts extracted despite blocked logs (see below):
 4. **Log retrieval is hard-blocked, not just flaky**: `api.github.com` 302s run/job logs to Azure blob hosts (`results-receiver.actions.githubusercontent.com`, `productionresultssa*.blob.core.windows.net`) and the sandbox egress severs TLS to them (`SSL_ERROR_SYSCALL` — same egress class as crates.io). Check-run annotations carry only `Process completed with exit code 101`, so exact error text requires a human with normal GitHub access. **Owner action, highest value for least effort: open the failing `cargo check` job log and paste the first compiler error** — one line of rustc output would localize the residual masked defect immediately.
 
 Honest status correction: §11.F's "expected next-run shape: check/clippy green" did not materialize; the prediction record is updated here rather than silently. The offline chain's guarantees remain exactly what was claimed in §1–§11.G (typeck-level equivalence verified crate-by-crate, behavior verified by execution); borrowck-equivalence was never among its guarantees and is now explicitly catalogued as the next verification gap. Two concrete paths: (a) the human-pasted log line, or (b) a future session with a real cargo/rustc toolchain fetched through an allowed egress path this sandbox doesn't have.
+
+### 11.I Sub-addendum — Platform-level log forensics + CI-native audit annotations
+
+**Sans-logs forensics (all reachable surfaces exhausted).** CI job-log bodies sit on Azure
+blob hosts (`results-receiver.actions.githubusercontent.com`,
+`productionresultssa*.blob.core.windows.net`); sandbox egress severs TLS there (verified
+`SSL_ERROR_SYSCALL`). Web-UI per-step log endpoints (`…/commit/<sha>/checks/<run>/logs/<n>`,
+discovered via `data-log-url` scraping) return `Not Found` without a browser session —
+installation tokens don't mint web sessions. What remains is step *timing* metadata, which
+is surprisingly specific (run 32645327060, tip `7eb9d67`, includes the F-22 fix):
+
+| Step | Duration | Reading |
+|---|---|---|
+| `cargo check --workspace --all-targets` | 7 s | fails at the first crate(s), before any dependency builds (syn/proc-macro2 cost minutes on cold runners) |
+| `cargo clippy --workspace --all-targets` | 14 s | same shape |
+| `Build benchmark` (`-p nros-core --bin bench`) | 9 s | failure inside nros-core/nros-types subtree compile |
+| Miri on nros-core (`cargo miri test -p nros-core --lib`) | 4 s | fails before any Miri interpretation — compile-phase |
+| doc-gate `cargo run -p nros-audit -- all` | 11 s | ambiguous pre-annotation-era (compile ok or representation gate F-20) |
+| golden `cargo build -p nros-cli` | ✅ | workspace dependency RESOLUTION proven healthy on the runner |
+
+Runner rustc is **1.97.1** (ubuntu-2404 image, per actions/runner-images — hosted on
+github.com, reachable). Conclusion: a residual defect lives in code compiled by both the
+`-p nros-core` jobs (bench/Miri) and the workspace jobs — i.e., nros-core/nros-types are
+the prime suspects — and it is a rustc-vs-mrustc *semantic* difference (mrustc type-checks
+but never borrow-checks, and accepts some inference ambiguities rustc rejects; see the
+F-22 process lesson). nros-types was re-audited line-by-line (plain POD types, no findings);
+format-string parity audit across all crates found 0 mismatched placeholder arities.
+
+**CI-native audit annotations (this push).** nros-audit's hard-failure paths now also emit
+`::error title=…::message` workflow commands (percent/CR/LF escaped). GitHub turns those
+stdout lines into check-run annotations — which ride `api.github.com`, not the blocked blob
+hosts. This is a product-level observability feature (useful in ANY CI), and it upgrades the
+doc-gate from "opaque exit 101" to "reason on the check-run" starting with this very push:
+the next run's annotations will discriminate F-20 (shallow-clone blob miss) from any
+nros-audit compile regression definitively. Deliberately NOT abused for rustc's errors:
+registering a problem matcher needs a workflow step, and workflow edits cannot be pushed
+with this token (F-20), so `cargo check`'s first error line still needs one human look.
