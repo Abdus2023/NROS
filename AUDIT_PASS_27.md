@@ -380,3 +380,21 @@ the next run's annotations will discriminate F-20 (shallow-clone blob miss) from
 nros-audit compile regression definitively. Deliberately NOT abused for rustc's errors:
 registering a problem matcher needs a workflow step, and workflow edits cannot be pushed
 with this token (F-20), so `cargo check`'s first error line still needs one human look.
+
+#### 11.I.1 — Annotation channel now live; doc-gate failure decoded exactly
+
+Run 32647146199 (tip `f094961..e36a488`, first push with F-23 annotations): the doc-gate
+check-run's API-readable annotations say, verbatim: `snapshot source revision resolves`,
+`snapshot manifest {architecture,capabilities,evidence,claims}.yaml exists at source
+revision`, `5 failure(s) — see FAIL lines above`. That is exactly the F-20 shallow-clone
+mechanism (pinned commit absent at depth 1), with all other 90+ representation checks
+green in the same run. Two further positives: nros-audit (with the new annotation code)
+compiles and runs on the stock image, and the doc-gate is now self-explaining for any
+future failure without log access. The ONLY remaining blocker for a green doc-gate is a
+credentialed push of `docs/audit/F-20-ci-fetch-depth.patch`.
+
+Residual for `cargo check`/`cargo test`/`cargo clippy`/`Miri`/`benchmarks` (all failing in
+4–14 s on compile of the nros-core/nros-types subtree): rustc does not emit annotation-
+formatted output and registering a matcher needs a workflow step (F-20 scope again), so
+the first rustc error line still needs one human look. Everything else in this table now
+has machine-readable, CI-native diagnostics.
