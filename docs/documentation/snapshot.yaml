@@ -7,7 +7,7 @@ repository:
   branch: main
 
 source_revision:
-  commit: 5e0ef68dc14cb0d99500e98b5ee2138fba83e5bb
+  commit: f09496127fff6e51920897c26ee9a3ffc47da399
   role: repository_state_represented
 
 representation_revision:
