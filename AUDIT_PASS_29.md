@@ -500,20 +500,23 @@ after the F29-01 fix, and
 [`32704793107`](https://github.com/Abdus2023/NROS/actions/runs/32704793107) after the
 F29-03 reformat.
 
-| Job | Base `48069dce` | After F29-01 | After F29-03 |
-|---|---|---|---|
-| **cargo test (workspace)** | **failure** (exit 101) | **success** | **success** |
-| **cargo fmt --check** | **failure** | failure | **success** |
-| cargo check (workspace, all targets) | success | success | success |
-| cargo clippy (workspace) | success | success | success |
-| nros init generates a buildable NROS project | success | success | success |
-| Provenance / SHA manifest | success | success | success |
-| Claim / evidence / representation gate | failure | failure | failure |
-| Safety gate (Miri, hard) | failure | failure | failure |
+| Job | Base `48069dce` | After F29-01 | After F29-03 | After F29-09 |
+|---|---|---|---|---|
+| **cargo test (workspace)** | **failure** (exit 101) | **success** | **success** | **success** |
+| **cargo fmt --check** | **failure** | failure | **success** | **success** |
+| **Benchmarks (report-only)** | never completed | never completed | never completed | **success** |
+| cargo check (workspace, all targets) | success | success | success | success |
+| cargo clippy (workspace) | success | success | success | success |
+| nros init generates a buildable NROS project | success | success | success | success |
+| Provenance / SHA manifest | success | success | success | success |
+| Claim / evidence / representation gate | failure | failure | failure | failure |
+| Safety gate (Miri, hard) | failure | failure | failure | failure |
 
-**6 of the 8 blocking jobs green, up from 4 of 8 on the base commit** (the ninth job,
-Benchmarks, is `continue-on-error` and report-only). Both fixes are confirmed by the real
-toolchain, not just by mrustc.
+**7 of 9 jobs green, up from 4 of 9 on the base commit** — and the ninth, `Benchmarks`,
+had never once reached a completed state before F29-09 (run `32707535971` completed it and
+uploaded a 681-byte `benchmark-results` artifact).
+
+Every fix in this pass was confirmed by the real toolchain, not only by mrustc.
 
 The two remaining red jobs are exactly the two this pass could not fix from here:
 
