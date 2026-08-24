@@ -182,7 +182,7 @@ DOCUMENTATION REPRESENTATION: PASS # exit 0
 
 ---
 
-### F29-03 (P0) — `cargo fmt --check` fails 40/40: the workspace has never been formatted. NOT FIXED (needs CI's exact rustfmt)
+### F29-03 (P0) — `cargo fmt --check` failed 40/40: the workspace had never been formatted. FIXED and confirmed by CI
 
 Measured with rustfmt compiled to WASM (`@scalar/rust-fmt` 0.2.0, `edition = 2021`):
 **27 of 33** `.rs` files under `crates/` differ from rustfmt's output. The 6 that are
@@ -194,14 +194,14 @@ Differing: every file in `nros-audit`, `nros-cli`, `nros-core` (incl. `bin/bench
 `nros-transport` (incl. `examples/compression.rs`), `nros-types`,
 `crates/nros/src/lib.rs`, `crates/nros/examples/vertical_slice.rs`.
 
-*Why this was not auto-fixed:* the WASM rustfmt's version is not necessarily the same
-build as CI's stable rustfmt, so applying its output could leave the gate red while
-producing a large, hard-to-review diff. The correct fix is one `cargo fmt --all`
-committed from a machine with the toolchain, then keeping the gate hard.
+*Resolved:* the WASM rustfmt's version could not be determined, so rather than guess, the
+reformat was committed and CI was used as the oracle. Run `32704793107` reports
+**`cargo fmt --check` → success** — CI's real stable rustfmt agrees with the output, and
+the first hard gate that had never been green is now green. See §7.
 
 ---
 
-### F29-04 (P0) — Miri gate fails 40/40; cause not decodable from this sandbox. NOT FIXED
+### F29-04 (P0) — Miri gate fails 40/40; cause not decodable from this sandbox. NOT FIXED — diagnostics patch supplied
 
 Step-level detail for job `97332119664`: `Install Miri` **success**, `Miri on nros-core`
 **failure** (exit 1), `Miri on nros-types` skipped. There is no NROS-authored
@@ -212,8 +212,28 @@ The repo's own `docs/audit/F-25-ci-miri-toolchain.patch` argues the cause is
 environmental (`RUSTUP_TOOLCHAIN=stable` outranking `rustup default nightly`) and
 switches to `rustup toolchain install nightly --component miri` + `cargo +nightly`.
 **That patch is also unapplied, and this pass could not verify its hypothesis** — so it
-was deliberately *not* applied. Note the step-level evidence above is in mild tension
-with F-25's premise: the install step *succeeded*, which is not what F-25 predicts.
+was deliberately *not* applied.
+
+The step-level evidence is in direct tension with F-25's premise: if the `miri` component
+were unavailable, the `cargo miri setup` inside that same `Install Miri` step would have
+failed, and it did not. And F-25 has never been exercised — the branch whose run is
+titled "apply F-25 Miri toolchain fix" (`arena/01a03242-nros` @ `dee4f028`) contains no
+`ci.yml` change at all; its only files are `AUDIT_PASS_28.md` and one `.arena/` file.
+
+Two candidate explanations remain, and they have very different severity:
+
+1. `cargo miri` is not resolvable in the step that runs it → a toolchain problem.
+2. `cargo miri` runs and **finds undefined behaviour in `nros-core`** → a P0 soundness
+   bug in the `MaybeUninit` / `drop_in_place` / raw-pointer code, which is precisely the
+   code this repository's safety case rests on. Miri is the only gate that can see it.
+
+**Supplied:** `docs/audit/F-29-ci-miri-diagnostics.patch` — a gate-semantics-neutral
+change that adds a read-only toolchain probe (`cargo miri --version`, `rustup show`,
+`RUSTUP_TOOLCHAIN`) and mirrors the Miri failure reason into workflow-command
+annotations, which ride the API instead of the blob host and are readable with
+`gh api repos/Abdus2023/NROS/check-runs/<job-id>/annotations`. It applies cleanly to the
+current `ci.yml` (`git apply --check` verified). It answers the question above in one CI
+cycle. It is not pushed for the same reason as F-20: no `workflows` scope.
 
 ---
 
@@ -375,12 +395,16 @@ tag diverge from the one `library/alloc` asked for.
 
 ## 5. What remains NOT verified
 
-* **`cargo fmt --check`, `cargo check`, `cargo test`, `cargo clippy`, `cargo miri` with
-  the real toolchain.** No rustc/rustfmt/clippy/miri is obtainable here. Everything in
-  §4 was produced by mrustc 1.90-mode, which does not borrow-check and is not Miri.
-  F29-01's fix is therefore verified *behaviourally* (240+ runs), not by Miri.
-* **The cause of the Miri failure** (F29-04) — logs are on a blocked host.
-* **Whether the WASM rustfmt's output matches CI's stable rustfmt** (F29-03).
+* **Borrow-checking and Miri.** No rustc, clippy or miri is obtainable here. Everything
+  in §4 was produced by mrustc in 1.90 mode, which does not borrow-check and is not Miri.
+  `cargo check`, `cargo test`, `cargo clippy` and `cargo fmt` *were* exercised by the
+  real toolchain in CI on this branch (§5b); `cargo miri` was not, and cannot be from
+  here. F29-01's fix is therefore verified behaviourally (240+ local runs, plus a green
+  `cargo test` in CI), not by Miri.
+* **The cause of the Miri failure** (F29-04). Job logs are on a blocked blob host, so it
+  is still unknown whether `cargo miri` is even resolvable in CI, or whether it is
+  reporting real undefined behaviour in `nros-core`.
+  `docs/audit/F-29-ci-miri-diagnostics.patch` settles that in one run.
 * **Benchmarks as performance claims.** The numbers in `benchmarks/results.json` remain
   repository-reported; nothing in this pass independently validates the
   "6.2 μs / 780K msg/s" or "46× latency" claims, and `nros-core`'s in-tree
@@ -392,24 +416,33 @@ tag diverge from the one `library/alloc` asked for.
 
 ## 5b. Independent confirmation from real CI on this branch
 
-Pushing this branch triggered run
-[`32702101917`](https://github.com/Abdus2023/NROS/actions/runs/32702101917)
-(`arena/01a0325b-nros`), i.e. the *real* toolchain on GitHub-hosted runners:
+Pushing this branch triggered two runs on GitHub-hosted runners, i.e. the *real*
+toolchain: [`32702101917`](https://github.com/Abdus2023/NROS/actions/runs/32702101917)
+after the F29-01 fix, and
+[`32704793107`](https://github.com/Abdus2023/NROS/actions/runs/32704793107) after the
+F29-03 reformat.
 
-| Job | Base `48069dce` | This branch |
-|---|---|---|
-| **cargo test (workspace)** | **failure** (exit 101) | **success** |
-| cargo check (workspace, all targets) | success | success |
-| cargo clippy (workspace) | success | success |
-| nros init generates a buildable NROS project | success | success |
-| Provenance / SHA manifest | success | success |
-| cargo fmt --check | failure | failure (F29-03, not fixed) |
-| Claim / evidence / representation gate | failure | failure (F29-02 fix not pushable) |
-| Safety gate (Miri, hard) | failure | failure (F29-04, not fixed) |
+| Job | Base `48069dce` | After F29-01 | After F29-03 |
+|---|---|---|---|
+| **cargo test (workspace)** | **failure** (exit 101) | **success** | **success** |
+| **cargo fmt --check** | **failure** | failure | **success** |
+| cargo check (workspace, all targets) | success | success | success |
+| cargo clippy (workspace) | success | success | success |
+| nros init generates a buildable NROS project | success | success | success |
+| Provenance / SHA manifest | success | success | success |
+| Claim / evidence / representation gate | failure | failure | failure |
+| Safety gate (Miri, hard) | failure | failure | failure |
 
-So F29-01's fix is confirmed by rustc and the real test harness, not only by mrustc:
-`cargo test` went from failing on the base commit to green. The three remaining red jobs
-are exactly the three this pass reports as unfixed, for the reasons given.
+**6 of the 8 blocking jobs green, up from 4 of 8 on the base commit** (the ninth job,
+Benchmarks, is `continue-on-error` and report-only). Both fixes are confirmed by the real
+toolchain, not just by mrustc.
+
+The two remaining red jobs are exactly the two this pass could not fix from here:
+
+* **Representation gate** — the fix (F-20) is verified but not pushable; see F29-02.
+* **Miri** — see F29-04. The step signature is unchanged by anything in this pass (which
+  does not touch `nros-core`'s unsafe code): `Install Miri` **success**,
+  `Miri on nros-core` **failure**, `Miri on nros-types` skipped.
 
 ## 6. Changes made in this pass
 
@@ -423,6 +456,7 @@ are exactly the three this pass reports as unfixed, for the reasons given.
 | `tools/offline-mrustc/stage2-vendor-stdlib.sh` | F29-05 items 6–9; §3 pin-table correction |
 | `tools/offline-mrustc/stage3-build-nros.sh` | F29-05 item 10 (suites now actually run, and fail the stage) |
 | `tools/offline-mrustc/README.md` | Pinning facts corrected to the real 1.90.0 lockfile; new tricks recorded |
+| `docs/audit/F-29-ci-miri-diagnostics.patch` | F29-04 — gate-neutral diagnostics that make the Miri failure reason readable via the API; `git apply --check` verified |
 | 26 `.rs` files under `crates/` | F29-03 — reformatted; see §7. Formatting-only, no behaviour change; `tests/compile_fail/` fixtures excluded |
 
 ## 7. The rustfmt reformat (F29-03)
@@ -445,11 +479,11 @@ against the reformatted tree — 54 tests pass, 6 demos, both golden templates, 
 examples (real `#[nros::node]` expansion), and all five probe suites still pass, with
 `STAGE3_COMPLETE` / exit 0.
 
-**The remaining uncertainty is honest and specific:** the rustfmt used here is a WASM
-build whose version could not be determined, so it may disagree with CI's stable rustfmt
-on some detail. That is checkable in one CI cycle — the `cargo fmt --check` job on this
-branch is the oracle. If it stays red, `git revert` the formatting commit; the diff is
-formatting-only and carries no behaviour change.
+**Adjudicated by CI:** the rustfmt used here is a WASM build whose version could not be
+determined, so instead of asserting that its output matches CI's stable rustfmt, the
+reformat was pushed and the real gate was allowed to decide. Run `32704793107` reports
+**`cargo fmt --check` → success**. The diff is formatting-only and carries no behaviour
+change, which the local stage-3 re-run confirms independently.
 
 ## 8. Not changed, deliberately
 
