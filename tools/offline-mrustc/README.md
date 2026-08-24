@@ -26,12 +26,22 @@ bash stage1-bootstrap.sh        # zlib, mrustc (master), rustc-1.90.0 source tre
 bash stage2-vendor-stdlib.sh    # vendored std deps + macro chain from GitHub tag tarballs
 bash stage3-build-nros.sh       # NROS rlibs/tests/demos/golden + real-macro facade + probes
 bash probes/compile-fail.sh     # negative-compile parity check (trybuild equivalent)
+bash probes/sanitizer.sh        # ASan+UBSan over every unit-test suite (Pass 29)
 bash snapshot-dance.sh          # 2-commit snapshot re-pin discipline (repo hygiene)
 ```
 
 Stage 3 auto-runs the probe binaries at the end. Expected good output ends with:
 `ALL RING PROBES PASS`, `ALL DISTRIBUTED PROBES PASS`, `MICROBENCH OK`,
 `ALL ROBUSTNESS PROBES PASS`, `ALL COMPILE-FAIL PROBES PASS`.
+
+`probes/sanitizer.sh` is run separately (it needs stage 3's `_cmd.txt` files) and should
+end with `ALL SANITIZER PROBES CLEAN`. It exists because Miri is the only UB detector in
+CI and has never passed: mrustc emits C, so the generated sources can be recompiled with
+`-fsanitize=address,undefined` and the unsafe ring code gets real memory-safety coverage.
+It is **not** a Miri substitute — it cannot see uninitialized reads or Rust-specific UB —
+and its header says so. Leak detection is excluded from the verdict because mrustc's
+libstd port leaks a fixed amount from `std::thread::Thread::new` in every binary; the
+script prints that attribution so it stays visible.
 
 ## The tricks (each one cost real debugging time — do not relearn them)
 

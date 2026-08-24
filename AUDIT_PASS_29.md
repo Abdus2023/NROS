@@ -446,6 +446,58 @@ measurements now in hand (F29-10), the `~Xμs` placeholder could finally be fill
 No claim was strengthened anywhere. Every edit either scopes a claim down or replaces an
 unverified number with a measured one plus its conditions.
 
+### F29-12 (P1) — no executed memory-safety evidence existed for `nros-core`'s unsafe code. SANITIZER PASS ADDED
+
+Miri is the only UB detector wired into CI and it has never produced a passing result
+(F29-04), and loom was never wired up at all. So the crate that carries the whole safety
+case — `MaybeUninit`, `drop_in_place`, raw pointer arithmetic over a shared ring — had
+**zero executed memory-safety evidence**.
+
+That gap is narrower than it looks. mrustc emits C, so the generated sources can simply be
+recompiled with gcc's sanitizers; no Rust toolchain is needed. Done:
+
+**All 8 suites, 54 tests, rebuilt with `-fsanitize=address,undefined
+-fno-sanitize-recover=all` and run: zero sanitizer reports.** No heap-buffer-overflow, no
+use-after-free, no double-free, no UBSan diagnostic (misalignment, signed overflow, null
+deref, invalid shift).
+
+```
+CLEAN test-nros_types-asan      4 passed      CLEAN test-nros_sim-asan        7 passed
+CLEAN test-nros_core-asan      20 passed      CLEAN test-nros_transport-asan  8 passed
+CLEAN test-nros_node-asan       5 passed      CLEAN test-nros_cli-asan        3 passed
+CLEAN test-nros_hal-asan        4 passed      CLEAN test-nros_studio-asan     3 passed
+```
+
+LeakSanitizer does report 1877 bytes leaked at exit from `test-nros_core-asan`. That was
+chased down rather than assumed away, and it is **not** NROS:
+
+* a control binary with no unsafe code at all (`test-nros_types-asan`, 4 trivial tests)
+  leaks 317 bytes in 8 allocations, so there is a fixed runtime baseline;
+* **0 leak frames have a symbol naming `RingBuffer`**;
+* the deepest recurring frame is `std::thread::Thread::new`, and the only test function
+  appearing in any leak stack is `test_spsc_ordering` — the one that spawns threads.
+  Per-thread `Thread` objects are not freed by the mrustc libstd port;
+* the drop-accounting tests that would catch a ring leak
+  (`test_generic_t_destruction`, `test_drop_drains_all_occupied_slots`,
+  `test_zst_with_drop_dropped_exactly_once`) all pass.
+
+Two measurement errors of my own were caught and corrected while doing this, both of which
+would have produced a false claim: grepping raw ASan frame lines matches the *binary path*
+(`.../test-nros_core-asan+0x…`), which reported 96 "nros_core frames" where the true count
+is 0; and this binary's crate mangles as `bin`, not `nros_core`, so the crate name is not a
+usable symbol match at all. The committed probe extracts the symbol only.
+
+**This is not a Miri substitute, and the probe says so in its header.** ASan/UBSan do not
+detect reading uninitialized memory (that is MemorySanitizer, which needs every object file
+including libstd plus an instrumented libc — not practical here), nor Rust-specific UB with
+no C analogue: invalid reference or `&mut` alias construction, invalid enum discriminants,
+`Pin` violations. A clean run narrows the risk; it does not close the Miri gap.
+
+**Deliverable:** `tools/offline-mrustc/probes/sanitizer.sh` — rebuilds every test binary
+from mrustc's generated C with sanitizers, runs them, fails on any report, and prints the
+leak attribution so the runtime baseline stays visible instead of being silently ignored.
+Verified end-to-end: `ALL SANITIZER PROBES CLEAN`, exit 0.
+
 ## 3. The stage-2 pin table vs the real 1.90.0 lockfile
 
 The README's "Pinning facts (verified during Pass 27)" list does not match
@@ -497,6 +549,7 @@ tag diverge from the one `library/alloc` asked for.
 | Real macro chain + facade | minicargo over `crates/nros/`, then both examples | built and ran |
 | Benchmark harness | `nros-core --bin bench`, 100 000 iterations ×6 | completes, `sent == received == 100000` (after F29-09) |
 | Same-thread ring cost | `probes/microbench.rs` | 110.90 ns/op, 9.02M msg/s (Pass 27: 112 ns/op) |
+| Memory safety (ASan+UBSan) | `probes/sanitizer.sh`, all 8 suites | **0 sanitizer reports**; leaks attributed to the mrustc libstd port, not NROS |
 | Claim/evidence/representation | `nros-audit all` | exit 0, 354 PASS, 0 FAIL |
 | Documentation representation | `scripts/validate-documentation-representation.py` | `DOCUMENTATION REPRESENTATION: PASS`, exit 0 |
 | README ↔ CI consistency | 10 documented gates vs `ci.yml` | all present; 12 workspace members as claimed; clippy report-only as documented; benchmarks `continue-on-error` as documented |
@@ -507,8 +560,9 @@ tag diverge from the one `library/alloc` asked for.
   in §4 was produced by mrustc in 1.90 mode, which does not borrow-check and is not Miri.
   `cargo check`, `cargo test`, `cargo clippy` and `cargo fmt` *were* exercised by the
   real toolchain in CI on this branch (§5b); `cargo miri` was not, and cannot be from
-  here. F29-01's fix is therefore verified behaviourally (240+ local runs, plus a green
-  `cargo test` in CI), not by Miri.
+  here. F29-12 partially substitutes — ASan+UBSan over all 54 tests found nothing — but
+  that covers heap errors, not uninitialized reads or Rust-specific UB. F29-01's fix is
+  verified behaviourally (240+ local runs, plus a green `cargo test` in CI), not by Miri.
 * **The cause of the Miri failure** (F29-04). Job logs are on a blocked blob host, so it
   is still unknown whether `cargo miri` is even resolvable in CI, or whether it is
   reporting real undefined behaviour in `nros-core`.
@@ -573,6 +627,7 @@ The two remaining red jobs are exactly the two this pass could not fix from here
 | `benchmarks/results_e2b-sandbox-2vcpu_20260824.json` | F29-10 — real, environment-stamped artifact with the scheduler-bound caveat and the conclusion on the published claims |
 | `README.md`, `COMPARISON.md`, `EVIDENCE_REGISTRY.md` | F29-11 — the downgrade the registry had already ordered, applied; measured numbers replace the unverified ones |
 | `docs/audit/verification.json` | F29-11 — rewritten from "every gate NOT_RUN" to the executed status of all eleven gates, with run IDs |
+| `tools/offline-mrustc/probes/sanitizer.sh` | F29-12 — new: rebuild every test binary from mrustc's generated C with ASan+UBSan, run them, and attribute any leak |
 | 26 `.rs` files under `crates/` | F29-03 — reformatted; see §7. Formatting-only, no behaviour change; `tests/compile_fail/` fixtures excluded |
 
 ## 7. The rustfmt reformat (F29-03)

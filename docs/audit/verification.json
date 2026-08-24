@@ -46,7 +46,8 @@
         "cargo miri is not resolvable in that step -> toolchain problem",
         "cargo miri runs and reports real undefined behaviour in nros-core's MaybeUninit / drop_in_place / raw-pointer code -> P0 soundness bug in the code the safety case rests on"
       ],
-      "next_step": "git apply docs/audit/F-29-ci-miri-diagnostics.patch - gate-semantics-neutral; adds a read-only toolchain probe and mirrors the failure reason into workflow-command annotations, which ride the API rather than the blob host. Answers the question in one run. Not pushed: the app token lacks the workflows scope."
+      "next_step": "git apply docs/audit/F-29-ci-miri-diagnostics.patch - gate-semantics-neutral; adds a read-only toolchain probe and mirrors the failure reason into workflow-command annotations, which ride the API rather than the blob host. Answers the question in one run. Not pushed: the app token lacks the workflows scope.",
+      "partial_substitute": "F29-12: all 8 unit-test suites (54 tests) were rebuilt from mrustc's generated C with -fsanitize=address,undefined -fno-sanitize-recover=all and run clean - zero sanitizer reports, so no heap-buffer-overflow, use-after-free, double-free or UBSan diagnostic in nros-core's unsafe ring code. LeakSanitizer's 1877 bytes at exit were attributed away from NROS: a no-unsafe control binary leaks 317 bytes of the same kind, 0 leak frames have a symbol naming RingBuffer, the deepest recurring frame is std::thread::Thread::new and the only test in any leak stack is the thread-spawning test_spsc_ordering. Repeatable via tools/offline-mrustc/probes/sanitizer.sh. THIS IS NOT A MIRI SUBSTITUTE: it cannot detect uninitialized reads (MemorySanitizer, impractical here) nor Rust-specific UB such as invalid &mut aliasing or invalid enum discriminants."
     },
     "loom": {
       "status": "NOT_RUN",
@@ -128,7 +129,8 @@
         "guard_contention": true,
         "thread_handoff": true,
         "miri": false,
-        "loom": false
+        "loom": false,
+        "asan_ubsan": "true (Pass 29, F29-12) - all 54 tests clean under ASan+UBSan"
       },
       "E_Performance": {
         "actual_per_message_timestamps": true,
@@ -151,5 +153,5 @@
       }
     }
   },
-  "overall_verdict": "Substantially improved and now evidenced rather than asserted. On this branch 7 of 9 CI jobs are green against 4 of 9 on the base commit: fmt, check, test, clippy, nros-init golden, provenance and benchmarks all pass on the real toolchain. Two defects that produced false confidence were found and fixed: the test suite was nondeterministic because TcpTransport::receive discarded complete frames on peer EOF (F29-01), and the benchmark binary hung intermittently so its CI job never completed (F29-09). The published performance claims were downgraded to match the executed evidence (F29-10), which is what EVIDENCE_REGISTRY.md had already required. Two gates remain red and both are blocked by permissions rather than by unknowns in the data: the representation gate needs docs/audit/F-20-ci-fetch-depth.patch applied by someone with the `workflows` scope (the snapshot data is provably correct and the gate passes locally), and the Miri gate's cause cannot be decoded without job logs - docs/audit/F-29-ci-miri-diagnostics.patch settles it in one run. Until Miri is green, no soundness claim about nros-core's unsafe code should be treated as verified, because Miri is the only UB detector wired into this CI and neither Miri nor loom has ever produced a passing result here."
+  "overall_verdict": "Substantially improved and now evidenced rather than asserted. On this branch 7 of 9 CI jobs are green against 4 of 9 on the base commit: fmt, check, test, clippy, nros-init golden, provenance and benchmarks all pass on the real toolchain. Two defects that produced false confidence were found and fixed: the test suite was nondeterministic because TcpTransport::receive discarded complete frames on peer EOF (F29-01), and the benchmark binary hung intermittently so its CI job never completed (F29-09). The published performance claims were downgraded to match the executed evidence (F29-10), which is what EVIDENCE_REGISTRY.md had already required. Two gates remain red and both are blocked by permissions rather than by unknowns in the data: the representation gate needs docs/audit/F-20-ci-fetch-depth.patch applied by someone with the `workflows` scope (the snapshot data is provably correct and the gate passes locally), and the Miri gate's cause cannot be decoded without job logs - docs/audit/F-29-ci-miri-diagnostics.patch settles it in one run. Until Miri is green, no soundness claim about nros-core's unsafe code should be treated as fully verified: Miri is the only UB detector wired into this CI and neither Miri nor loom has ever produced a passing result here. Pass 29 narrowed that gap rather than closing it - all 54 tests run clean under ASan+UBSan (F29-12, tools/offline-mrustc/probes/sanitizer.sh), which rules out heap corruption and the common UBSan classes but cannot see uninitialized reads or Rust-specific UB such as invalid &mut aliasing."
 }
