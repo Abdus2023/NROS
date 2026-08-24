@@ -133,7 +133,7 @@ fn diag_emit(title: &str, msg: &str) {
     let mut cur = String::new();
     for c in cleaned.chars() {
         cur.push(c);
-        if cur.len() >= 1900 {
+        if cur.len() >= 8000 {
             chunks.push(std::mem::take(&mut cur));
         }
     }
@@ -311,15 +311,21 @@ fn ci_diag_harvest_trybuild_wip() {
         diag_emit("Pass27-DIAG trybuild", "no wip/*.stderr produced");
         return;
     }
-    diag_emit("Pass27-DIAG trybuild", &format!("{} wip stderr file(s) found", files.len()));
-    // DATA FIRST: file contents before any further ceremony (the silent killer
-    // has consistently struck within ~30s of this point in earlier iterations).
+    // DATA FIRST, MAX DENSITY: the environmental killer cuts emission by time,
+    // not by bytes — concatenate ALL files into one burst (big chunks, no pacing
+    // sleeps). Chunk labels carry the file boundaries for transcription.
+    let mut bundle = format!("WIP-FILES count={}\n", files.len());
     for fp in files.iter().take(8) {
         let content = std::fs::read_to_string(fp).unwrap_or_default();
-        diag_emit(&format!("Pass27-DIAG file {}", fp.display()), &content);
-        std::thread::sleep(std::time::Duration::from_secs(1));
+        bundle.push_str(&format!(
+            "\n<<<BEGIN-FILE {}>>>\n{}\n<<<END-FILE {}>>>\n",
+            fp.display(),
+            content,
+            fp.display()
+        ));
     }
-    let tail: String = log.chars().rev().take(2500).collect::<String>().chars().rev().collect();
+    diag_emit("Pass27-DIAG wip-bundle", &bundle);
+    let tail: String = log.chars().rev().take(1200).collect::<String>().chars().rev().collect();
     diag_emit("Pass27-DIAG trybuild", &format!("log tail:\n{}", tail));
 }
 
