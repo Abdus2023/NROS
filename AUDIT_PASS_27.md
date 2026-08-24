@@ -398,3 +398,68 @@ Residual for `cargo check`/`cargo test`/`cargo clippy`/`Miri`/`benchmarks` (all 
 formatted output and registering a matcher needs a workflow step (F-20 scope again), so
 the first rustc error line still needs one human look. Everything else in this table now
 has machine-readable, CI-native diagnostics.
+
+#### 11.I.2 — Self-serve diagnostic channel; residual compile defect found & fixed (F-24); check/clippy green
+
+The §11.I.1 standoff (rustc error line invisible without human log access) was broken
+without workflow edits and without asking the user for logs, using a rule made possible
+by the repo layout: **nros-audit is executed by the governance CI job, has zero
+dependencies, and compiles even when other workspace members are broken.** Temporary,
+CI-env-gated, clearly-flagged diagnostic code (Pass27-DIAG, removed in finalization)
+was added to its `all` subcommand: spawn the red CI commands as subprocesses inside the
+job and re-emit their output as escaped `::error` workflow commands, which surface as
+API-readable check-run annotations (logs ride blocked Azure blob hosts; annotations
+ride api.github.com).
+
+**Iteration log (each push = one CI run, full honesty):**
+
+| # | Run | Result |
+|---|---|---|
+| diag#1 | 32675569678 | Worked. Delivered the exact residual defect verbatim (below). |
+| diag#2 | 32676158182 | Added trybuild wip harvest (F-19). Emitted NOTHING beyond the check diagnostics — channel loss. |
+| diag#3 | 32676713846 | Phase markers proved loss is at the channel, not the process: begin+output of phase 1 arrived, the "end ok" marker microseconds later (and everything after) vanished. |
+| diag#4 | 32677310447 | **Root cause found: raw ANSI/ESC bytes inside command messages poison the runner's workflow-command stream.** ANSI-stripping restored the full check phase (status Some(0), zero error lines). But the process died inside the trybuild phase 35 s in, before gates (their annotations missing too), with no panic payload. |
+| diag#5 | 32677804243 | Heartbeat markers + panic hook + agent-drain sleeps (evidence points to loss of last-~2s pre-exit emissions). In flight — token expiry interrupted observation (see below). |
+
+**F-24 (the residual compile defect, located verbatim by diag#1):**
+`error[E0596]: cannot borrow `this` as mutable, as it is not declared as mutable`
+at `crates/nros-core/src/lib.rs:291:34` — `ptr::drop_in_place((*this.ptr).as_mut_ptr())`
+inside the Pass-27 `abort_initialized` ManuallyDrop fix. Mechanism: the receiver place
+resolves `this.ptr` *through `ManuallyDrop`'s `Deref`*; rustc then requires `DerefMut`
+for the mutably-borrowed place expression, i.e. an `&mut this`, which an immutable
+binding cannot provide. mrustc accepted it — exactly the predicted blind-spot class
+(no borrow checking; §11.H item 3). Fix (commit `8e1133e`): read the raw slot pointer
+and ring reference out through the shared Deref (Copy fields) into locals, then deref
+the locals — `this` is never mutably borrowed. Sibling audit: no other ManuallyDrop
+field-access-mutation sites exist in the workspace.
+
+**Result on real rustc 1.97.1 (two independent runs, 32676158182 & 32676713846):**
+- `cargo check --workspace --all-targets` ✅ **SUCCESS**
+- `cargo clippy --workspace --all-targets` ✅ **SUCCESS** (warnings only, no -D in the job)
+- golden `nros init` ✅, provenance ✅ (unchanged)
+- benchmarks job: builds bench again (was blocked by the same defect)
+- `cargo test --workspace --all-targets` ❌ — remaining known cause: F-19 (un-blessed
+  trybuild .stderr), harvest in flight over the diag channel; runner-matched
+  blessing without workflow edits is the goal
+- Miri ❌ — now reaches actual interpretation; verdict being decoded via diag#5
+- fmt ❌ F-18 (owner decision), doc-gate ❌ F-20 (needs credentialed push of the
+  fetch-depth patch)
+
+**Engineering lessons (recorded for the toolchain skill):**
+1. Workflow-command annotations are a general, no-workflow-edit, self-serve CI
+   observability channel — but **never embed raw ANSI/ESC bytes** in command messages
+   (strip CSI/OSC first), and drain (sleep a few seconds) before letting the emitting
+   process exit, or last-moment commands are silently dropped by the agent.
+2. The mrustc borrow-check blind spot is no longer theoretical debt: it was the
+   precise cause of a multi-day CI red streak in this pass, and is now catalogued with
+   a worked example (F-24's Deref-through-ManuallyDrop mutability).
+3. diag instrumentation must be panic-isolated per phase (a silent death inside one
+   phase must not mute the rest) and heartbeat-marker instrumented (channel loss
+   becomes distinguishable from process death).
+
+**Environmental interruption:** mid-iteration, the sandbox's GitHub App token expired
+(401 Bad credentials on both `gh` API and `git` transport). diag#5's annotation
+payloads (trybuild wip files for F-19, Miri verdict, test-suite confirmation) are
+queued for reading as soon as the GitHub connection is re-established; all local
+content commits are ready. Nothing was lost: every intermediate state is a pushed
+commit.
