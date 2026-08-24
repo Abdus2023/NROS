@@ -66,3 +66,52 @@ fn loom_spsc_two_message_handoff() {
         assert_eq!(received, vec![0, 1]);
     });
 }
+
+/// Guard-based zero-copy path under preemption: allocate/commit on one thread,
+/// guard-drop (release + index advance) interleaved with the next reservation.
+/// Checks exactly-once delivery and absence of slot aliasing when the buffer
+/// wraps (capacity 1 forces maximal slot reuse).
+#[test]
+fn loom_spsc_guard_protocol_wraparound() {
+    loom::model(|| {
+        let (producer, consumer) = channel::<u64>(1);
+
+        let producer_thread = thread::spawn(move || {
+            for value in [10u64, 20] {
+                loop {
+                    match producer.allocate() {
+                        Some(guard) => {
+                            guard.write_value(value).commit();
+                            break;
+                        }
+                        None => thread::yield_now(),
+                    }
+                }
+            }
+        });
+
+        let consumer_thread = thread::spawn(move || {
+            let mut received = Vec::new();
+            while received.len() < 2 {
+                if let Some(guard) = consumer.try_recv() {
+                    received.push(*guard);
+                    // Hold the read guard across a scheduling point so loom
+                    // explores producer reservation attempts while the slot is
+                    // still owned by this guard, then drop to release it.
+                    thread::yield_now();
+                    drop(guard);
+                } else {
+                    thread::yield_now();
+                }
+            }
+            received
+        });
+
+        producer_thread.join().unwrap();
+        let received = consumer_thread.join().unwrap();
+
+        // Exactly-once FIFO delivery survives every interleaving of index
+        // wraparound, reservation retries and guard-drop release.
+        assert_eq!(received, vec![10, 20]);
+    });
+}
