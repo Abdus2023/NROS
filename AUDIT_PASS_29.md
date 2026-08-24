@@ -408,6 +408,22 @@ fixed binary at commit `835165df`, following the repo's own
 `results_<host>_<date>.json` convention, with the environment, the scheduler-bound
 caveat, the same-thread figure, and the conclusion stated in its `notes`.
 
+**Loose end closed.** `nros-core`'s in-tree `benchmark_latency_monotonic` pushed a
+hard-coded `1000` into its latency vector with a `TODO` beside it, then printed a note
+admitting the numbers meant nothing — worse than no benchmark, because it reads like a
+measurement. It now uses the same publish-`Instant` technique as `bench.rs`, with both
+F29-09 lessons applied (enqueue before commit; terminate on messages received). Run
+explicitly it produces real figures and terminates:
+
+```
+Throughput: 3450431 msg/s, elapsed: 28.98ms, latency samples: 100000
+Latency us - mean 186.06, p50 190.52, p95 337.23, p99 360.69, max 396.78
+```
+
+`latency samples: 100000` is the check that matters — every sample is accounted for, so
+the exit condition is reachable. The mean corroborates the `bench` binary's 156–235 μs
+range independently. It stays `#[ignore]`d, so `cargo test` is unaffected.
+
 **What this does and does not establish.** It does not prove the ring is slow — 110 ns/op
 same-thread is a good number and it reproduces. It does establish that **no executed
 measurement in this repository has ever produced 6.2 μs**, so the README's "Prototype
@@ -571,8 +587,8 @@ tag diverge from the one `library/alloc` asked for.
   never measured by anything, but the converse does not follow either: a shared,
   unpinned 2-vCPU sandbox cannot validate a "<10 μs" real-time target. Confirming that
   needs CPU pinning on the target hardware. Separately, `nros-core`'s in-tree
-  `benchmark_latency_monotonic` still pushes a hard-coded `1000` with a `TODO` where the
-  real publish-instant delta belongs.
+  (`benchmark_latency_monotonic`'s hard-coded `1000` has since been replaced with a real
+  measurement — see F29-10.)
 * **Anything requiring hardware.** HAL DMA remains `SimulatedDmaBuffer`.
 
 ---

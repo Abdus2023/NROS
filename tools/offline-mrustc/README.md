@@ -202,6 +202,12 @@ Still accurate from Pass 27:
     `minicargo.mk` re-links `bin/mrustc` through a recursive make that does not inherit
     stage 1's command-line `LINKFLAGS`. Export `CPATH` / `LIBRARY_PATH` /
     `LD_LIBRARY_PATH` (all three stages do this when `/usr/include/zlib.h` is absent).
+26. **mrustc's libtest clone does not honour a bare `--ignored`.** Running
+    `./test-nros_core -- --ignored` reports `0 passed; 21 filtered out` — it filters
+    *everything* out. Use a filter together with `--include-ignored`:
+    `./test-nros_core benchmark_latency_monotonic --include-ignored --nocapture`.
+    (`--help` does list `--ignored`, so this is easy to misread as a working flag.)
+
 25. **Verify path rewrites, don't assume them.** The stage-2 path fixups now rewrite by
     *crate name* and then assert that every remaining `path = "..."` in the in-tree
     copies resolves on disk. Silent no-op `sed` rewrites are what made the old block

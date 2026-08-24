@@ -1119,24 +1119,52 @@ mod tests {
 
     mod benchmarks {
         use super::*;
+        use std::time::Instant;
         #[test]
         #[ignore]
         fn benchmark_latency_monotonic() {
-            // Real latency measurement with monotonic clock, not synthetic 1000 ns
+            // Real end-to-end latency via a monotonic clock.
+            //
+            // Pass 29: this used to push a hard-coded `1000` into the latency vector with a
+            // TODO beside it, then print a note admitting the numbers meant nothing. That is
+            // worse than having no benchmark, because the code reads like a measurement. It
+            // now uses the same technique as `src/bin/bench.rs`, the canonical artifact
+            // generator: the producer records an `Instant` in a shared queue and the
+            // consumer subtracts it on receipt.
+            //
+            // Two details are carried over from the F29-09 fix in bench.rs and matter here
+            // just as much:
+            //   - the instant is enqueued BEFORE commit, so the consumer can never observe a
+            //     message whose instant is not yet queued; and
+            //   - the consumer terminates on messages RECEIVED, not on samples recorded, so
+            //     termination cannot depend on the queue staying in step. Without that, one
+            //     race makes the loop condition permanently unreachable and the benchmark
+            //     hangs — which is exactly what bench.rs did before F29-09.
+            //
+            // Cross-thread latency on a shared machine is dominated by scheduling, not by the
+            // ring. For the ring's own cost use
+            // tools/offline-mrustc/probes/microbench.rs (same-thread, ~110 ns/op).
             let capacity = 1024;
             let (producer, consumer) = channel::<Twist>(capacity);
             let iterations = 100_000;
             let latencies = Arc::new(std::sync::Mutex::new(Vec::with_capacity(iterations)));
             let lat_clone = latencies.clone();
+            let publish_queue: Arc<std::sync::Mutex<std::collections::VecDeque<Instant>>> = Arc::new(
+                std::sync::Mutex::new(std::collections::VecDeque::with_capacity(iterations)),
+            );
+            let queue_clone = publish_queue.clone();
 
             let consumer_thread = thread::spawn(move || {
                 let mut local_lats = Vec::with_capacity(iterations);
-                while local_lats.len() < iterations {
-                    if let Some(guard) = consumer.try_recv() {
-                        // In real bench, Twist would contain publish Instant
-                        // For now, we measure inter-arrival time as proxy, not true end-to-end
-                        // Real implementation would embed MonotonicTimestamp in message
-                        local_lats.push(1000); // TODO: replace with real publish Instant delta
+                let mut received = 0usize;
+                while received < iterations {
+                    if let Some(_guard) = consumer.try_recv() {
+                        received += 1;
+                        let now = Instant::now();
+                        let published = queue_clone.lock().unwrap().pop_front();
+                        if let Some(published) = published {
+                            local_lats.push(now.duration_since(published).as_nanos() as u64);
+                        }
                     } else {
                         thread::yield_now();
                     }
@@ -1144,11 +1172,13 @@ mod tests {
                 *lat_clone.lock().unwrap() = local_lats;
             });
 
-            let start = std::time::Instant::now();
+            let start = Instant::now();
             for _ in 0..iterations {
+                let publish_time = Instant::now();
                 loop {
                     if let Some(guard) = producer.allocate() {
                         let twist = Twist::default();
+                        publish_queue.lock().unwrap().push_back(publish_time);
                         guard.write_value(twist).commit();
                         break;
                     }
@@ -1158,13 +1188,40 @@ mod tests {
 
             consumer_thread.join().unwrap();
             let elapsed = start.elapsed();
-            let lats = latencies.lock().unwrap();
+            let mut lats = latencies.lock().unwrap().clone();
+            lats.sort_unstable();
+            let pct = |p: f64| -> f64 {
+                if lats.is_empty() {
+                    0.0
+                } else {
+                    let i = ((lats.len() as f64 - 1.0) * p / 100.0) as usize;
+                    lats[i] as f64 / 1000.0
+                }
+            };
+            let mean_ns = if lats.is_empty() {
+                0.0
+            } else {
+                lats.iter().sum::<u64>() as f64 / lats.len() as f64
+            };
             println!(
-                "Throughput: {:.0} msg/s, elapsed: {:?}",
+                "Throughput: {:.0} msg/s, elapsed: {:?}, latency samples: {}",
                 iterations as f64 / elapsed.as_secs_f64(),
-                elapsed
+                elapsed,
+                lats.len()
             );
-            println!("Note: Latency measurement still needs publish Instant embedded in message for true end-to-end — currently measuring inter-arrival, not true latency. See bench.rs binary for full artifact with env info per AUDIT Pass 7 §12");
+            println!(
+                "Latency us - mean {:.2}, p50 {:.2}, p95 {:.2}, p99 {:.2}, max {:.2}",
+                mean_ns / 1000.0,
+                pct(50.0),
+                pct(95.0),
+                pct(99.0),
+                lats.last().map(|v| *v as f64 / 1000.0).unwrap_or(0.0)
+            );
+            println!(
+                "Note: cross-thread and scheduler-bound. For the ring's own cost see \
+                 tools/offline-mrustc/probes/microbench.rs; for a committed artifact with \
+                 full environment info see src/bin/bench.rs (AUDIT Pass 7 s12)."
+            );
         }
     }
 }
