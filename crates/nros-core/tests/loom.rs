@@ -115,14 +115,7 @@ fn loom_spsc_guard_protocol_wraparound() {
         assert_eq!(received, vec![10, 20]);
     });
 }
-/// Reservation semantics across the commit boundary. Assertions are restricted
-/// to facts that hold in EVERY interleaving loom schedules:
-///  - with a reservation outstanding but NOT committed, try_recv returns None
-///    (deterministic: checked on the driving thread, not raced);
-///  - a second reserve while the first is outstanding fails (CAS exclusivity);
-///  - after commit, the consumer thread observes exactly the committed value.
-/// Loom then explores every placement of the consumer's read around the
-/// commit's Release store, proving visibility of exactly-once delivery.
+/// Reservation semantics across the commit boundary.
 #[test]
 fn loom_spsc_reservation_commit_visibility() {
     loom::model(|| {
