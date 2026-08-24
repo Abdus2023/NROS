@@ -415,6 +415,37 @@ measurement" and `COMPARISON.md`'s "46x faster" are claims without evidence and 
 scoped or withdrawn per the repo's own rule (*"No observed evidence → no verified
 claim"*, `docs/verification/claims.md`).
 
+### F29-11 (P1) — the evidence registry had already ordered the performance claims downgraded; the README never was. APPLIED
+
+`EVIDENCE_REGISTRY.md` §Performance Claims has, since before this pass, carried explicit
+dispositions:
+
+> | 6.2 μs mean latency, 780K msg/s | … | 🟡 Repository-reported, not independently
+> verified — **downgrade** to "Target: <10μs, Prototype measurement: ~Xμs in local run" |
+> | 46x faster than ROS2, 15x throughput, etc. | … | 🔴 **Not independently established** |
+
+So this was not an open policy question — the registry had already decided, and the
+decision had simply never been carried into the documents that make the claims. With real
+measurements now in hand (F29-10), the `~Xμs` placeholder could finally be filled in:
+
+* `README.md` — the "Prototype measurement repository-reported 6.2 μs avg, 780K msg/s"
+  line replaced with a table of what was actually executed, the scheduler-bound caveat,
+  and an explicit statement that `<10 μs` is a target, not a result. The
+  "46× latency, 15× throughput" summary line is now labelled a design target and points at
+  the registry.
+* `COMPARISON.md` — a caveat added directly above the §2.1 latency table (which is the
+  source of the 46x/42x/74x/112x ratios), and the "NROS Strengths" bullets reworded so the
+  ratios are no longer presented bare.
+* `EVIDENCE_REGISTRY.md` — both Performance Claims rows updated with the executed numbers
+  and marked as applied; the SPSC row moved to BENCHMARKED (same-thread only) and the TCP
+  row given the F29-01 defect, fix and verification.
+* `docs/audit/verification.json` — rewritten. It still claimed branch
+  `arena/01a0188d-nros` and recorded **every gate as `NOT_RUN`**; it now records the
+  executed status of all eleven gates with the run IDs and the two remaining blockers.
+
+No claim was strengthened anywhere. Every edit either scopes a claim down or replaces an
+unverified number with a measured one plus its conditions.
+
 ## 3. The stage-2 pin table vs the real 1.90.0 lockfile
 
 The README's "Pinning facts (verified during Pass 27)" list does not match
@@ -540,6 +571,8 @@ The two remaining red jobs are exactly the two this pass could not fix from here
 | `docs/audit/F-29-ci-miri-diagnostics.patch` | F29-04 — gate-neutral diagnostics that make the Miri failure reason readable via the API; `git apply --check` verified |
 | `crates/nros-core/src/bin/bench.rs` | F29-09 — consumer exit condition no longer unreachable; publish instant enqueued before commit |
 | `benchmarks/results_e2b-sandbox-2vcpu_20260824.json` | F29-10 — real, environment-stamped artifact with the scheduler-bound caveat and the conclusion on the published claims |
+| `README.md`, `COMPARISON.md`, `EVIDENCE_REGISTRY.md` | F29-11 — the downgrade the registry had already ordered, applied; measured numbers replace the unverified ones |
+| `docs/audit/verification.json` | F29-11 — rewritten from "every gate NOT_RUN" to the executed status of all eleven gates, with run IDs |
 | 26 `.rs` files under `crates/` | F29-03 — reformatted; see §7. Formatting-only, no behaviour change; `tests/compile_fail/` fixtures excluded |
 
 ## 7. The rustfmt reformat (F29-03)

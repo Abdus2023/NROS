@@ -1,75 +1,110 @@
 {
+  "_provenance": "Rewritten by AUDIT Pass 29 (2026-08-24). The previous version of this file dated from branch arena/01a0188d-nros and recorded every gate as NOT_RUN; that record was superseded by executed evidence. See AUDIT_PASS_29.md for the full findings, commands and outputs.",
   "repository": "Abdus2023/NROS",
-  "branch": "arena/01a0188d-nros",
-  "revision": "725d3ab (fix types dep) + subsequent fixes up to Safety Gate v0.1.1",
-  "timestamp": "2026-08-19T18:00:00Z",
+  "branch": "arena/01a0325b-nros",
+  "revision": "083e3ed (Pass 29.4) on top of main @ 48069dce",
+  "timestamp": "2026-08-24T09:00:00Z",
+  "evidence_sources": {
+    "ci_run_on_this_branch": "https://github.com/Abdus2023/NROS/actions/runs/32707535971 (head 083e3ed9)",
+    "ci_run_on_base_commit": "https://github.com/Abdus2023/NROS/actions/runs/32693805857 (main @ 48069dce)",
+    "local_toolchain": "mrustc master + Rust 1.90.0 stdlib built from source, GCC 12.2 C backend, 2-vCPU sandbox; see tools/offline-mrustc/",
+    "audit_document": "AUDIT_PASS_29.md"
+  },
   "gates": {
     "fmt": {
-      "status": "NOT_RUN",
+      "status": "PASS",
       "required": true,
       "command": "cargo fmt --all -- --check",
-      "evidence": "No GitHub Actions workflow on audited ref per CI-003, workflow file exists locally at .github/workflows/ci.yml but cannot be pushed via API due to workflows permission"
+      "evidence": "CI run 32707535971 job 'cargo fmt --check' -> success, on the real stable rustfmt. This gate had failed in 40/40 prior runs: 27 of 33 .rs files under crates/ were never formatted. 26 reformatted (F29-03); tests/compile_fail/*.rs excluded because they are trybuild fixtures, not cargo fmt targets."
     },
     "check": {
-      "status": "NOT_RUN",
+      "status": "PASS",
       "required": true,
       "command": "cargo check --workspace --all-targets",
-      "evidence": "No cargo available in sandbox, but code compiles logically per safety gate fixes"
+      "evidence": "CI run 32707535971 -> success"
     },
     "test": {
-      "status": "NOT_RUN",
+      "status": "PASS",
       "required": true,
-      "command": "cargo test --workspace --lib --bins -- --nocapture",
-      "evidence": "Tests exist: test_double_reserve_prevention, test_read_guard_lifetime, test_generic_t_destruction, test_abandoned_reservation, test_channel_producer_consumer_ownership, test_capacity_one, etc. per Safety Gate v0.1.1"
+      "command": "cargo test --workspace --all-targets",
+      "evidence": "CI run 32707535971 -> success. IMPORTANT: this gate was NONDETERMINISTIC before F29-01. The same head_sha dee4f028 produced cargo test=success in run 32694486471 and =failure in run 32695031562, and that commit's diff from main is docs-only. Root cause was TcpTransport::receive returning Err on peer EOF before parsing, discarding a complete frame (reproduced 6/40 local runs). After the fix: 0/100 on that suite, 0/240 across all 8 suites, 0/60 under 4x CPU load.",
+      "local_result": "54 passed, 0 failed, 1 ignored across 8 suites (mrustc-built test binaries)"
     },
     "clippy": {
-      "status": "NOT_RUN",
+      "status": "PASS",
       "required": true,
-      "command": "cargo clippy --workspace --all-targets -- -D warnings"
+      "command": "cargo clippy --workspace --all-targets",
+      "evidence": "CI run 32707535971 -> success. Note this is report-only: the job does not pass -D warnings, matching README's stated 'report-only until a clippy-clean baseline is established'."
     },
     "miri": {
-      "status": "NOT_RUN",
+      "status": "FAILING_CAUSE_UNKNOWN",
       "required": true,
-      "command": "cargo miri test -p nros-core --lib -- --nocapture",
-      "note": "CI previously had || echo suppressing failure (CI-002), now fixed to hard failure in local workflow file"
+      "command": "cargo miri test -p nros-core --lib",
+      "evidence": "Failed in 40/40 recorded runs, unchanged by this pass. Step signature: 'Install Miri' success, 'Miri on nros-core' failure (exit 1), 'Miri on nros-types' skipped. Job logs are served from *.blob.core.windows.net, which is unreachable from the audit sandbox, and there is no NROS-authored annotation, so the cause cannot be decoded from outside CI.",
+      "note": "The step signature contradicts the premise of docs/audit/F-25-ci-miri-toolchain.patch: if the miri component were unavailable, the 'cargo miri setup' inside that same Install Miri step would have failed. F-25 has also never been exercised - arena/01a03242-nros @ dee4f028, the branch whose run is titled 'apply F-25 Miri toolchain fix', contains no ci.yml change at all.",
+      "two_candidate_causes": [
+        "cargo miri is not resolvable in that step -> toolchain problem",
+        "cargo miri runs and reports real undefined behaviour in nros-core's MaybeUninit / drop_in_place / raw-pointer code -> P0 soundness bug in the code the safety case rests on"
+      ],
+      "next_step": "git apply docs/audit/F-29-ci-miri-diagnostics.patch - gate-semantics-neutral; adds a read-only toolchain probe and mirrors the failure reason into workflow-command annotations, which ride the API rather than the blob host. Answers the question in one run. Not pushed: the app token lacks the workflows scope."
     },
     "loom": {
       "status": "NOT_RUN",
       "required": false,
-      "command": "cargo test --test loom -- --nocapture (would need loom crate)",
-      "note": "Formal concurrency verification for atomic ordering Acquire/Release, reservation flags, wraparound"
+      "command": "cargo test --test loom (needs the loom crate; crates.io is unreachable from the audit sandbox)",
+      "note": "Formal concurrency verification of the Acquire/Release ordering, reservation flags and wraparound remains outstanding. Miri is the only UB detector that has ever been wired into CI, and it is currently red for unknown reasons."
     },
     "nros_init_compile": {
-      "status": "PARTIAL",
+      "status": "PASS",
       "required": true,
-      "command": "cargo run -p nros-cli --bin nros -- init /tmp/test_robot --template=basic && cd /tmp/test_robot && cargo check",
-      "evidence": "Fixed P0 NROS-011: generate_toml now minimal no non-existent crates, generates plain Rust that compiles. Old template generated src/nodes/main.rs without [[bin]] and no NROS dependency. New template generates src/main.rs with fn main and Cargo.toml with no non-existent deps. Golden test in CI workflow now real init test per CI-001 fix, not trivial hello.",
-      "previous_failure": "CI-001: previous workflow created hand-written fn main() { println!(\"Hello NROS\") } not running nros init"
+      "command": "cargo build -p nros-cli && nros init <proj> --template=basic|mobile_base && cargo check",
+      "evidence": "CI job 'nros init generates a buildable NROS project' -> success in run 32707535971, for both templates. Also verified locally: golden-basic and golden-mobile_base compile and run under mrustc."
+    },
+    "doc_gate_representation": {
+      "status": "FAILING_FIX_NOT_PUSHABLE",
+      "required": true,
+      "command": "cargo run -p nros-audit -- representation",
+      "evidence": "Failed in 40/40 runs. Cause established and it is NOT the data: docs/audit/F-20-ci-fetch-depth.patch was never applied, so the doc-gate job checked out at depth 1 and the snapshot's pinned source_revision (6a9cdec7...) did not resolve. All four recorded blob fingerprints match the actual blobs at that revision (verified via the contents API: architecture 04d3a0b15f27, capabilities 075ca21cb52d, evidence de3ba49b73c3, claims f4773c3a2bb3). With the revision resolvable, `nros-audit representation` and `nros-audit all` both pass locally (354 PASS, 0 FAIL, exit 0).",
+      "blocker": "Applying the patch requires the `workflows` scope; git push rejects .github/workflows/ci.yml without it."
+    },
+    "doc_gate_python_validator": {
+      "status": "PASS",
+      "required": true,
+      "command": "python3 scripts/validate-documentation-representation.py",
+      "evidence": "DOCUMENTATION REPRESENTATION: PASS, exit 0 (PyYAML 6.0.3)"
     },
     "benchmark": {
-      "status": "SIMULATED",
+      "status": "EXECUTED_CLAIMS_DOWNGRADED",
       "required": false,
-      "command": "cargo run -p nros-core --bin bench -- --iterations 100000 --output benchmarks/results.json",
-      "evidence": "benchmarks/results.json exists as TEMPLATE artifact with required fields per Pass 7 §12, but numbers are repository-reported 6.2us mean 780K msg/s preserved historical reference NOT independently verified. Real artifact must be generated on target hardware (e.g., Jetson Xavier) with hostname and date. Current bench.rs measures real end-to-end latency via publish Instant queue (fixed from synthetic 1000 ns), but lib.rs benchmarks mod still placeholder with TODO."
+      "command": "nros-core --bin bench --iterations 100000 --output benchmarks/results_e2b-sandbox-2vcpu_20260824.json",
+      "evidence": "F29-09: the bench binary HUNG - 2/12 runs at 2000 iterations and 1/3 at 100000 timed out - because the consumer's exit condition (local_latencies.len() >= iterations) became permanently unreachable when a receive found the shared instant queue empty; the producer committed before enqueuing. This is why the CI 'benchmarks' job had never reached a completed state (continue-on-error does not bound a hang). Fixed both halves; 20/20 and 5/5 completions afterwards with messages_sent == messages_received == 100000, and CI run 32707535971 completed the job and uploaded its artifact for the first time.",
+      "measured": {
+        "same_thread_spsc_ns_per_op": 110.9,
+        "same_thread_spsc_msg_per_sec": 9017471,
+        "cross_thread_mean_us_this_pass": 156.52,
+        "cross_thread_mean_us_pass27": 588.21,
+        "message_size_bytes": 64
+      },
+      "claim_disposition": "The published '6.2 us mean / 780K msg/s' and '46x faster than ROS2' are NOT supported by any executed measurement in this repository. benchmarks/results.json declares itself a TEMPLATE carrying unverified numbers. EVIDENCE_REGISTRY.md had already ordered the downgrade; Pass 29 applied it to README.md and COMPARISON.md. Cross-thread figures are scheduler-bound (2 shared unpinned vCPU) and do not characterise the ring; the same-thread figure does, and it reproduces across sessions (110.90 vs Pass 27's 112 ns/op)."
     },
     "hardware": {
       "status": "NOT_RUN",
       "required": false,
-      "note": "HAL DMA real hardware, V4L2 integration, Jetson validation"
+      "note": "HAL DMA remains SimulatedDmaBuffer (Vec<u8>); no memfd_create/mmap/DMA-BUF, no V4L2, no Jetson validation. The <10 us latency target cannot be confirmed on a shared unpinned sandbox and needs CPU pinning on target hardware."
     }
   },
   "evidence_registry": {
     "path": "EVIDENCE_REGISTRY.md",
     "status": "IMPLEMENTED",
-    "note": "Defines SPECIFIED/SCAFFOLDED/SIMULATED/IMPLEMENTED/TESTED/BENCHMARKED/INTEGRATION-TESTED/HARDWARE-VALIDATED/PRODUCTION-READY/SAFETY-QUALIFIABLE per AUDIT Pass 5"
+    "note": "Pass 29 updated the SPSC ring row to BENCHMARKED (same-thread only), the TCP transport row with the F29-01 defect and fix, and both Performance Claims rows with the executed measurements."
   },
   "claim_ledger": {
-    "path": "docs/CLAIM_LEDGER.md (to be created)",
+    "path": "docs/CLAIM_LEDGER.md (still to be created)",
     "status": "TODO",
-    "note": "Would map Claim/Source/Evidence/Status per Pass 11 recommendation"
+    "note": "docs/verification/claims.md defines the rule ('No observed evidence -> no verified claim'); a per-claim ledger mapping Claim/Source/Evidence/Status has still not been written."
   },
   "safety_gate": {
-    "version": "v0.1.1",
+    "version": "v0.1.1 (code) / Pass 29 (evidence)",
     "status": "PARTIAL",
     "gates": {
       "A_Initialization": {
@@ -77,28 +112,19 @@
         "commit_requires_init_via_type_state": true,
         "double_init_impossible": true,
         "abort_before_init_safe": true,
-        "initialized_but_aborted_semantics": "TODO: abort_initialized drops T and clears flag"
+        "abort_initialized_double_drop": "FIXED and regression-tested (test_abort_initialized_panic_in_drop_is_not_double_drop); documented trade-off is a wedged producer on drop-panic rather than UB"
       },
       "B_Ownership": {
         "producer_role_capability": true,
         "consumer_role_capability": true,
-        "no_public_raw_ring_sharing": "PARTIAL: ring() still exists for backward compat but channel() preferred",
+        "no_public_raw_ring_sharing": "PARTIAL: Publisher::ring() and Subscriber::new still expose Arc<RingBuffer> (deprecated but safe and public), so SPSC discipline is enforced by convention on that path; channel() is the type-enforced path",
         "derefmut_removed": true
       },
-      "C_Destruction": {
-        "drop_counter": true,
-        "string": true,
-        "vec_u8": true,
-        "box_t": true,
-        "pending_values": true,
-        "consumed_values": true,
-        "aborted_values": true
-      },
+      "C_Destruction": "all seven destruction cases covered by tests; ZST drop-exactly-once covered by test_zst_with_drop_dropped_exactly_once",
       "D_Concurrency": {
         "spsc_stress": true,
         "capacity_1": true,
         "wraparound": true,
-        "full_empty_races": true,
         "guard_contention": true,
         "thread_handoff": true,
         "miri": false,
@@ -108,23 +134,22 @@
         "actual_per_message_timestamps": true,
         "monotonic_clock": true,
         "throughput": true,
-        "p50": true,
-        "p95": true,
-        "p99": true,
-        "max": true,
+        "p50_p95_p99_max": true,
         "cpu_affinity_documented": false,
-        "benchmark_env_recorded": true
+        "benchmark_env_recorded": true,
+        "benchmark_binary_terminates": "FIXED in Pass 29 (F29-09) - it previously hung intermittently"
       },
       "F_CI": {
-        "fmt": false,
-        "check": false,
-        "test": false,
-        "clippy": false,
+        "fmt": true,
+        "check": true,
+        "test": true,
+        "clippy": true,
         "miri": false,
         "golden_nros_init": true,
-        "benchmark_artifact": true
+        "benchmark_artifact": true,
+        "representation_gate": false
       }
     }
   },
-  "overall_verdict": "Architecture-complete prototype with partially mature evidence registry, but unresolved core safety invariants (initialization-state model now fixed via type-state in v0.1.1), simulated operational tooling, absent CI on audited ref due to workflows permission, documentation/source inconsistencies partially fixed (workspace inventory 8 vs 11 fixed, CLI IMPLEMENTED-TESTED too broad fixed via evidence taxonomy, 6.2us claim downgraded to repository-reported). Branch considerably better than earlier snapshot but safety claim still too strong until Miri/Loom and CI PASS."
+  "overall_verdict": "Substantially improved and now evidenced rather than asserted. On this branch 7 of 9 CI jobs are green against 4 of 9 on the base commit: fmt, check, test, clippy, nros-init golden, provenance and benchmarks all pass on the real toolchain. Two defects that produced false confidence were found and fixed: the test suite was nondeterministic because TcpTransport::receive discarded complete frames on peer EOF (F29-01), and the benchmark binary hung intermittently so its CI job never completed (F29-09). The published performance claims were downgraded to match the executed evidence (F29-10), which is what EVIDENCE_REGISTRY.md had already required. Two gates remain red and both are blocked by permissions rather than by unknowns in the data: the representation gate needs docs/audit/F-20-ci-fetch-depth.patch applied by someone with the `workflows` scope (the snapshot data is provably correct and the gate passes locally), and the Miri gate's cause cannot be decoded without job logs - docs/audit/F-29-ci-miri-diagnostics.patch settles it in one run. Until Miri is green, no soundness claim about nros-core's unsafe code should be treated as verified, because Miri is the only UB detector wired into this CI and neither Miri nor loom has ever produced a passing result here."
 }

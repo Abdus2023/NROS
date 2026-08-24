@@ -15,7 +15,7 @@
 - **[Evidence Registry — EVIDENCE_REGISTRY.md](./EVIDENCE_REGISTRY.md)** — Feature → spec → implementation → status (SPECIFIED/SCAFFOLDED/SIMULATED/IMPLEMENTED/TESTED/BENCHMARKED/...) → test → claim_allowed per AUDIT recommendation
 - **[Core Safety — crates/nros-core/SAFETY.md](./crates/nros-core/SAFETY.md)** — Safety Gate v0.1 invariants, guard-based redesign WriteGuard/ReadGuard, generic T destruction, monotonic clock, benchmark separation, Miri/loom
   - Architecture: DDS middleware vs Zero-Copy IPC / RT Scheduler
-  - Performance: 46× latency, 15× throughput, 79% memory, 100 KHz real-time
+  - Performance: 46× latency, 15× throughput, 79% memory, 100 KHz real-time — **design targets, not measured results.** `EVIDENCE_REGISTRY.md` §Performance Claims records the 46×/15× figures as 🔴 *not independently established* (this repo contains no ROS2 baseline) and the latency figure as repository-reported only. See the "Performance Targets" section below for what has actually been executed
   - Features: zero-copy default, compile-time checking, fleet mgmt, HAL unified, GPU auto-dispatch
   - Developer Experience: 51% fewer LOC, 73-81% faster builds
   - Deployment: 29× faster startup, 37% power saving +58% battery life
@@ -33,7 +33,25 @@
 | Startup Time | 2-5 seconds | < 100ms |
 | Max Real-time Frequency | 1 KHz | 100 KHz |
 
-**Target**: <10 μs latency, 500K msg/s — Prototype measurement repository-reported 6.2 μs avg, 780K msg/s (see §18, but needs independent verification per AUDIT.md — benchmark separated from correctness gate, monotonic clock, no assert in `cargo test`)
+**Target**: <10 μs latency, 500K msg/s — **a target, not a result.** No executed
+measurement in this repository has ever produced 6.2 μs.
+
+The `6.2 μs avg / 780K msg/s` figure quoted in earlier revisions traces to
+`benchmarks/results.json`, which states in its own `notes` that it is a *template*
+carrying unverified numbers. `EVIDENCE_REGISTRY.md` recorded that the claim must be
+downgraded; this text is that downgrade. What has actually been measured:
+
+| Measurement | Value | Source |
+|---|---|---|
+| Same-thread SPSC publish+consume (the IPC path itself) | **110.90 ns/op, 9.02M msg/s** (64 B, cap 1024) | `tools/offline-mrustc/probes/microbench.rs` @ `835165df`; Pass 27 independently measured 112 ns/op |
+| Cross-thread end-to-end, 2-vCPU sandbox, unpinned | mean **156.52 μs**, 3.34M msg/s | `benchmarks/results_e2b-sandbox-2vcpu_20260824.json` @ `835165df` |
+| Cross-thread end-to-end, comparable sandbox (Pass 27) | mean 588.21 μs, 1.57M msg/s | `benchmarks/results_e2b-sandbox-2vcpu_20260822.json` |
+
+The cross-thread numbers are **scheduler-bound, not IPC latency**: the harness spins a
+producer and a consumer on 2 shared vCPUs with no CPU pinning, so they characterise the
+OS scheduler far more than the ring buffer. Confirming the `<10 μs` target needs pinned
+cores on the target hardware. Benchmarking stays separated from the correctness gate
+(`#[ignore]`, monotonic clock, no perf assert in `cargo test`) per AUDIT CORE-007/008.
 
 ## 🏗️ Architecture Overview
 
