@@ -129,10 +129,12 @@ fn ci_diag9_miri() {
     if std::env::var_os("CI").is_none() {
         return;
     }
-    // diag #10 prepend: test-decode FIRST (2223a6e's cargo-test job is still red
-    // despite the blessing — need the trybuild diff or the failing unit test name).
-    ci_diag10_test_decode();
-    d9_emit("Pass27-d10 boundary", "test-decode done; Miri decode follows");
+    // diag #11: workspace test-suite decode FIRST (trybuild PASSES — d10 proved
+    // status Some(0), zero wip re-writes — so the workspace red is a runtime
+    // failure elsewhere), then a rustup-env probe documenting the Miri job's
+    // environmental failure for the owner patch. Miri phases from diag #9/10 are
+    // dropped: verdict established ('miri' component not available on the
+    // effective stable toolchain; rustup default nightly does not take effect).
     std::panic::set_hook(Box::new(|info| {
         let payload = info.payload().downcast_ref::<&str>().map(|s| s.to_string())
             .or_else(|| info.payload().downcast_ref::<String>().cloned())
@@ -141,6 +143,13 @@ fn ci_diag9_miri() {
         d9_emit("Pass27-d9 PANIC-HOOK", &format!("{} at {}", payload, loc));
         std::thread::sleep(std::time::Duration::from_secs(3));
     }));
+    ci_diag11_test_suite_decode();
+    ci_diag11_rustup_probe();
+    d9_emit("Pass27-d11 all-phases", "complete — draining");
+    std::thread::sleep(std::time::Duration::from_secs(8));
+    return;
+    #[allow(unreachable_code)]
+    {
     d9_emit("Pass27-d9 phase miri-install", "begin");
     let (_c1, log1) = d9_heartbeated(
         "miri-install",
@@ -175,6 +184,7 @@ fn ci_diag9_miri() {
     d9_emit("Pass27-d9 miri tail", &t2);
     d9_emit("Pass27-d9 all-phases", "complete — draining");
     std::thread::sleep(std::time::Duration::from_secs(8));
+    }
 }
 
 fn ci_diag10_test_decode() {
@@ -235,6 +245,43 @@ fn ci_diag10_test_decode() {
         bundle.push_str(&format!("\n<<<BEGIN-FILE {}>>>\n{}\n<<<END-FILE {}>>>\n", fp.display(), content, fp.display()));
     }
     d9_emit("Pass27-d10 trybuild-decode", &bundle);
+}
+
+fn ci_diag11_test_suite_decode() {
+    d9_emit("Pass27-d11 phase test-suite", "begin");
+    let (code, log) = d9_heartbeated(
+        "t11-suite",
+        "cargo test --workspace --all-targets --no-fail-fast",
+        "/tmp/d11_suite.log",
+    );
+    let lines: Vec<&str> = log.lines().collect();
+    let mut bundle = format!("status={:?}\n", code);
+    let mut idxs: Vec<usize> = (0..lines.len())
+        .filter(|&i| {
+            lines[i].contains("FAILED")
+                || lines[i].contains("panicked at")
+                || lines[i].starts_with("failures:")
+                || lines[i].contains("test result: FAILED")
+                || lines[i].contains("assertion")
+        })
+        .collect();
+    idxs.truncate(40);
+    for i in idxs {
+        let lo = i.saturating_sub(2);
+        let hi = (i + 4).min(lines.len());
+        bundle.push_str(&format!("--- ctx@{}:\n{}\n", i, lines[lo..hi].join("\n")));
+    }
+    d9_emit("Pass27-d11 suite-decode", &bundle);
+}
+
+fn ci_diag11_rustup_probe() {
+    let (code, log) = d9_heartbeated(
+        "t11-rustup",
+        "rustup show; echo RUSTUP_TOOLCHAIN=$RUSTUP_TOOLCHAIN; echo default=$(rustup default 2>&1); rustup target list --installed | head",
+        "/tmp/d11_rustup.log",
+    );
+    let t: String = log.chars().rev().take(2000).collect::<String>().chars().rev().collect();
+    d9_emit("Pass27-d11 rustup-probe", &format!("status={:?}\n{}", code, t));
 }
 
 fn gate_fail(msg: String) -> ! {
