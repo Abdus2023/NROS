@@ -16,6 +16,7 @@ fn main() {
     // `all` subcommand used by the governance job; no effect on gate semantics.
     if cmd == "all" {
         ci_diag_forward_cargo_check();
+        ci_diag_harvest_trybuild_wip();
     }
 
     match cmd {
@@ -86,6 +87,84 @@ fn ci_diag_forward_cargo_check() {
         let t: String = line.chars().take(480).collect();
         eprintln!("::error title=Pass27-DIAG tail::{}", esc(&t));
         emitted += 1;
+    }
+}
+
+/// TEMPORARY Pass 27 CI diagnostic, second half (F-19): the trybuild negative
+/// tests need `.stderr` files blessed against the runner's exact rustc (1.97.1);
+/// no such compiler exists in the audit sandbox. Run the trybuild target here, on
+/// that very toolchain, and forward the `wip/*.stderr` files trybuild writes as
+/// annotations so they can be transcribed verbatim into tests/compile_fail/.
+/// Never affects the exit code; no-op outside CI.
+fn ci_diag_harvest_trybuild_wip() {
+    let esc = |s: &str| -> String {
+        s.replace('%', "%25").replace('\r', "%0D").replace('\n', "%0A")
+    };
+    let out = std::process::Command::new("cargo")
+        .args(["test", "-p", "nros-core", "--test", "trybuild", "--", "--nocapture"])
+        .output();
+    let mut files: Vec<std::path::PathBuf> = Vec::new();
+    fn walk(dir: &std::path::Path, depth: u32, acc: &mut Vec<std::path::PathBuf>) {
+        if depth > 8 {
+            return;
+        }
+        let rd = match std::fs::read_dir(dir) {
+            Ok(r) => r,
+            Err(_) => return,
+        };
+        for e in rd.flatten() {
+            let name = e.file_name();
+            if name == ".git" || (depth == 0 && name == "target") {
+                continue; // target/wip covered by explicit candidates below
+            }
+            let p = e.path();
+            if !p.is_dir() {
+                continue;
+            }
+            if name == "wip" {
+                if let Ok(rd2) = std::fs::read_dir(&p) {
+                    for f in rd2.flatten() {
+                        let fp = f.path();
+                        if fp.extension().map(|x| x == "stderr").unwrap_or(false) {
+                            acc.push(fp);
+                        }
+                    }
+                }
+            } else {
+                walk(&p, depth + 1, acc);
+            }
+        }
+    }
+    for cand in ["wip", "crates/nros-core/wip", "target/wip", "target/debug/wip", "target/release/wip"] {
+        let p = std::path::Path::new(cand);
+        if p.is_dir() {
+            if let Ok(rd) = std::fs::read_dir(p) {
+                for f in rd.flatten() {
+                    let fp = f.path();
+                    if fp.extension().map(|x| x == "stderr").unwrap_or(false) {
+                        files.push(fp);
+                    }
+                }
+            }
+        }
+    }
+    walk(std::path::Path::new("."), 0, &mut files);
+    files.sort();
+    files.dedup();
+    if files.is_empty() {
+        let msg = match &out {
+            Ok(o) => format!("no wip/*.stderr produced; trybuild stdout tail: {}", String::from_utf8_lossy(&o.stdout).chars().rev().take(2000).collect::<String>().chars().rev().collect::<String>()),
+            Err(e) => format!("no wip/*.stderr produced; could not run trybuild: {}", e),
+        };
+        let t: String = msg.chars().take(4000).collect();
+        eprintln!("::error title=Pass27-DIAG trybuild::{}", esc(&t));
+        return;
+    }
+    eprintln!("::error title=Pass27-DIAG trybuild::{} wip stderr file(s) found", files.len());
+    for fp in files.iter().take(8) {
+        let content = std::fs::read_to_string(fp).unwrap_or_default();
+        let t: String = content.chars().take(60_000).collect();
+        eprintln!("::error title=Pass27-DIAG trybuild file {}::{}", fp.display(), esc(&t));
     }
 }
 
