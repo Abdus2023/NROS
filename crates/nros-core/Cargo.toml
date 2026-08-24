@@ -15,6 +15,10 @@ path = "src/main.rs"
 
 [dependencies]
 nros-types = { path = "../nros-types" }
+# Optional: loom-based model checking of the SPSC synchronization protocol
+# (Pass 31, P31-02). Enabled only via `--features loom` for tests/loom.rs;
+# off by default so default builds, Miri and the offline pipeline are unaffected.
+loom = { version = "0.7", optional = true }
 
 [dev-dependencies]
 trybuild = "1.0"

@@ -1,0 +1,49 @@
+From: Pass 31 audit session <arena-agent@users.noreply.github.com>
+Subject: Add the Loom concurrency-model job to CI (P31-02)
+
+Context. Pass 31 wired nros-core for Loom: the crate's synchronization
+primitives (the AlignedU64/AlignedBool reservation flags and indices, and Arc)
+now resolve to loom's instrumented versions when the optional `loom` feature
+is enabled, and crates/nros-core/tests/loom.rs runs the REAL
+RingBuffer/Producer/Consumer protocol under loom::model (bounded
+interleavings: two-message handoff, capacity-1 guard wraparound with a
+guard-held preemption point, reservation/commit visibility). Feature is off by
+default; native builds, Miri and the offline pipeline are unchanged.
+
+What remains is EXECUTION. Loom requires the loom crate from crates.io
+(unavailable in the offline audit sandbox), so the models must run in real CI.
+modifying .github/workflows/ci.yml requires the `workflows` scope, which the
+app token lacks (same limitation that kept F-20 and F-29 as staged patches).
+
+This patch adds one self-contained job. It is a hard gate by design: loom
+explores executions of the same unsafe SPSC core the safety case rests on, so
+a failing loom run MUST fail the pipeline — do not add continue-on-error.
+The models are bounded and complete in seconds; no timeout tuning needed.
+
+Apply with:  git apply docs/audit/P31-02-ci-loom-job.patch
+Then push with a token that has the `workflows` scope.
+---
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -95,6 +95,22 @@ jobs:
+       - name: Miri on nros-types
+         run: cargo miri test -p nros-types --lib
+ 
++  loom-gate:
++    name: Concurrency model gate (Loom, hard)
++    runs-on: ubuntu-latest
++    env:
++      # Loom prunes provably-equivalent interleavings; the checkpoint bound
++      # only guards against runaway exploration, not correctness of a verdict.
++      LOOM_MAX_PREEMPTIONS: "4"
++    steps:
++      - uses: actions/checkout@v4
++        with:
++          fetch-depth: 0
++      - name: Loom on nros-core SPSC protocol
++        run: cargo test -p nros-core --features loom --test loom --release
++
+   nros-init-golden:
+     name: nros init generates a buildable NROS project
+     runs-on: ubuntu-latest

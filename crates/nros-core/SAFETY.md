@@ -1,7 +1,8 @@
 # nros-core Safety Gate v0.1 — Ownership + Lifetime + Destruction + Concurrency
 
 > Implements remediation for AUDIT.md P0 findings CORE-001..004
-> Status: IMPLEMENTED → TESTED → Needs CI verification + Miri/loom
+> Status: IMPLEMENTED → TESTED → BENCHMARKED (same-thread) → **Miri green (run 32718667809)** + ASan/UBSan clean (F29-12).
+> Remaining: loom interleaving models WIRED but not yet executed (Pass 31); hardware real-time validation not run.
 
 ## Invariants (MUST)
 
@@ -107,7 +108,8 @@ println!("{}", *guard); // Deref
 - Loom for concurrency: test interleavings of write_reserved, read_reserved, indices — **not yet executed; next major safety milestone after Miri is green**
 - **Pass 30 (2026-08-24) — Miri status decoded**: the CI safety-gate previously failed for an unknown reason. The retrieved job log (run 32707535971) showed Miri installed, compiled nros-core and ran the lib suite; every test ahead of `test_zero_copy_pubsub_guard_api` passed, then that test stopped on `SystemTime::now()` -> `clock_gettime(CLOCK_REALTIME)`, which Miri isolation refuses. No UB diagnostic has ever been emitted against this crate. Classification at the time: `BLOCKED_TEST_ENVIRONMENT`, not a code-soundness failure.
 - **F30-01 remediation, executed green**: the suite's memory-safety tests must not depend on host wall-clock availability. `test_zero_copy_pubsub_guard_api` now uses a fixed `Timestamp { sec: 1, nanosec: 0 }`; nros-types' inherently wall-clock-bound `test_wall_timestamp_now` is `#[cfg_attr(miri, ignore)]` (native runs keep it). Miri isolation stays ENABLED — the fix removes the dependency rather than weakening the verifier with `-Zmiri-disable-isolation`. **Confirmed executed: CI run 32718667809, 'Miri on nros-core' + 'Miri on nros-types' both success.**
-- **Still outstanding**: loom interleaving verification of the atomic SPSC protocol (NOT_RUN), and hardware/DMA validation. Miri green + ASan/UBSan green + 54 native tests green does not yet justify production/safety-qualified wording — see `docs/representation/claims.yaml` CLAIM-SAFETY-001.
+- **Still outstanding**: loom interleaving verification of the atomic SPSC protocol — **WIRED (Pass 31, P31-02)**: optional `loom` feature swaps the ring's synchronization primitives for loom's instrumented versions, and `tests/loom.rs` runs the real `RingBuffer`/`Producer`/`Consumer` protocol under `loom::model` (bounded; command `cargo test -p nros-core --features loom --test loom`). Execution pending — CI job staged as `docs/audit/P31-02-ci-loom-job.patch` (app token lacks the workflows scope to add it directly). Hardware/DMA validation also remains open.
+- **Pass 31 (P31-01) — raw-ring escape hatch CLOSED**: the deprecated `Publisher::ring()`, `Publisher::from_ring()` and `Subscriber::new(Arc<RingBuffer>)` were removed rather than merely deprecated; `Publisher`/`Subscriber` are now a topic-labeled facade over the type-enforced pair (`Publisher::declare(topic, capacity)` is the sole construction path). No safe API hands out `Arc<RingBuffer>` anymore. Miri green + ASan/UBSan green + 54 native tests green does not yet justify production/safety-qualified wording — see `docs/representation/claims.yaml` CLAIM-SAFETY-001 and `docs/CLAIM_LEDGER.md`.
 
 ## Future: RawMessageRing vs TypedRing (AUDIT Option C)
 

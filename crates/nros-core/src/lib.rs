@@ -7,7 +7,21 @@ use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 use std::ops::Deref;
 use std::ptr;
+
+// ── Synchronization primitives — loom-instrumentable (Pass 31, P31-02) ──────
+// The SPSC protocol's correctness rests on these Acquire/Release/CAS operations.
+// Enabling the (implicit, optional) feature `loom` swaps them for loom's
+// instrumented versions so `tests/loom.rs` can explore the legal interleavings
+// of THIS implementation (not a model copy). Default builds use std types and
+// are bit-identical to before; `cargo miri test` is unaffected (feature off).
+// Run the models with:  cargo test -p nros-core --features loom --test loom
+#[cfg(feature = "loom")]
+use loom::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+#[cfg(feature = "loom")]
+use loom::sync::Arc;
+#[cfg(not(feature = "loom"))]
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+#[cfg(not(feature = "loom"))]
 use std::sync::Arc;
 
 // ── Cache-line alignment ────────────────────────────────────────────────────
@@ -431,93 +445,85 @@ pub fn channel<T>(capacity: usize) -> (Producer<T>, Consumer<T>) {
     (Producer::new(ring.clone()), Consumer::new(ring))
 }
 
-// ── Legacy Publisher/Subscriber — kept for backward compat, now using guard API ──
-// P1 Fix: Close raw ring escape hatch per AUDIT Pass 20-23 — ring() exposes Arc<RingBuffer> allowing arbitrary endpoint creation outside SPSC discipline
-// New code should use channel() API that returns Producer/Consumer not Clone, enforces single producer/consumer via type system
+// ── Topic-labeled pub/sub façade over the type-enforced SPSC pair ────────────
+// Pass 31 (P31-01): the legacy raw-ring compatibility API has been REMOVED, not
+// merely deprecated — `#[deprecated]` never closes a capability (AUDIT Pass 24
+// §253, and the repo's own verification.json B_Ownership recorded SPSC
+// enforcement as only PARTIAL while these methods existed). The removed items:
+//   - Publisher::from_ring(topic, Arc<RingBuffer<T>>)
+//   - Publisher::ring() -> Arc<RingBuffer<T>>
+//   - Subscriber::new(Arc<RingBuffer<T>>, topic)
+// Each handed a raw `Arc<RingBuffer<T>>` to arbitrary safe code, letting
+// endpoints be manufactured outside the SPSC type discipline (CORE-016/019).
+// What remains is a thin topic-labeled wrapper over Producer/Consumer with
+// exactly one construction path — declare() — which returns the matched pair,
+// so no safe API exposes a shared ring. `RingBuffer` itself stays public as
+// the documented low-level building block: its guard invariants (CAS-reserved
+// single outstanding write/read reservation, type-state initialization, no
+// DerefMut on read guards) hold regardless of handle count, and the trybuild
+// negative-compile suite (tests/compile_fail) targets its API directly.
 
 pub struct Publisher<T> {
-    ring: Arc<RingBuffer<T>>,
+    producer: Producer<T>,
     topic: String,
 }
 
 impl<T> Publisher<T> {
-    pub fn new(topic: &str, capacity: usize) -> Self {
-        Self {
-            ring: Arc::new(RingBuffer::new(capacity)),
-            topic: topic.to_string(),
-        }
-    }
-
-    #[deprecated(
-        note = "Use channel() API for type-enforced SPSC, from_ring() exposes raw Arc and weakens SPSC guarantee per CORE-016/019"
-    )]
-    pub fn from_ring(topic: &str, ring: Arc<RingBuffer<T>>) -> Self {
-        Self {
-            ring,
-            topic: topic.to_string(),
-        }
+    /// Declare a topic and create the matched Publisher/Subscriber pair — the
+    /// sole construction path. Neither endpoint is Clone: single producer and
+    /// single consumer are enforced by the type system (fixes CORE-016, CORE-019).
+    pub fn declare(topic: &str, capacity: usize) -> (Publisher<T>, Subscriber<T>) {
+        let (producer, consumer) = channel(capacity);
+        (
+            Publisher {
+                producer,
+                topic: topic.to_string(),
+            },
+            Subscriber {
+                consumer,
+                topic: topic.to_string(),
+            },
+        )
     }
 
     pub fn allocate(&self) -> Option<WriteGuard<'_, T>> {
-        self.ring.try_reserve()
+        self.producer.allocate()
     }
 
     pub fn publish_copy(&self, msg: T) -> Result<(), &'static str> {
-        let guard = self
-            .ring
-            .try_reserve()
-            .ok_or("Buffer full or already reserved")?;
-        guard.write_value(msg).commit();
-        Ok(())
+        self.producer.publish_copy(msg)
     }
 
     pub fn topic(&self) -> &str {
         &self.topic
     }
 
-    #[deprecated(
-        note = "Use channel() API for type-enforced SPSC — ring() exposes raw Arc<RingBuffer> allowing arbitrary producers/consumers outside type system, weakens SPSC guarantee"
-    )]
-    pub fn ring(&self) -> Arc<RingBuffer<T>> {
-        self.ring.clone()
-    }
-
     pub fn len(&self) -> usize {
-        self.ring.len()
+        self.producer.len()
     }
     pub fn is_empty(&self) -> bool {
-        self.ring.is_empty()
+        self.producer.is_empty()
     }
 }
 
 pub struct Subscriber<T> {
-    ring: Arc<RingBuffer<T>>,
+    consumer: Consumer<T>,
     topic: String,
 }
 
 impl<T> Subscriber<T> {
-    #[deprecated(
-        note = "Use channel() API for type-enforced SPSC; Subscriber::new takes a raw Arc<RingBuffer> and weakens the SPSC guarantee per CORE-016/019"
-    )]
-    pub fn new(ring: Arc<RingBuffer<T>>, topic: &str) -> Self {
-        Self {
-            ring,
-            topic: topic.to_string(),
-        }
-    }
-
     pub fn try_recv(&self) -> Option<ReadGuard<'_, T>> {
-        self.ring.try_read()
+        self.consumer.try_recv()
     }
 
     pub fn pending(&self) -> usize {
-        self.ring.len()
+        self.consumer.pending()
     }
     pub fn topic(&self) -> &str {
         &self.topic
     }
     pub fn is_empty(&self) -> bool {
-        self.ring.is_empty()
+        self.consumer.is_empty()
     }
 }
 

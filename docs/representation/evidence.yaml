@@ -55,7 +55,7 @@ records:
       passing_head: "2d4ea5b901bee386d44b1a7994cfa8088d4a26e2"
       scope: nros-core and nros-types libtest suites under isolation
       prior_blocker: wall_clock_syscall_in_test_resolved_by_F30-01
-      loom: not_run_concurrency_interleavings_verification_outstanding
+      loom: wired_not_run_P31-02_optional_feature_swaps_ring_primitives_tests/loom.rs_is_the_real_protocol_under_loom::model_CI_job_staged_as_docs/audit/P31-02-ci-loom-job.patch
     benchmark:
       status: present_non_gating
     hardware:

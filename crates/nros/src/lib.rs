@@ -37,8 +37,10 @@ pub mod prelude {
     /// Backward-compat alias.
     pub type MonotonicTimestamp = MonotonicInstant;
 
-    // Core IPC — note: Producer/Consumer are the preferred type-enforced SPSC endpoints;
-    // Publisher/Subscriber remain for backward compatibility.
+    // Core IPC — Producer/Consumer are the type-enforced SPSC endpoints;
+    // Publisher/Subscriber are the topic-labeled facade over them (Pass 31: the
+    // deprecated raw-ring constructors were removed; Publisher::declare() is the
+    // sole construction path).
     pub use nros_core::{
         channel, BackpressurePolicy, ChannelConfig, Consumer, DeliveryPolicy, ExecutionClass,
         InitializedWriteGuard, PerformanceStats, Producer, Publisher, ReadGuard, RingBuffer,

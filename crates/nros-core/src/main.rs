@@ -1,10 +1,9 @@
-// Demo 1 intentionally exercises the legacy Publisher/Subscriber + ring() API to show the
-// deprecated surface still works; Demos 2/3 use the preferred type-enforced channel().
-#![allow(deprecated)]
 // NROS Core — Sound Zero-Copy SPSC — Demo v0.1.1 Type-State Initialization
 // Fixes P0 CORE-011 as_mut() over uninit removed, CORE-014 commit requires init via type-state
+// Pass 31 (P31-01): the deprecated raw-ring Publisher/Subscriber API was REMOVED; Demo 1 now
+// uses Publisher::declare()/Subscriber, the topic-labeled facade over the type-enforced pair.
 
-use nros_core::{channel, PerformanceStats, Publisher, Subscriber, Timestamp, Twist, Vector3};
+use nros_core::{channel, PerformanceStats, Publisher, Timestamp, Twist, Vector3};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::thread;
@@ -14,10 +13,9 @@ fn main() {
     println!("NROS Core — Sound Zero-Copy IPC Demo (Safety Gate v0.1.1 Type-State)\n");
     println!("Fixes: CORE-011 as_mut() removed, CORE-014 commit requires InitializedWriteGuard, CORE-012 real measurement via bench binary, CORE-015 DerefMut removed, CORE-016 SpscChannel enforces single producer/consumer\n");
 
-    // Demo 1: Legacy Publisher/Subscriber API with new type-state
+    // Demo 1: Topic-labeled Publisher/Subscriber facade over the type-enforced SPSC pair
     let capacity = 256;
-    let publisher = Publisher::<Twist>::new("/cmd_vel", capacity);
-    let subscriber = Subscriber::new(publisher.ring(), "/cmd_vel");
+    let (publisher, subscriber) = Publisher::<Twist>::declare("/cmd_vel", capacity);
     let stats = Arc::new(PerformanceStats::new());
 
     let stats_clone = stats.clone();

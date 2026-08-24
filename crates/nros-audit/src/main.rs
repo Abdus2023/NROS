@@ -82,6 +82,20 @@ fn check_claims() {
     } else {
         gate_fail("DOC-003: EVIDENCE_REGISTRY.md does not expose claim_allowed".to_string());
     }
+    // Pass 31 (P31-03): the per-claim ledger is now load-bearing. It binds every
+    // claim in docs/representation/claims.yaml to executed evidence and to the
+    // exact wording that evidence permits. If it is deleted or drained of
+    // per-claim scope, the claim rule ("No observed evidence -> no verified
+    // claim") again becomes unenforceable-per-claim, so this is a hard failure.
+    let ledger = fs::read_to_string("docs/CLAIM_LEDGER.md").unwrap_or_default();
+    if ledger.contains("CLAIM-MIRI-001") && ledger.contains("Allowed wording") {
+        println!("✅ Claim ledger present and binds claims to allowed wording");
+    } else {
+        gate_fail(
+            "DOC-006: docs/CLAIM_LEDGER.md missing or does not bind claims to allowed wording"
+                .to_string(),
+        );
+    }
 }
 
 fn check_ci() {

@@ -48,10 +48,11 @@
       "partial_substitute": "F29-12: all 8 unit-test suites (54 tests) were rebuilt from mrustc's generated C with -fsanitize=address,undefined -fno-sanitize-recover=all and run clean - zero sanitizer reports, so no heap-buffer-overflow, use-after-free, double-free or UBSan diagnostic in nros-core's unsafe ring code. LeakSanitizer's 1877 bytes at exit were attributed away from NROS: a no-unsafe control binary leaks 317 bytes of the same kind, 0 leak frames have a symbol naming RingBuffer, the deepest recurring frame is std::thread::Thread::new and the only test in any leak stack is the thread-spawning test_spsc_ordering. Repeatable via tools/offline-mrustc/probes/sanitizer.sh. ASan/UBSan complements but does not replace Miri; both are now green."
     },
     "loom": {
-      "status": "NOT_RUN",
+      "status": "WIRED_NOT_RUN",
       "required": false,
-      "command": "cargo test --test loom (needs the loom crate; crates.io is unreachable from the audit sandbox)",
-      "note": "Formal concurrency verification of the Acquire/Release ordering, reservation flags and wraparound remains outstanding. Miri is the only UB detector that has ever been wired into CI; as of Pass 30 its failure is decoded (wall-clock syscall in one test, blocked_test_environment) and F30-01 remediation is applied, with executed re-verification pending."
+      "command": "cargo test -p nros-core --features loom --test loom",
+      "wiring": "Pass 31 (P31-02): nros-core gained an optional 'loom' dependency whose feature swaps the crate's synchronization primitives (AlignedU64/AlignedBool atomics, Arc) for loom's instrumented versions, and tests/loom.rs runs the REAL RingBuffer/Producer/Consumer protocol (not a model copy) under loom::model with bounded interleavings: two-message handoff (visibility + FIFO), capacity-1 guard wraparound with guard-held preemption (exactly-once + no slot aliasing), and reservation/commit visibility (uncommitted reservation invisible; second reserve fails; commit observed). Feature is off by default: native builds, Miri and the offline mrustc pipeline are bit-identical to before.",
+      "note": "Formal concurrency verification of the Acquire/Release ordering, reservation flags and wraparound is now IMPLEMENTED but NOT YET EXECUTED: loom must still be observed running and passing. Running it needs a CI job (blocked by the same missing workflows scope as historical F-20 patching: the app token cannot push .github/workflows changes - the Loom CI addition is staged as docs/audit/P31-02-ci-loom-job.patch) or an environment with the loom dependency available. Model design note: assertions are restricted to facts true in EVERY interleaving (e.g. receive-side asserts must not be scheduled-specific)."
     },
     "nros_init_compile": {
       "status": "PASS",
@@ -98,9 +99,9 @@
     "note": "Pass 29 updated the SPSC ring row to BENCHMARKED (same-thread only), the TCP transport row with the F29-01 defect and fix, and both Performance Claims rows with the executed measurements."
   },
   "claim_ledger": {
-    "path": "docs/CLAIM_LEDGER.md (still to be created)",
-    "status": "TODO",
-    "note": "docs/verification/claims.md defines the rule ('No observed evidence -> no verified claim'); a per-claim ledger mapping Claim/Source/Evidence/Status has still not been written."
+    "path": "docs/CLAIM_LEDGER.md",
+    "status": "IMPLEMENTED",
+    "note": "Created in Pass 31 (P31-03): every claim in docs/representation/claims.yaml is mapped to source, implementation, executed evidence (run IDs per EVID-006), environment, policy class and permitted wording. Strengthening a claim class requires recording the new executed run first."
   },
   "safety_gate": {
     "version": "v0.1.1 (code) / Pass 29 (evidence)",
@@ -116,7 +117,7 @@
       "B_Ownership": {
         "producer_role_capability": true,
         "consumer_role_capability": true,
-        "no_public_raw_ring_sharing": "PARTIAL: Publisher::ring() and Subscriber::new still expose Arc<RingBuffer> (deprecated but safe and public), so SPSC discipline is enforced by convention on that path; channel() is the type-enforced path",
+        "no_public_raw_ring_sharing": "CLOSED (Pass 31, P31-01): Publisher::ring(), Publisher::from_ring() and Subscriber::new(Arc<RingBuffer>) were REMOVED - deprecation alone never closed the capability, so the hole it covered persisted while they existed. Publisher/Subscriber are now a thin topic-labeled facade over Producer/Consumer with a single construction path, Publisher::declare(topic, capacity), which returns the matched pair; no safe API hands out Arc<RingBuffer>. RingBuffer stays public as the documented low-level building block (its CAS reservation + type-state invariants hold regardless of handle count); the trybuild negative-compile suite still passes against it.",
         "derefmut_removed": true
       },
       "C_Destruction": "all seven destruction cases covered by tests; ZST drop-exactly-once covered by test_zst_with_drop_dropped_exactly_once",
