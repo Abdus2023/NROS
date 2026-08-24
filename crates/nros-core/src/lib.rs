@@ -474,16 +474,15 @@ impl<T> Publisher<T> {
     /// single consumer are enforced by the type system (fixes CORE-016, CORE-019).
     pub fn declare(topic: &str, capacity: usize) -> (Publisher<T>, Subscriber<T>) {
         let (producer, consumer) = channel(capacity);
-        (
-            Publisher {
-                producer,
-                topic: topic.to_string(),
-            },
-            Subscriber {
-                consumer,
-                topic: topic.to_string(),
-            },
-        )
+        let publisher = Publisher {
+            producer,
+            topic: topic.to_string(),
+        };
+        let subscriber = Subscriber {
+            consumer,
+            topic: topic.to_string(),
+        };
+        (publisher, subscriber)
     }
 
     pub fn allocate(&self) -> Option<WriteGuard<'_, T>> {
