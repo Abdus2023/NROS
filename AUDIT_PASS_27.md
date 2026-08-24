@@ -463,3 +463,30 @@ payloads (trybuild wip files for F-19, Miri verdict, test-suite confirmation) ar
 queued for reading as soon as the GitHub connection is re-established; all local
 content commits are ready. Nothing was lost: every intermediate state is a pushed
 commit.
+
+#### 11.I.3 — F-19 closed: trybuild .stderr blessed from the runner's own rustc (self-serve)
+
+The diag channel finished its job. diag #6-#8 iterations hardened data delivery
+around an environmental killer that consistently terminates the emitting process
+~15-90s after a heavy cargo codegen phase (kill point wobbles; panic hook silent;
+N.B. processes inside GitHub's runner fleet — cargo exits 101 normally, ours is
+reaped externally; root cause NOT fully established, worked around by density).
+The countermeasures that landed all four wip files: heartbeated subprocess runner
+with progressive log streaming, canonical-path dedup (the "8 files" were ./wip vs
+wip duplicates), data-first emission precedence, and a single concatenated
+BEGIN/END-tagged bundle at 8KB chunks (the killer cuts by time spent emitting,
+so data density per second of survival window was quadrupled).
+
+Harvested from run 32690827299 (diag#8, runner rustc 1.97.1 — the exact toolchain
+the blessed files must match), transcribed bit-exact through the annotation
+unescaping, and committed as `crates/nros-core/tests/compile_fail/*.stderr`:
+- `commit_uninit.stderr` (270 B): E0599 no `commit` on uninit WriteGuard — CORE-014
+- `safe_init_with.stderr` (279 B): E0599 removed unsafe-to-call-safe init_with — CORE-011
+- `mutable_read_guard.stderr` (665 B): E0594 cannot assign through ReadGuard — CORE-015
+- `two_producers_from_one_channel.stderr` (339 B): E0599 no Clone for Producer — CORE-016
+
+All temporary Pass27-DIAG code is removed in the finalization commit
+(diag iterations f2c56d8..38ac5ae remain in history as the methodology record;
+the F-23 gate_fail annotation feature is retained). The workspace `cargo test`
+job is expected to go green on the finalization run; Miri decode continues
+(next section) and fmt/doc-gate remain the tracked F-18/F-20 owner actions.

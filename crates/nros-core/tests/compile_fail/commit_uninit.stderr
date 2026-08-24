@@ -1,0 +1,5 @@
+error[E0599]: no method named `commit` found for struct `WriteGuard<'a, T>` in the current scope
+  --> tests/compile_fail/commit_uninit.rs:12:11
+   |
+12 |     guard.commit(); // This should fail to compile
+   |           ^^^^^^ method not found in `WriteGuard<'_, u64>`
