@@ -1,0 +1,41 @@
+From: Pass 27 audit session <arena-agent@users.noreply.github.com>
+Subject: Fix Miri job: install nightly toolchain robustly (RUSTUP_TOOLCHAIN env override)
+
+The Safety-gate job fails for environmental reasons, decoded via an in-job
+rustup probe (Pass 27 diag #9/#11): the current ubuntu-latest image makes
+`rustup default nightly` ineffective (an environment-level toolchain override,
+RUSTUP_TOOLCHAIN=stable, outranks `rustup default`; `rustup component add miri`
+then targets the effective stable toolchain and fails with "the 'miri' component
+which provides the command 'cargo-miri' is not available for the
+'stable-x86_64-unknown-linux-gnu' toolchain"). Verified twice on live CI that
+the install chain exits status 1 with that exact error.
+
+The fix side-steps every selection ambiguity: install nightly with the miri
+component in one command and select the toolchain per-invocation with
+`+nightly`, whose precedence beats RUSTUP_TOOLCHAIN, directory overrides and
+the rustup default alike.
+
+Apply with:  git apply docs/audit/F-25-ci-miri-toolchain.patch
+(Cannot be pushed from the audit sandbox: the app token lacks the `workflows`
+scope — same class as F-20's fetch-depth patch.)
+---
+ .github/workflows/ci.yml | 13 ++++++-------
+ 1 file changed, 6 insertions(+), 7 deletions(-)
+
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 0000000..0000000 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -82,12 +82,11 @@ jobs:
+       - name: Install Miri
+         run: |
+-          rustup default nightly
+-          rustup component add miri
+-          cargo miri setup
++          rustup toolchain install nightly --component miri
+       - name: Miri on nros-core
+-        run: cargo miri test -p nros-core --lib
++        run: cargo +nightly miri setup && cargo +nightly miri test -p nros-core --lib
+       - name: Miri on nros-types
+-        run: cargo miri test -p nros-types --lib
++        run: cargo +nightly miri test -p nros-types --lib

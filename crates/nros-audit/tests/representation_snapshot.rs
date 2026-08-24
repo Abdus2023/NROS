@@ -6,12 +6,25 @@
 
 use std::fs;
 use std::path::Path;
+use std::path::PathBuf;
 
-const ROOT: &str = "docs/representation";
+/// Anchor at the package directory (compile-time) — the bare relative path
+/// `docs/representation` only resolved when cargo happened to run the test
+/// binary with the workspace root as CWD; cargo actually uses the PACKAGE dir,
+/// so this test previously failed spuriously on its fixture paths (found by the
+/// first real CI `cargo test --workspace` run; the test had never executed).
+fn rep_path(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/representation").join(name)
+}
+
+fn docs_path(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/documentation").join(name)
+}
+
 const MANIFESTS: &[&str] = &["architecture.yaml", "capabilities.yaml", "evidence.yaml", "claims.yaml"];
 
 fn read(name: &str) -> String {
-    fs::read_to_string(Path::new(ROOT).join(name)).expect("representation fixture must exist")
+    fs::read_to_string(rep_path(name)).expect("representation fixture must exist")
 }
 
 #[test]
@@ -50,6 +63,10 @@ fn snapshot_does_not_equate_integrity_with_execution_success() {
 
 #[test]
 fn schema_and_snapshot_are_present() {
-    assert!(Path::new(ROOT).join("schema.yaml").is_file());
-    assert!(Path::new(ROOT).join("snapshot.yaml").is_file());
+    // The authoritative schema file lives in docs/documentation (the
+    // documentation-reference schema the validator enforces); previously this
+    // asserted a non-existent docs/representation/schema.yaml and could never
+    // have passed anywhere.
+    assert!(docs_path("schema.yaml").is_file(), "documentation schema must exist");
+    assert!(rep_path("snapshot.yaml").is_file(), "representation snapshot must exist");
 }

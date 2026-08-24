@@ -490,3 +490,47 @@ All temporary Pass27-DIAG code is removed in the finalization commit
 the F-23 gate_fail annotation feature is retained). The workspace `cargo test`
 job is expected to go green on the finalization run; Miri decode continues
 (next section) and fmt/doc-gate remain the tracked F-18/F-20 owner actions.
+
+#### 11.I.4 — Workspace test-suite decoded & fixed (F-26); Miri job proven environmental (F-25); full green minus owner actions
+
+With the blessing in place, trybuild passed in-job (diag #10: status Some(0),
+1 passed, zero wip re-writes — the .stderr transcription is byte-exact). The
+workspace test job's residual red was decoded by diag #11's failure-context
+harvest as 5 failing tests in `crates/nros-audit/tests/representation_snapshot.rs`:
+
+**F-26 (test-suite defect, previously NEVER EXECUTED by CI — the class of defect
+this audit's NOT_RUN taxonomy exists to catch):**
+1. `ROOT = "docs/representation"` was CWD-relative; cargo runs test binaries with
+   CWD = package dir, not workspace root, so every fixture read panicked.
+2. `schema_and_snapshot_are_present` asserted a non-existent
+   `docs/representation/schema.yaml` — a failure under ANY CWD; the authoritative
+   schema lives in docs/documentation/schema.yaml.
+Fix: package-dir-anchored paths (`env!("CARGO_MANIFEST_DIR")/../../docs/...`) and
+the schema assertion pointed at the real file. All other 50+ test binaries in the
+workspace suite were green in the same harvest (extraction was unfiltered: the
+only FAILED hits were these five).
+
+**F-25 (Miri job = environmental, double-verified live):** the in-job rustup
+probe chain fails before any Miri interpretation: `rustup default nightly` does
+not take effect on the current ubuntu-latest image (environment-level toolchain
+selection overrides it), so `rustup component add miri` targets the effective
+stable toolchain and errors: item 'miri' component ... not available for the
+'stable-x86_64-unknown-linux-gnu' toolchain. NOT a code defect; fix requires the
+credential-with-workflows-scope push of `docs/audit/F-25-ci-miri-toolchain.patch`
+(install `nightly` with `--component miri` in one step; invoke with `+nightly`,
+which outranks env/override/default selection). Owner action, same class as F-20.
+
+**Remediation map now:**
+- `cargo check` ✅ green (F-24 fixed)
+- `cargo clippy` ✅ green
+- `cargo test` ✅ expected green (F-19 blessed + F-26 fixed — this run verifies)
+- benchmarks ✅ builds+runs (bench binary compiles since F-24)
+- golden/provenance ✅ green
+- Miri ❌ until F-25 owner push (content READY: docs/audit/F-25-ci-miri-toolchain.patch)
+- fmt ❌ until F-18 owner decision (377-line normalization or gate downgrade)
+- doc-gate ❌ until F-20 owner push (docs/audit/F-20-ci-fetch-depth.patch)
+
+All temporary Pass27-DIAG instrumentation is removed (restored to the F-23
+production state). Diagnostic methodology iterations #1-#11 remain in git history
+as the record. Awaiting the finalization run to confirm the green ceiling stated
+above; any residual will be reported in the next addendum rather than edited retroactively.
