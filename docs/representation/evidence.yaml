@@ -21,9 +21,14 @@ records:
       paths:
         - crates/nros-core/src
     tests:
-      status: present
+      status: executed_passed_offline_mrustc_2026-08-22
+      note: >-
+        20 passed / 0 failed / 1 ignored incl. Pass-27 remediation regressions
+        (ZST zero-size-alloc UB fix, abort_initialized drop-panic double-drop fix);
+        adversarial probes re-run green (exact drop counts, 1M wraparound cap-2).
+        Miri still outstanding.
     ci:
-      status: unknown
+      status: check_clippy_passed_2026-08-24
     miri:
       status: unknown
     benchmark:
@@ -49,7 +54,7 @@ records:
     tests:
       status: state_machine_only
     ci:
-      status: unknown
+      status: check_clippy_passed_2026-08-24
     benchmark:
       status: absent
     hardware:
@@ -61,11 +66,238 @@ records:
     tests:
       status: absent_for_live_telemetry
     ci:
-      status: unknown
+      status: check_clippy_passed_2026-08-24
     benchmark:
       status: absent
     hardware:
       status: absent
+
+  # Pass 27 (2026-08-22): records completed for every capability per schema
+  # invariant `every_capability_must_be_evidence_linked`. Test statuses marked
+  # executed_passed_offline_mrustc_2026-08-22 were run by the offline verification
+  # session (source-built compiler; independent of cargo).
+  # 2026-08-24 update: CI now EXECUTES. `check_clippy_passed_2026-08-24` means the
+  # workspace `cargo check --workspace --all-targets` AND `cargo clippy
+  # --workspace --all-targets` jobs both passed on real rustc 1.97.1 (runs
+  # 32676158182 / 32676713846), after Pass 27 F-24 (real-rustc E0596 in
+  # nros-core abort_initialized) was found via the §11.I.2 diagnostic annotation
+  # channel and fixed. The workspace `cargo test` job remains red ONLY pending
+  # F-19 trybuild .stderr blessing (harvest in flight over the same channel);
+  # the Miri job remains red and is being decoded (§11.I.2); fmt red = F-18
+  # owner decision; doc-gate red = F-20 needs credentialed push of
+  # docs/audit/F-20-ci-fetch-depth.patch.
+  - capability: CORE-IPC-002
+    source:
+      status: absent
+    tests:
+      status: absent
+    ci:
+      status: check_clippy_passed_2026-08-24
+    miri:
+      status: not_applicable
+    benchmark:
+      status: absent
+    hardware:
+      status: absent
+
+  - capability: NODE-001
+    source:
+      status: present
+      paths:
+        - crates/nros-node/src
+    tests:
+      status: executed_passed_offline_mrustc_2026-08-22
+    ci:
+      status: check_clippy_passed_2026-08-24
+    miri:
+      status: not_run
+    benchmark:
+      status: unit_level_timing_assert_only
+    hardware:
+      status: not_applicable
+
+  - capability: NODE-002
+    source:
+      status: absent
+    tests:
+      status: absent
+    ci:
+      status: check_clippy_passed_2026-08-24
+    miri:
+      status: not_applicable
+    benchmark:
+      status: not_applicable
+    hardware:
+      status: not_applicable
+
+  - capability: HAL-001
+    source:
+      status: present
+      paths:
+        - crates/nros-hal/src
+    tests:
+      status: executed_passed_offline_mrustc_2026-08-22
+    ci:
+      status: check_clippy_passed_2026-08-24
+    miri:
+      status: not_run
+    benchmark:
+      status: absent
+    hardware:
+      status: absent
+
+  - capability: TRANSPORT-001
+    source:
+      status: present
+      paths:
+        - crates/nros-transport/src
+    tests:
+      status: executed_passed_offline_mrustc_2026-08-22
+      note: >-
+        8/8 incl. new TCP fragmented-delivery regression (Pass 27 §11.C): stream framing
+        defect (nonblocking read_exact consuming partial prefix) found and fixed with
+        per-connection buffered reader; bug->test->fix discrimination proven by splicing
+        the test into the pre-fix code (fails) vs fixed code (passes byte-identical).
+        Pass 27 §11.E adds executed robustness probes (210k+ adversarial inputs):
+        header truncation sweep 0..36B, 100k garbage + 100k mutated headers, deserializer
+        truncation/garbage, TCP 64MiB-payload-starvation trap and 256KiB junk storm —
+        zero panics, zero phantom frames, no payload pre-allocation.
+    ci:
+      status: check_clippy_passed_2026-08-24
+    miri:
+      status: not_run
+    benchmark:
+      status: absent
+    hardware:
+      status: not_applicable_udp_loopback_only
+
+  - capability: TRANSPORT-002
+    source:
+      status: scaffolded_only
+    tests:
+      status: absent
+    ci:
+      status: check_clippy_passed_2026-08-24
+    miri:
+      status: not_run
+    benchmark:
+      status: absent
+    hardware:
+      status: not_applicable
+
+  - capability: DIST-001
+    source:
+      status: present
+      paths:
+        - crates/nros-distributed/src
+    tests:
+      status: executed_passed_offline_mrustc_2026-08-22
+      note: >-
+        5 in-crate tests exist but the libtest harness hits an mrustc typechecker
+        crash (toolchain-only, documented §11.E); the same test bodies were executed
+        as probe binaries (PASS) plus 6 extended adversarial probes (election/timeout
+        discipline, CRUD+version+hash determinism+spread, scheduler lifecycle with
+        negative transitions, capability matrix, wrong-node refusal). Probe session
+        FOUND a real defect: execute_task accepted any status (completed task re-ran
+        silently) — fixed as F-21 with state-guard + regression test.
+        2026-08-23 update: first real CI execution (run 32601114459) exposed F-22 —
+        test_consistent_hash left T unconstrained (E0282 under real rustc); fixed with
+        explicit annotation. In-crate harness tests are expected green under cargo
+        from the next CI run; keep `ci.status` updated from there.
+    ci:
+      status: check_clippy_passed_2026-08-24
+    miri:
+      status: not_run
+    benchmark:
+      status: absent
+    hardware:
+      status: not_applicable
+
+  - capability: SIM-001
+    source:
+      status: present
+      paths:
+        - crates/nros-sim/src
+    tests:
+      status: executed_passed_offline_mrustc_2026-08-22
+    ci:
+      status: check_clippy_passed_2026-08-24
+    miri:
+      status: not_run
+    benchmark:
+      status: absent
+    hardware:
+      status: not_applicable
+
+  - capability: STUDIO-001
+    source:
+      status: present
+      paths:
+        - crates/nros-studio/src
+    tests:
+      status: executed_passed_offline_mrustc_2026-08-22
+    ci:
+      status: check_clippy_passed_2026-08-24
+    miri:
+      status: not_run
+    benchmark:
+      status: absent
+    hardware:
+      status: not_applicable
+
+  - capability: CLI-001
+    source:
+      status: present
+      paths:
+        - crates/nros-cli/src
+    tests:
+      status: executed_passed_offline_mrustc_2026-08-22_unit_and_golden_init_compile
+    ci:
+      status: check_clippy_passed_2026-08-24
+    miri:
+      status: not_applicable
+    benchmark:
+      status: absent
+    hardware:
+      status: not_applicable
+
+  - capability: AUDIT-001
+    source:
+      status: present
+      paths:
+        - crates/nros-audit/src
+    tests:
+      status: gates_executed_locally_2026-08-22
+    ci:
+      status: check_clippy_passed_2026-08-24
+    miri:
+      status: not_applicable
+    benchmark:
+      status: not_applicable
+    hardware:
+      status: not_applicable
+
+  - capability: FACADE-001
+    source:
+      status: present
+      paths:
+        - crates/nros/src
+        - crates/nros-macros/src
+    tests:
+      status: executed_passed_offline_mrustc_real_syn_2026-08-22
+      note: >-
+        Real nros-macros (syn 2.0.119 / quote 1.0.47 / proc-macro2 1.0.107 vendored from
+        dtolnay GitHub tags) built with mrustc; facade rlib built against it; examples
+        mobile_base and vertical_slice compiled and ran green (Pass 27 §11). Official
+        rustc confirmation still pending with first CI execution.
+    ci:
+      status: check_clippy_passed_2026-08-24
+    miri:
+      status: not_applicable
+    benchmark:
+      status: not_applicable
+    hardware:
+      status: not_applicable
 
 verification_state:
   workflow_definition: present_or_staged

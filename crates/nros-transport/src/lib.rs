@@ -568,10 +568,21 @@ impl UdpTransport {
 
 pub struct TcpTransport {
     pub listener: Option<TcpListener>,
-    pub connections: Arc<Mutex<HashMap<String, TcpStream>>>,
+    pub connections: Arc<Mutex<HashMap<String, TcpConnection>>>,
     pub compression: CompressionEngine,
     pub sequence: AtomicU64,
     pub stats: Arc<TransportStats>,
+}
+
+/// Per-connection TCP state: the stream plus a partial-frame receive buffer.
+/// Pass 27 fix: the buffer retains bytes of an incompletely-delivered frame across
+/// receive() calls so nonblocking short reads never desynchronize the stream framing.
+/// (Previously receive() issued read_exact() directly on the nonblocking socket: a
+/// short read consumed a prefix of the header/payload, then failed with WouldBlock,
+/// discarding those bytes — every subsequent parse started mid-frame, permanently.)
+pub struct TcpConnection {
+    stream: TcpStream,
+    rx_buf: Vec<u8>,
 }
 
 impl TcpTransport {
@@ -615,7 +626,7 @@ impl TcpTransport {
             .map_err(|e| format!("Failed to set non-blocking: {}", e))?;
 
         let mut connections = self.connections.lock().unwrap();
-        connections.insert(topic.to_string(), stream);
+        connections.insert(topic.to_string(), TcpConnection { stream, rx_buf: Vec::new() });
 
         println!("[TCP] Connected to {} for topic: {}", addr, topic);
         Ok(())
@@ -623,7 +634,7 @@ impl TcpTransport {
 
     pub fn publish<T: Serializable>(&self, topic: &str, message: &T) -> Result<(), String> {
         let mut connections = self.connections.lock().unwrap();
-        let stream = connections
+        let conn = connections
             .get_mut(topic)
             .ok_or_else(|| format!("No connection for topic: {}", topic))?;
 
@@ -646,20 +657,43 @@ impl TcpTransport {
         let seq = self.sequence.fetch_add(1, Ordering::Relaxed);
         let header = MessageHeader::new(0, final_payload.len() as u32, seq).with_checksum(&final_payload);
 
-        // Send header + payload with TCP_NODELAY per design (low latency)
+        // Pass 27 fix: send header+payload as ONE frame buffer with a bounded retry
+        // loop. Two separate write_all() calls on a nonblocking socket could return
+        // WouldBlock mid-frame, tearing the frame on the wire; the receiver then waited
+        // on a partial prefix forever and the next frame misparsed — session dead.
+        // Frames are bounded by MAX_PAYLOAD_SIZE (64 MiB receive-side policy), so a
+        // bounded spin is acceptable here; a full nonblocking tx-queue with backpressure
+        // semantics is a documented follow-up for the real-time network stack.
         let header_bytes = header.to_bytes();
-        stream
-            .write_all(&header_bytes)
-            .map_err(|e| format!("Failed to send header: {}", e))?;
-
         let start = Instant::now();
-        stream
-            .write_all(&final_payload)
-            .map_err(|e| format!("Failed to send payload: {}", e))?;
-
-        stream
-            .flush()
-            .map_err(|e| format!("Failed to flush: {}", e))?;
+        let mut frame = Vec::with_capacity(header_bytes.len() + final_payload.len());
+        frame.extend_from_slice(&header_bytes);
+        frame.extend_from_slice(&final_payload);
+        let mut sent = 0usize;
+        let mut retries = 0u32;
+        while sent < frame.len() {
+            match conn.stream.write(&frame[sent..]) {
+                Ok(0) => return Err("TCP connection closed during send".to_string()),
+                Ok(n) => {
+                    sent += n;
+                    retries = 0;
+                }
+                Err(ref e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    retries += 1;
+                    if retries > 1000 {
+                        return Err(format!(
+                            "TCP send backpressure exceeded ({}/{} bytes written)",
+                            sent,
+                            frame.len()
+                        ));
+                    }
+                    std::thread::yield_now();
+                }
+                Err(e) => return Err(format!("Failed to send frame: {}", e)),
+            }
+        }
+        // (TcpStream::flush() is a documented no-op; the old explicit flush is removed.)
 
         let elapsed = start.elapsed().as_micros() as u64;
         self.stats
@@ -670,27 +704,49 @@ impl TcpTransport {
 
     pub fn receive<T: Serializable>(&self, topic: &str) -> Result<Option<(T, MessageHeader)>, String> {
         let mut connections = self.connections.lock().unwrap();
-        let stream = connections
+        let conn = connections
             .get_mut(topic)
             .ok_or_else(|| format!("No connection for topic: {}", topic))?;
 
-        // Read header
-        let mut header_buf = [0u8; MessageHeader::SIZE];
-        match stream.read_exact(&mut header_buf) {
-            Ok(_) => {},
-            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => return Ok(None),
-            Err(e) => return Err(format!("Failed to read header: {}", e)),
+        // Pass 27 fix: stream-correct framing with a per-connection receive buffer.
+        // The old code ran read_exact() on the raw nonblocking stream; a short read
+        // consumed a PREFIX of the header/payload and then failed with WouldBlock,
+        // discarding those bytes — every later parse started mid-frame and the stream
+        // never resynchronized (found by deep audit; previously untested: no TCP test
+        // existed). Now bytes accumulate until a complete frame is buffered; Ok(None)
+        // consumes nothing.
+
+        // 1. Drain every byte currently available without blocking.
+        loop {
+            let mut chunk = [0u8; 8192];
+            match conn.stream.read(&mut chunk) {
+                Ok(0) => return Err(format!("TCP connection closed by peer (topic: {})", topic)),
+                Ok(n) => conn.rx_buf.extend_from_slice(&chunk[..n]),
+                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
+                Err(ref e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(e) => return Err(format!("Failed to read from stream: {}", e)),
+            }
         }
 
-        let header = MessageHeader::from_bytes(&header_buf)?;
+        // Pass 24 hardening (retained & extended): payload_size is untrusted input.
+        // Cap the payload at 64 MiB (far above legitimate frames) and the accumulation
+        // buffer at one max-size frame; a peer streaming non-frame junk trips the buffer
+        // guard and errors instead of growing without bound.
+        const MAX_PAYLOAD_SIZE: usize = 64 * 1024 * 1024;
+        const MAX_RX_BUFFER: usize = MessageHeader::SIZE + MAX_PAYLOAD_SIZE;
+        if conn.rx_buf.len() > MAX_RX_BUFFER {
+            conn.rx_buf.clear();
+            return Err("TCP receive buffer exceeded maximum frame size without a parseable frame — stream junk".to_string());
+        }
+
+        // 2. Need at least a full header before parsing.
+        if conn.rx_buf.len() < MessageHeader::SIZE {
+            return Ok(None);
+        }
+
+        let header = MessageHeader::from_bytes(&conn.rx_buf[..MessageHeader::SIZE])?;
         header.validate()?;
 
-        // Pass 24 hardening: bound the payload allocation. `payload_size` comes from the
-        // untrusted network header; without a cap a malicious/buggy peer can advertise a
-        // multi-GB frame and OOM the receiver before a single byte of body is read.
-        // 64 MiB is far above any legitimate NROS frame (images/point clouds) while
-        // preventing pathological allocations.
-        const MAX_PAYLOAD_SIZE: usize = 64 * 1024 * 1024;
         let payload_len = header.payload_size as usize;
         if payload_len > MAX_PAYLOAD_SIZE {
             return Err(format!(
@@ -699,11 +755,15 @@ impl TcpTransport {
             ));
         }
 
-        // Read payload
-        let mut payload_buf = vec![0u8; payload_len];
-        stream
-            .read_exact(&mut payload_buf)
-            .map_err(|e| format!("Failed to read payload: {}", e))?;
+        // 3. Wait until the entire payload has arrived — consume nothing meanwhile.
+        let frame_len = MessageHeader::SIZE + payload_len;
+        if conn.rx_buf.len() < frame_len {
+            return Ok(None);
+        }
+
+        // 4. Complete frame buffered — split it out and advance the consume point.
+        let payload_buf = conn.rx_buf[MessageHeader::SIZE..frame_len].to_vec();
+        conn.rx_buf.drain(..frame_len);
 
         // Verify checksum — fixes AUDIT.md
         header.verify_checksum(&payload_buf)?;
@@ -712,8 +772,7 @@ impl TcpTransport {
         let decompressed = self.compression.decompress(&payload_buf)?;
         let message = T::deserialize(&decompressed)?;
 
-        self.stats
-            .record_receive(header_buf.len() + payload_buf.len());
+        self.stats.record_receive(frame_len);
         Ok(Some((message, header)))
     }
 
@@ -1119,6 +1178,79 @@ mod tests {
         // For deterministic test, we accept that UDP might be lossy, so we just check stats didn't crash
         // Instead, we ensure publish didn't error and stats recorded
         assert!(pub_transport.stats().messages_sent.load(Ordering::Relaxed) >= 1);
+    }
+
+    #[test]
+    fn test_tcp_fragmented_delivery_no_desync() {
+        // Pass 27 regression: TCP receive previously ran read_exact() directly on the
+        // nonblocking stream; a short read consumed a PREFIX of the header/payload and
+        // then failed with WouldBlock, discarding those bytes — every later parse
+        // started mid-frame and the stream never resynchronized (no TCP test existed).
+        // Partial frames are now buffered per connection and reassembled. This test
+        // forces fragmentation (half header / rest of header / payload byte-by-byte)
+        // and requires the frame to arrive exactly once, byte-identical.
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let transport = TcpTransport::new_client();
+        transport.connect("/chatter", &addr.to_string()).unwrap();
+
+        let msg = Twist {
+            linear: Vector3 { x: 1.0, y: 2.0, z: 3.0 },
+            angular: Vector3 { x: 0.1, y: 0.2, z: 0.3 },
+        };
+
+        // Build the exact wire frame (same layout as publish()).
+        let mut payload = Vec::new();
+        msg.serialize(&mut payload).unwrap();
+        let mut wire_payload = Vec::with_capacity(payload.len() + 1);
+        wire_payload.push(0u8); // compression flag: none
+        wire_payload.extend_from_slice(&payload);
+        let header = MessageHeader::new(0, wire_payload.len() as u32, 0).with_checksum(&wire_payload);
+        let mut frame = header.to_bytes().to_vec();
+        frame.extend_from_slice(&wire_payload);
+        let frame_len = frame.len();
+
+        let sender = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let half = MessageHeader::SIZE / 2;
+            stream.write_all(&frame[..half]).unwrap();
+            stream.flush().unwrap();
+            std::thread::sleep(Duration::from_millis(80));
+            stream.write_all(&frame[half..MessageHeader::SIZE]).unwrap();
+            stream.flush().unwrap();
+            std::thread::sleep(Duration::from_millis(80));
+            for b in &frame[MessageHeader::SIZE..] {
+                stream.write_all(std::slice::from_ref(b)).unwrap();
+                stream.flush().unwrap();
+                std::thread::sleep(Duration::from_millis(2));
+            }
+        });
+
+        // Mid-stream: a partial frame must yield Ok(None) and consume nothing.
+        std::thread::sleep(Duration::from_millis(40));
+        assert!(
+            transport.receive::<Twist>("/chatter").unwrap().is_none(),
+            "partial frame must yield Ok(None) without consuming bytes"
+        );
+
+        // After the sender finishes, the complete frame must decode exactly.
+        let mut got = None;
+        for _ in 0..200 {
+            if let Some((received, hdr)) = transport.receive::<Twist>("/chatter").unwrap() {
+                assert_eq!(hdr.payload_size as usize + MessageHeader::SIZE, frame_len);
+                got = Some(received);
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        sender.join().unwrap();
+        let received = got.expect("complete frame must arrive intact after fragmented delivery");
+        assert!((received.linear.x - 1.0).abs() < 1e-9);
+        assert!((received.linear.y - 2.0).abs() < 1e-9);
+        assert!((received.linear.z - 3.0).abs() < 1e-9);
+        assert!((received.angular.x - 0.1).abs() < 1e-9);
+        assert!((received.angular.z - 0.3).abs() < 1e-9);
     }
 
     #[test]

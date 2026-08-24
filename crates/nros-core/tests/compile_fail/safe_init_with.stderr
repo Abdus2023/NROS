@@ -1,0 +1,5 @@
+error[E0599]: no method named `init_with` found for struct `WriteGuard<'a, T>` in the current scope
+  --> tests/compile_fail/safe_init_with.rs:13:23
+   |
+13 |     let _init = guard.init_with(|slot| {
+   |                 ------^^^^^^^^^ method not found in `WriteGuard<'_, u64>`

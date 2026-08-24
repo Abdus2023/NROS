@@ -1,0 +1,29 @@
+{
+  "env": {
+    "cpu_model": "Intel(R) Xeon(R) Processor @ 2.60GHz",
+    "os": "linux",
+    "kernel": "Linux version 6.1.158+ (root@runnervmeorf1) (gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, GNU ld (GNU Binutils for Ubuntu) 2.42) #1 SMP PREEMPT_DYNAMIC Mon May 11 18:48:24 UTC 2026",
+    "rustc_version": "mrustc v0.12.0 (Rust 1.90.0 stdlib built from source; GCC 12.2.0 C backend), offline sandbox substitute for official rustc",
+    "commit": "9c05e8b8563f00bf182fcc56aff1b31baaf79618 (arena/01a02a3e-nros, Pass 27)",
+    "timestamp": "1787423262",
+    "capacity": 1024,
+    "iterations": 100000,
+    "affinity": "not pinned; 2 shared vCPU sandbox",
+    "message_size": 64
+  },
+  "throughput_msg_per_sec": 1571112.67,
+  "latency": {
+    "min_us": 92.03,
+    "p50_us": 628.87,
+    "p95_us": 770.31,
+    "p99_us": 823.47,
+    "p999_us": 852.0,
+    "max_us": 886.02,
+    "mean_us": 588.21,
+    "stddev_us": 139.55
+  },
+  "total_time_ms": 63.65,
+  "messages_sent": 100000,
+  "messages_received": 100000,
+  "notes": "FIRST REAL artifact (not the historical template). Produced 2026-08-22 by the offline verification session using a source-built compiler (no cargo/rustup available in sandbox). Hardware: shared 2-vCPU E2B sandbox; producer/consumer threads spin-contend, so cross-thread latency is scheduler-bound: mean 588us is scheduler, not IPC. Raw same-thread ring publish+consume measured separately at ~73.5 ns/op (~13.6M ops/s). message_size measured 64 B (canonical nros_types::Twist, repr(C)) \u2014 correcting the historical template value 56. Repository-reported 6.2us/780K-msg/s figures remain unverified on this constrained hardware; see AUDIT_PASS_27.md."
+}

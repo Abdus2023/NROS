@@ -122,3 +122,13 @@ capabilities:
     specification: AUDIT.md
     state: IMPLEMENTED
     claim: allowed_with_scope
+
+  - id: FACADE-001
+    name: nros facade crate and passthrough procedural macros
+    crate: nros
+    specification: DESIGN.md#3.1
+    state: SCAFFOLDED
+    claim: allowed_as_scaffolding
+    limitations:
+      - macros_are_passthrough_no_codegen
+      - offline_compile_blocked_by_syn_quote_proc_macro2_2026-08-22

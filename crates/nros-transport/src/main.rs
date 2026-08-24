@@ -4,6 +4,7 @@
 use nros_transport::{
     Twist, Vector3, MessageHeader, Serializable, UdpTransport, TcpTransport,
     ServiceDiscovery, ServiceInfo, CompressionEngine, LargePayload,
+    CompressionEngineTrait, // Pass 27 fix: should_compress/is_simulated are trait methods (E0599 without import)
 };
 use std::time::Duration;
 

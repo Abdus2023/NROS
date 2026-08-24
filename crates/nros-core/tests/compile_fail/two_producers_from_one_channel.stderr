@@ -1,0 +1,5 @@
+error[E0599]: no method named `clone` found for struct `Producer<T>` in the current scope
+  --> tests/compile_fail/two_producers_from_one_channel.rs:10:37
+   |
+10 |     let _producer_clone = producer2.clone(); // This should fail to compile: no Clone impl
+   |                                     ^^^^^ method not found in `Producer<u64>`

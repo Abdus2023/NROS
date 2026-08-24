@@ -30,6 +30,15 @@ fn main() {
     }
 }
 
+fn gate_fail(msg: String) -> ! {
+    // Pass 27 observability fix: print each hard failure BOTH as prose and as a GitHub
+    // Actions workflow-command annotation, so the reason is visible on the check-run even
+    // where raw job logs are unreachable (annotations ride the API, logs ride blob hosts).
+    println!("❌ {}", msg);
+    println!("::error title=NROS audit gate::{}", msg.replace('%', "%25").replace('\r', "%0D").replace('\n', "%0A"));
+    std::process::exit(1);
+}
+
 fn check_workspace_inventory() {
     println!("🔍 DOC-GATE: workspace inventory");
     let cargo_toml = fs::read_to_string("Cargo.toml").unwrap_or_default();
@@ -37,7 +46,7 @@ fn check_workspace_inventory() {
     let cargo_crates: Vec<&str> = cargo_toml.lines().filter(|l| l.contains("crates/")).collect();
     println!("Cargo.toml workspace members: {}", cargo_crates.len());
     if readme.contains("8 crates") && cargo_crates.len() >= 10 {
-        println!("❌ DOC-001: stale README crate inventory");
+        gate_fail("DOC-001: stale README crate inventory".to_string());
     } else {
         println!("✅ Workspace inventory does not show the known stale-8-crates mismatch");
     }
@@ -86,7 +95,12 @@ fn check_safety_invariants() {
     println!("🔒 SAFETY-GATE: structural source checks");
     let core = fs::read_to_string("crates/nros-core/src/lib.rs").unwrap_or_default();
     let mut failures = 0;
-    if core.contains("pub fn init_with<F>") { failures += 1; println!("❌ safe init_with regression"); }
-    if core.contains("pub fn as_mut_ptr(&self)") && !core.contains("pub unsafe fn as_mut_ptr(&self)") { failures += 1; println!("❌ safe as_mut_ptr regression"); }
-    if failures == 0 { println!("✅ structural safety checks passed"); } else { println!("❌ {} safety regression(s)", failures); }
+    if core.contains("pub fn init_with<F>") { failures += 1; println!("❌ safe init_with regression");  println!("::error title=NROS safety gate::safe init_with regression"); }
+    if core.contains("pub fn as_mut_ptr(&self)") && !core.contains("pub unsafe fn as_mut_ptr(&self)") { failures += 1; println!("❌ safe as_mut_ptr regression");  println!("::error title=NROS safety gate::safe as_mut_ptr regression"); }
+    if failures == 0 {
+        println!("✅ structural safety checks passed");
+    } else {
+        // Pass 27 fix (F-8): hard gate (was exit-0 always). Observability: ::error annotation.
+        gate_fail(format!("{} safety regression(s)", failures));
+    }
 }

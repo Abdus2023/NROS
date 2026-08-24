@@ -28,7 +28,10 @@ fn main() {
 
     // Create simulation world (nros-sim) with SimulatedPhysicsEngine
     let mut sim_world = SimulationWorld::new();
-    sim_world.spawn_robot("mobile_robot", nros_types::Vector3::new(0.0, 0.5, 0.0));
+    // Sim boundary: nros-sim intentionally keeps its own geometry types (zero-dep crate);
+    // canonical migration is tracked as I-007. Message flow below stays canonical.
+    // (Previously passed nros_types::Vector3 here — type mismatch, found by first real CI run.)
+    sim_world.spawn_robot("mobile_robot", nros_sim::Vector3::new(0.0, 0.5, 0.0));
     sim_world.add_imu();
     println!("[Sim] Spawned robot at [0, 0.5, 0] + IMU");
 
@@ -69,7 +72,9 @@ fn main() {
 
         // Verify ownership transfer, no copy: received_guard Derefs to &T, Drop will drop and advance
         assert!((received_guard.linear.x - twist.linear.x).abs() < 1e-9, "Message correctness");
-        assert_eq!(received_guard.frame_id(), 0); // Twist doesn't have frame_id, but for generic test
+        // Note: canonical `Twist` has no frame_id accessor — a previous `received_guard.frame_id()`
+        // assertion here was a stale copy from the HAL Image path and does not compile (E0599).
+        // Found by the first real CI execution (arena deep-analysis session, 2026-08-22).
 
         // 5. Node callback — real VelocityController::on_cmd_vel (not placeholder)
         let callback_start = Instant::now();
@@ -79,9 +84,14 @@ fn main() {
         // Drop guard — advances read_idx and drops T exactly once (fixes CORE-003)
         drop(received_guard);
 
-        // 6. Simulator consumes MotorCommand — canonical type, no conversion shim
+        // 6. Simulator consumes the controller output — MotorCommand is wheel-space, so route it
+        // through the node's own inverse kinematics (compute_odometry) to get body twist.
+        // Canonical type, no ad-hoc conversion shim. Note: a previous `motor_cmd.linear_velocity`
+        // field access here did not compile (E0599 — MotorCommand is {left,right}_velocity);
+        // found by the first real CI execution (arena deep-analysis session, 2026-08-22).
         let sim_start = Instant::now();
-        sim_world.apply_robot_velocity(motor_cmd.linear_velocity.x, motor_cmd.angular_velocity.z);
+        let odom = controller.compute_odometry(&motor_cmd, 0.05);
+        sim_world.apply_robot_velocity(odom.linear_velocity.x, odom.angular_velocity.z);
         sim_world.step(Duration::from_millis(50));
         let elapsed_sim = sim_start.elapsed();
 

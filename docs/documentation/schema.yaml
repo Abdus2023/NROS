@@ -118,6 +118,7 @@ vocabularies:
     - references
     - depends_on
     - supersedes
+    - superseded_by
     - implements
     - derived_from
     - contradicts
