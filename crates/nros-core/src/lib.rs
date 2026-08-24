@@ -1149,9 +1149,10 @@ mod tests {
             let iterations = 100_000;
             let latencies = Arc::new(std::sync::Mutex::new(Vec::with_capacity(iterations)));
             let lat_clone = latencies.clone();
-            let publish_queue: Arc<std::sync::Mutex<std::collections::VecDeque<Instant>>> = Arc::new(
-                std::sync::Mutex::new(std::collections::VecDeque::with_capacity(iterations)),
-            );
+            let publish_queue: Arc<std::sync::Mutex<std::collections::VecDeque<Instant>>> =
+                Arc::new(std::sync::Mutex::new(
+                    std::collections::VecDeque::with_capacity(iterations),
+                ));
             let queue_clone = publish_queue.clone();
 
             let consumer_thread = thread::spawn(move || {
