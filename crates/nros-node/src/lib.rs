@@ -758,10 +758,26 @@ mod tests {
         }
         let elapsed = start.elapsed();
 
-        let avg_us = node.stats().avg_execution_time_us();
+        let stats = node.stats();
+        let avg_us = stats.avg_execution_time_us();
         println!("10000 callbacks in {:?}, avg {:.2} μs", elapsed, avg_us);
-        // Target <1000 μs deadline, should be << that, typically <5 μs
-        assert!(avg_us < 100.0, "avg {} μs too high", avg_us);
-        assert_eq!(node.stats().deadline_misses.load(Ordering::Relaxed), 0);
+        // Pass 29 (F29-06): this used to assert `avg_us < 100.0`. That is a wall-clock
+        // threshold inside `cargo test` — exactly what CORE-008 removed from nros-core
+        // ("Tests — Correctness only, no perf asserts"). On a loaded CI runner it fails
+        // for reasons unrelated to the code under test, i.e. it is a latent source of
+        // the same nondeterminism as F29-01. Assert the bookkeeping instead; threshold
+        // measurement belongs to the benchmark binaries (`nros-core --bin bench`,
+        // `tools/offline-mrustc/probes/microbench.rs`).
+        assert_eq!(
+            stats.callback_count.load(Ordering::Relaxed),
+            10_000,
+            "every callback must be accounted for"
+        );
+        assert!(
+            avg_us.is_finite() && avg_us > 0.0,
+            "avg {} μs is not a plausible measurement",
+            avg_us
+        );
+        assert_eq!(stats.deadline_misses.load(Ordering::Relaxed), 0);
     }
 }

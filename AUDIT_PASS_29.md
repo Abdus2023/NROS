@@ -249,7 +249,7 @@ rebuilds; do not add one.
 
 ---
 
-### F29-06 (P2) — `nros-node` keeps a wall-clock assertion inside `cargo test`
+### F29-06 (P2) — `nros-node` kept a wall-clock assertion inside `cargo test`. FIXED
 
 `crates/nros-node/src/lib.rs:764`
 
@@ -258,12 +258,19 @@ assert!(avg_us < 100.0, "avg {} μs too high", avg_us);
 ```
 
 `crates/nros-core/src/lib.rs:612` states the opposite rule for the same repo:
-`// ── Tests — Correctness only, no perf asserts (fixes CORE-008) ──`. This is a latent
-flake on a loaded runner. It did **not** fire in 240 local runs nor in 20 runs under 4×
-CPU load, so it is reported rather than "fixed" — but it is the same class of defect as
-F29-01 and belongs behind `#[ignore]` with the other benchmarks.
+`// ── Tests — Correctness only, no perf asserts (fixes CORE-008) ──`. It is a latent
+flake on a loaded runner — the same class of defect as F29-01. It did **not** fire in 240
+local runs nor in 20 runs under 4× CPU load, so it was not the cause of the CI flake, but
+the threshold measures the machine, not the code.
 
-### F29-07 (P2) — `ServiceDiscovery` announces to port 0
+**Fix applied:** the threshold is replaced with bookkeeping assertions that cannot depend
+on machine speed — every one of the 10 000 callbacks accounted for, and `avg_us` finite
+and non-zero. The `deadline_misses == 0` assertion is kept (that is correctness, not
+timing). Threshold measurement stays with the benchmark binaries.
+
+**Verified:** `test-nros_node` 0/50 failures, 5 passed.
+
+### F29-07 (P2) — `ServiceDiscovery` announced to port 0. FIXED
 
 `crates/nros-transport/src/lib.rs:1063`
 
@@ -275,9 +282,14 @@ broadcast_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(255, 255, 255, 255)), b
 (the documented "bind Any" path, and what `test_service_discovery` uses) yields
 `255.255.255.255:0`, so `announce()`'s `send_to` can never reach a real listener. The
 error is swallowed (`let _ = ...`) and `discover()` only reads a local `HashMap`, so the
-test passes regardless. Should use `socket.local_addr()?.port()`.
+test passes regardless.
 
-### F29-08 (P2) — three `nros-audit` sub-gates can never fail
+**Fix applied:** `broadcast_addr` now uses `socket.local_addr()?.port()`, and a failure to
+read the bound address is a construction error rather than a silent wrong port.
+
+**Verified:** `test-nros_transport` 0/50 failures, 8 passed.
+
+### F29-08 (P2) — three `nros-audit` sub-gates could never fail. FIXED
 
 `check_ci()`, `check_claims()` and `check_benchmarks()` in
 `crates/nros-audit/src/main.rs` contain **zero** `gate_fail` calls (verified by
@@ -290,6 +302,21 @@ enforces.
 regressions (`pub fn init_with<F>`, and a *safe* `as_mut_ptr`). It does not check the
 type-state chain, the absence of `DerefMut` on `ReadGuard`, or the guard-drop
 discipline that `crates/nros-core/SAFETY.md` describes.
+
+**Fix applied:** all three now call `gate_fail` (`CI-004`, `DOC-002`/`DOC-003`,
+`BENCH-005`). The narrowness of `check_safety_invariants()` is left as-is — widening it
+is a design decision, not a defect fix.
+
+**Verified both ways.** From the repo root all three pass and `nros-audit all` still exits
+0 with 354 PASS / 0 FAIL. From an empty directory the same binary now fails, which is the
+part that was previously impossible:
+
+```
+$ cd /tmp/emptygate
+nros-audit ci          exit=1  ❌ CI-004: no CI workflow found (...)
+nros-audit claims      exit=1  ❌ DOC-002: evidence taxonomy labeling not detected ...
+nros-audit benchmarks  exit=1  ❌ BENCH-005: benchmarks/results.json missing ...
+```
 
 ---
 
@@ -388,13 +415,23 @@ are exactly the three this pass reports as unfixed, for the reasons given.
 
 | File | Change |
 |---|---|
-| `crates/nros-transport/src/lib.rs` | F29-01 — `TcpTransport::receive` no longer discards a complete buffered frame on peer EOF |
+| `crates/nros-transport/src/lib.rs` | F29-01 — `TcpTransport::receive` no longer discards a complete buffered frame on peer EOF; F29-07 — `ServiceDiscovery` announces to the bound port |
+| `crates/nros-node/src/lib.rs` | F29-06 — wall-clock threshold in `cargo test` replaced with machine-independent bookkeeping assertions |
+| `crates/nros-audit/src/main.rs` | F29-08 — `check_ci` / `check_claims` / `check_benchmarks` can now actually fail |
 | `.github/workflows/ci.yml` | F29-02 — **prepared and verified, NOT committed**: `git apply docs/audit/F-20-ci-fetch-depth.patch` needs the `workflows` scope, which this session's token lacks. Applies cleanly; needs an owner to push |
 | `tools/offline-mrustc/stage1-bootstrap.sh` | F29-05 items 1–5 |
 | `tools/offline-mrustc/stage2-vendor-stdlib.sh` | F29-05 items 6–9; §3 pin-table correction |
 | `tools/offline-mrustc/stage3-build-nros.sh` | F29-05 item 10 (suites now actually run, and fail the stage) |
 | `tools/offline-mrustc/README.md` | Pinning facts corrected to the real 1.90.0 lockfile; new tricks recorded |
 
-Not changed, deliberately: the rustfmt reformat (F29-03), the Miri workflow (F29-04),
-the `nros-node` perf assert (F29-06), `ServiceDiscovery` (F29-07) and the audit
-sub-gates (F29-08) — each is reported with its evidence and left to an owner decision.
+Not changed, deliberately:
+
+* **The Miri workflow (F29-04).** The repo's F-25 patch is unapplied, and the branch
+  whose run is titled "apply F-25 Miri toolchain fix" (`arena/01a03242-nros` @
+  `dee4f028`) contains no `ci.yml` change at all — its only files are
+  `AUDIT_PASS_28.md` and one `.arena/` file. So there is still **no evidence either way**
+  on whether F-25 works, and applying an unverifiable workflow change on top of a gate
+  that is already red would not be an improvement anyone could check.
+* **The scope of `check_safety_invariants()` (F29-08).** Deciding which additional
+  invariants it should enforce is a design decision, not a defect fix.
+* **The rustfmt reformat (F29-03)** — see §7.

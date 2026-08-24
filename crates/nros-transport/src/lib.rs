@@ -1050,6 +1050,18 @@ impl ServiceDiscovery {
         let socket = UdpSocket::bind(format!("0.0.0.0:{}", bind_port))
             .map_err(|e| format!("Failed to bind discovery socket {}: {}", bind_port, e))?;
 
+        // Pass 29 (F29-07): announcements must target the port the socket *actually
+        // bound*, not the port that was requested. With `ServiceDiscovery::new(0)` — the
+        // documented "bind Any" path, and the one `test_service_discovery` uses — the old
+        // code built a broadcast target of 255.255.255.255:0, so `announce()`'s `send_to`
+        // could never reach a real listener. Nothing caught it: the send error is
+        // swallowed by `let _ = ...` and `discover()` only reads the local HashMap, so
+        // the test passed either way.
+        let local_port = socket
+            .local_addr()
+            .map_err(|e| format!("Failed to read bound discovery address: {}", e))?
+            .port();
+
         socket
             .set_broadcast(true)
             .map_err(|e| format!("Failed to enable broadcast: {}", e))?;
@@ -1060,7 +1072,7 @@ impl ServiceDiscovery {
 
         Ok(ServiceDiscovery {
             services: Arc::new(Mutex::new(HashMap::new())),
-            broadcast_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(255, 255, 255, 255)), bind_port),
+            broadcast_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(255, 255, 255, 255)), local_port),
             socket,
         })
     }

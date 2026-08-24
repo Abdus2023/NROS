@@ -56,15 +56,18 @@ fn check_claims() {
     println!("🔍 Claim Strength Gate");
     let readme = fs::read_to_string("README.md").unwrap_or_default();
     let evidence = fs::read_to_string("EVIDENCE_REGISTRY.md").unwrap_or_default();
+    // Pass 29 (F29-08): these branches used to print ⚠️ and fall through, so the
+    // sub-gate could never fail — `nros-audit -- claims` exited 0 even with no evidence
+    // taxonomy at all. README documents this as a gate, so make it one.
     if evidence.contains("SIMULATED") || readme.contains("SIMULATED") {
         println!("✅ Simulation/evidence labeling present");
     } else {
-        println!("⚠️ Evidence taxonomy labeling not detected");
+        gate_fail("DOC-002: evidence taxonomy labeling not detected in README.md or EVIDENCE_REGISTRY.md".to_string());
     }
     if evidence.contains("claim_allowed") {
         println!("✅ Evidence registry exposes claim_allowed");
     } else {
-        println!("⚠️ Evidence registry claim_allowed field not detected");
+        gate_fail("DOC-003: EVIDENCE_REGISTRY.md does not expose claim_allowed".to_string());
     }
 }
 
@@ -77,7 +80,9 @@ fn check_ci() {
     } else if staged.exists() {
         println!("⚠️ CI workflow staged: {}", staged.display());
     } else {
-        println!("❌ CI workflow not found");
+        // Pass 29 (F29-08): was `println!("❌ ...")` followed by a fall-through to a
+        // successful exit, so a missing workflow did not fail the gate.
+        gate_fail("CI-004: no CI workflow found (.github/workflows/ci.yml or docs/ci.yml)".to_string());
     }
 }
 
@@ -87,7 +92,11 @@ fn check_benchmarks() {
     if results.exists() {
         println!("✅ Benchmark artifact exists");
     } else {
-        println!("⚠️ Benchmark artifact not present");
+        // Pass 29 (F29-08): README quotes benchmark figures, so a missing artifact is a
+        // claim-without-evidence, not a warning. (The artifact being *present* still does
+        // not validate the numbers — see the `benchmark_artifact_is_not_independent_validation`
+        // invariant enforced by the representation gate.)
+        gate_fail("BENCH-005: benchmarks/results.json missing while README quotes benchmark figures".to_string());
     }
 }
 
