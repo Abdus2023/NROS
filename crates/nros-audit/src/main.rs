@@ -68,8 +68,15 @@ fn ci_diag_run_all() {
     }));
     diag_phase("check", || ci_diag_forward_cargo_check());
     diag_phase("trybuild", || ci_diag_harvest_trybuild_wip());
-    diag_phase("test-suite", || ci_diag_forward_test_suite());
-    diag_phase("miri", || ci_diag_forward_miri());
+    // Canary: pure heartbeats, zero load — discriminates agent-side channel loss
+    // from load-correlated process death. test-suite/miri phases deferred to a
+    // later push until the canary verdict is in (85s survival window observed).
+    diag_phase("canary", || {
+        for i in 1..=8 {
+            diag_emit("Pass27-DIAG canary", &format!("canary beat {}/8 — pure sleep, no subprocess load", i));
+            std::thread::sleep(std::time::Duration::from_secs(15));
+        }
+    });
     diag_emit("Pass27-DIAG all-phases", "complete — draining agent queue");
     std::thread::sleep(std::time::Duration::from_secs(8));
 }
@@ -239,8 +246,6 @@ fn ci_diag_harvest_trybuild_wip() {
         "cargo test -p nros-core --test trybuild",
         "/tmp/diag_trybuild.log",
     );
-    let tail: String = log.chars().rev().take(2500).collect::<String>().chars().rev().collect();
-    diag_emit("Pass27-DIAG trybuild", &format!("log tail:\n{}", tail));
     let mut files: Vec<std::path::PathBuf> = Vec::new();
     fn walk(dir: &std::path::Path, depth: u32, acc: &mut Vec<std::path::PathBuf>) {
         if depth > 8 {
@@ -295,17 +300,27 @@ fn ci_diag_harvest_trybuild_wip() {
         }
     }
     walk(std::path::Path::new("."), 0, &mut files);
+    for f in files.iter_mut() {
+        if let Ok(c) = std::fs::canonicalize(&f) {
+            *f = c;
+        }
+    }
     files.sort();
     files.dedup();
     if files.is_empty() {
-        diag_emit("Pass27-DIAG trybuild", "no wip/*.stderr produced (see log tail above; wip path should be named in it)");
+        diag_emit("Pass27-DIAG trybuild", "no wip/*.stderr produced");
         return;
     }
     diag_emit("Pass27-DIAG trybuild", &format!("{} wip stderr file(s) found", files.len()));
+    // DATA FIRST: file contents before any further ceremony (the silent killer
+    // has consistently struck within ~30s of this point in earlier iterations).
     for fp in files.iter().take(8) {
         let content = std::fs::read_to_string(fp).unwrap_or_default();
-        diag_emit(&format!("Pass27-DIAG trybuild file {}", fp.display()), &content);
+        diag_emit(&format!("Pass27-DIAG file {}", fp.display()), &content);
+        std::thread::sleep(std::time::Duration::from_secs(1));
     }
+    let tail: String = log.chars().rev().take(2500).collect::<String>().chars().rev().collect();
+    diag_emit("Pass27-DIAG trybuild", &format!("log tail:\n{}", tail));
 }
 
 /// TEMPORARY Pass 27 CI diagnostic, third phase: decode the red `cargo test
