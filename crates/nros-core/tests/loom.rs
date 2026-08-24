@@ -129,6 +129,19 @@ fn loom_spsc_reservation_commit_visibility() {
     loom::model(|| {
         let (producer, consumer) = channel::<usize>(2);
 
+        let consumer_thread = thread::spawn(move || {
+            let mut received = None;
+            while received.is_none() {
+                if let Some(guard) = consumer.try_recv() {
+                    received = Some(*guard);
+                    drop(guard);
+                } else {
+                    thread::yield_now();
+                }
+            }
+            received.unwrap()
+        });
+
         let guard = producer.allocate().expect("first reserve must succeed");
         assert!(
             producer.allocate().is_none(),
