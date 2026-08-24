@@ -717,10 +717,24 @@ impl TcpTransport {
         // consumes nothing.
 
         // 1. Drain every byte currently available without blocking.
+        // Pass 29 fix: EOF used to be turned into an error *here*, before any parse was
+        // attempted, so a peer that shuts down cleanly (FIN) right after sending a
+        // complete frame caused that frame — already sitting in `rx_buf`, header and
+        // checksum intact — to be discarded and `Err("TCP connection closed by peer")`
+        // returned instead. TCP delivers buffered data before the FIN, so a zero-length
+        // read must end the *drain*, not the *call*: fall through and parse whatever has
+        // arrived, and only report the shutdown when no complete frame is left to
+        // return. This is the actual cause of the intermittent
+        // `test_tcp_fragmented_delivery_no_desync` failure (measured 6/40 runs locally),
+        // which is the same race that makes `cargo test` nondeterministic in CI.
+        let mut peer_closed = false;
         loop {
             let mut chunk = [0u8; 8192];
             match conn.stream.read(&mut chunk) {
-                Ok(0) => return Err(format!("TCP connection closed by peer (topic: {})", topic)),
+                Ok(0) => {
+                    peer_closed = true;
+                    break;
+                }
                 Ok(n) => conn.rx_buf.extend_from_slice(&chunk[..n]),
                 Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
                 Err(ref e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
@@ -741,6 +755,14 @@ impl TcpTransport {
 
         // 2. Need at least a full header before parsing.
         if conn.rx_buf.len() < MessageHeader::SIZE {
+            if peer_closed {
+                let buffered = conn.rx_buf.len();
+                conn.rx_buf.clear();
+                return Err(format!(
+                    "TCP connection closed by peer (topic: {}) with {} partial header byte(s) buffered",
+                    topic, buffered
+                ));
+            }
             return Ok(None);
         }
 
@@ -758,6 +780,14 @@ impl TcpTransport {
         // 3. Wait until the entire payload has arrived — consume nothing meanwhile.
         let frame_len = MessageHeader::SIZE + payload_len;
         if conn.rx_buf.len() < frame_len {
+            if peer_closed {
+                let buffered = conn.rx_buf.len();
+                conn.rx_buf.clear();
+                return Err(format!(
+                    "TCP connection closed by peer (topic: {}) after {} of {} frame bytes",
+                    topic, buffered, frame_len
+                ));
+            }
             return Ok(None);
         }
 
