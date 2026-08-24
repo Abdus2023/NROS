@@ -7,7 +7,7 @@ identity:
   branch: arena/01a02a3e-nros
 
 source_revision:
-  commit: "cb4c1fc5ab72478c05088832e0d9afaac18a302b"
+  commit: "6239bbb6e9f7267040c9efc35667da0a559d6b21"
   relation: represented_repository_state
 
 snapshot_revision:
@@ -27,7 +27,7 @@ content_integrity:
   source_revision_blobs:
     architecture.yaml: "04d3a0b15f27d335a64a82de6110344481d87d54"
     capabilities.yaml: "075ca21cb52d3b85713ec981f97cc175c8d3d9c9"
-    evidence.yaml: "66c795b88361e247b77a1b6f2626fd51032ca1af"
+    evidence.yaml: "de3ba49b73c3b801dfdc9b5c58eafe79a8617638"
     claims.yaml: "f4773c3a2bb30ed025ce1347c07817508340afb1"
 
 verification_contract:
