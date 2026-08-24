@@ -9,6 +9,15 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let cmd = args.get(1).map(|s| s.as_str()).unwrap_or("claims");
 
+    // TEMPORARY Pass 27 CI diagnostic (removed once the residual rustc defect is
+    // fixed): forward the errors of the failing `cargo check --workspace
+    // --all-targets` as workflow-command annotations so they are readable through
+    // the check-runs API where raw job logs are unreachable. Active only for the
+    // `all` subcommand used by the governance job; no effect on gate semantics.
+    if cmd == "all" {
+        ci_diag_forward_cargo_check();
+    }
+
     match cmd {
         "claims" => check_claims(),
         "workspace" => check_workspace_inventory(),
@@ -27,6 +36,56 @@ fn main() {
         _ => {
             println!("Usage: nros-audit [claims|workspace|ci|benchmarks|safety|representation|all]");
         }
+    }
+}
+
+/// TEMPORARY Pass 27 CI diagnostic — see call site. Runs the command that is red
+/// in CI (`cargo check --workspace --all-targets`) and re-emits its error output
+/// as `::error` workflow commands, which surface as check-run annotations
+/// (API-readable) even though raw job logs (Azure blob hosts) are unreachable
+/// from the audit workstation. No-ops outside GitHub Actions. Gate semantics are
+/// unchanged: this function never exits non-zero by itself.
+fn ci_diag_forward_cargo_check() {
+    if std::env::var_os("CI").is_none() {
+        return;
+    }
+    eprintln!("::error title=Pass27-DIAG marker::diag channel active — forwarding cargo check stderr");
+    let out = std::process::Command::new("cargo")
+        .args(["check", "--workspace", "--all-targets", "--message-format", "short"])
+        .output();
+    let out = match out {
+        Ok(o) => o,
+        Err(e) => {
+            eprintln!("::error title=Pass27-DIAG spawn::failed to spawn cargo: {}", e);
+            return;
+        }
+    };
+    let text = String::from_utf8_lossy(&out.stderr);
+    let esc = |s: &str| -> String {
+        s.replace('%', "%25").replace('\r', "%0D").replace('\n', "%0A")
+    };
+    // Error-bearing lines first, then the compiler/cargo tail for context. Capped
+    // so we stay well under the 50-annotation check-run limit.
+    let mut emitted = 0usize;
+    for line in text.lines().filter(|l| l.contains("error")) {
+        if emitted >= 30 {
+            break;
+        }
+        let t: String = line.chars().take(480).collect();
+        eprintln!("::error title=Pass27-DIAG rustc::{}", esc(&t));
+        emitted += 1;
+    }
+    let tail: Vec<&str> = text.lines().collect();
+    for line in tail.iter().rev().take(12).rev() {
+        if emitted >= 40 {
+            break;
+        }
+        if line.trim().is_empty() {
+            continue;
+        }
+        let t: String = line.chars().take(480).collect();
+        eprintln!("::error title=Pass27-DIAG tail::{}", esc(&t));
+        emitted += 1;
     }
 }
 
