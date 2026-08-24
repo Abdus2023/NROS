@@ -129,6 +129,10 @@ fn ci_diag9_miri() {
     if std::env::var_os("CI").is_none() {
         return;
     }
+    // diag #10 prepend: test-decode FIRST (2223a6e's cargo-test job is still red
+    // despite the blessing — need the trybuild diff or the failing unit test name).
+    ci_diag10_test_decode();
+    d9_emit("Pass27-d10 boundary", "test-decode done; Miri decode follows");
     std::panic::set_hook(Box::new(|info| {
         let payload = info.payload().downcast_ref::<&str>().map(|s| s.to_string())
             .or_else(|| info.payload().downcast_ref::<String>().cloned())
@@ -171,6 +175,66 @@ fn ci_diag9_miri() {
     d9_emit("Pass27-d9 miri tail", &t2);
     d9_emit("Pass27-d9 all-phases", "complete — draining");
     std::thread::sleep(std::time::Duration::from_secs(8));
+}
+
+fn ci_diag10_test_decode() {
+    d9_emit("Pass27-d10 phase test-decode", "begin");
+    let (code, log) = d9_heartbeated(
+        "t10-trybuild",
+        "cargo test -p nros-core --test trybuild -- --nocapture",
+        "/tmp/d10_trybuild.log",
+    );
+    // Hits: mismatch/diff context + failure lines — data first.
+    let lines: Vec<&str> = log.lines().collect();
+    let mut bundle = format!("status={:?}\n", code);
+    let mut idxs: Vec<usize> = (0..lines.len())
+        .filter(|&i| {
+            lines[i].contains("mismatch")
+                || lines[i].contains("diff ")
+                || lines[i].contains("EXPECTED")
+                || lines[i].contains("ACTUAL")
+                || lines[i].contains("test result")
+                || lines[i].contains("FAILED")
+                || lines[i].contains("failed")
+        })
+        .collect();
+    idxs.truncate(40);
+    for i in idxs {
+        let lo = i.saturating_sub(1);
+        let hi = (i + 3).min(lines.len());
+        bundle.push_str(&format!("--- ctx@{}:\n{}\n", i, lines[lo..hi].join("\n")));
+    }
+    // Any (re-)written wip files: transcribe again — they settle mismatch-vs-pass.
+    let mut files: Vec<std::path::PathBuf> = Vec::new();
+    for cand in [
+        "wip",
+        "crates/nros-core/wip",
+        "target/wip",
+        "target/debug/wip",
+        "target/release/wip",
+        "target/tests/trybuild/wip",
+        "target/tests/wip",
+    ] {
+        let p = std::path::Path::new(cand);
+        if let Ok(rd) = p.read_dir() {
+            for f in rd.flatten() {
+                let fp = f.path();
+                if fp.extension().map(|x| x == "stderr").unwrap_or(false) {
+                    if let Ok(c) = std::fs::canonicalize(&fp) {
+                        files.push(c);
+                    }
+                }
+            }
+        }
+    }
+    files.sort();
+    files.dedup();
+    bundle.push_str(&format!("\nWIP-FILES count={}\n", files.len()));
+    for fp in files.iter().take(6) {
+        let content = std::fs::read_to_string(fp).unwrap_or_default();
+        bundle.push_str(&format!("\n<<<BEGIN-FILE {}>>>\n{}\n<<<END-FILE {}>>>\n", fp.display(), content, fp.display()));
+    }
+    d9_emit("Pass27-d10 trybuild-decode", &bundle);
 }
 
 fn gate_fail(msg: String) -> ! {
