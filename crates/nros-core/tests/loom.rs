@@ -115,7 +115,7 @@ fn loom_spsc_guard_protocol_wraparound() {
         assert_eq!(received, vec![10, 20]);
     });
 }
-/// Reservation semantics across the commit boundary.
+
 #[test]
 fn loom_spsc_reservation_commit_visibility() {
     loom::model(|| {
@@ -132,7 +132,21 @@ fn loom_spsc_reservation_commit_visibility() {
             }
         });
 
+        let guard = producer.allocate().expect("first reserve must succeed");
+        assert!(
+            producer.allocate().is_none(),
+            "second reserve must fail while the first reservation is outstanding"
+        );
+        // Uncommitted reservation must not be observable as a message.
+        assert!(
+            producer.is_empty(),
+            "an outstanding reservation must not appear as a published message"
+        );
 
-        let _ = consumer_thread.join();
+        thread::yield_now(); // maximal preemption: schedule consumer around commit
+        guard.write_value(7).commit();
+
+        let value = consumer_thread.join().unwrap();
+        assert_eq!(value, 7);
     });
 }
