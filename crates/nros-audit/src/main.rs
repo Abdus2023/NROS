@@ -47,10 +47,31 @@ fn ci_diag_run_all() {
     if std::env::var_os("CI").is_none() {
         return;
     }
+    // Panic hook covers even abort-style deaths: payload + location as annotation,
+    // then a short sleep so the runner agent can drain queued workflow commands
+    // before the process dies (evidence: emissions in the last ~1-2s before step
+    // exit never become annotations).
+    std::panic::set_hook(Box::new(|info| {
+        let payload = if let Some(s) = info.payload().downcast_ref::<&str>() {
+            s.to_string()
+        } else if let Some(s) = info.payload().downcast_ref::<String>() {
+            s.clone()
+        } else {
+            "<non-string>".to_string()
+        };
+        let loc = info
+            .location()
+            .map(|l| format!("{}:{}", l.file(), l.line()))
+            .unwrap_or_else(|| "<unknown>".to_string());
+        diag_emit("Pass27-DIAG PANIC-HOOK", &format!("{} at {}", payload, loc));
+        std::thread::sleep(std::time::Duration::from_secs(3));
+    }));
     diag_phase("check", || ci_diag_forward_cargo_check());
     diag_phase("trybuild", || ci_diag_harvest_trybuild_wip());
     diag_phase("test-suite", || ci_diag_forward_test_suite());
     diag_phase("miri", || ci_diag_forward_miri());
+    diag_emit("Pass27-DIAG all-phases", "complete — draining agent queue");
+    std::thread::sleep(std::time::Duration::from_secs(8));
 }
 
 /// Strip ANSI CSI sequences (cargo's colored output) — they were the suspected
@@ -178,9 +199,21 @@ fn ci_diag_forward_cargo_check() {
 /// annotations so they can be transcribed verbatim into tests/compile_fail/.
 /// Never affects the exit code; no-op outside CI.
 fn ci_diag_harvest_trybuild_wip() {
+    diag_emit("Pass27-DIAG trybuild", "hb1: spawning cargo test -p nros-core --test trybuild");
     let out = std::process::Command::new("cargo")
         .args(["test", "-p", "nros-core", "--test", "trybuild", "--", "--nocapture"])
         .output();
+    match &out {
+        Ok(o) => diag_emit(
+            "Pass27-DIAG trybuild",
+            &format!(
+                "hb2: cargo test status={:?}; stderr tail: {}",
+                o.status.code(),
+                String::from_utf8_lossy(&o.stderr).chars().rev().take(1500).collect::<String>().chars().rev().collect::<String>()
+            ),
+        ),
+        Err(e) => diag_emit("Pass27-DIAG trybuild", &format!("hb2: spawn error {}", e)),
+    }
     let mut files: Vec<std::path::PathBuf> = Vec::new();
     fn walk(dir: &std::path::Path, depth: u32, acc: &mut Vec<std::path::PathBuf>) {
         if depth > 8 {
