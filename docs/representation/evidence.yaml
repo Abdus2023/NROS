@@ -13,6 +13,13 @@ rules:
     rule: simulated_implementation_cannot_support_real_backend_claim
   - id: EVID-005
     rule: hardware_validation_requires_actual_hardware_evidence
+  - id: EVID-006
+    # Pass 30 (2026-08-24): declared execution evidence (CI run id, head SHA,
+    # job conclusion in any catalog entry) must resolve to an immutable
+    # external execution record; narrative descriptions of a run are not
+    # evidence until the run itself resolves. Declared as a schema rule now;
+    # automated referential-integrity enforcement in nros-audit remains TODO.
+    rule: declared_execution_evidence_must_resolve_to_immutable_execution_record
 
 records:
   - capability: CORE-IPC-001
@@ -26,11 +33,32 @@ records:
         20 passed / 0 failed / 1 ignored incl. Pass-27 remediation regressions
         (ZST zero-size-alloc UB fix, abort_initialized drop-panic double-drop fix);
         adversarial probes re-run green (exact drop counts, 1M wraparound cap-2).
-        Miri still outstanding.
+        2026-08-24 update: Miri status decoded, see miri block below — the blocker was
+        a test-side wall-clock dependency, not observed unsafe-code UB, and Pass 30
+        (F30-01) removed it so the suite can execute under isolation.
     ci:
       status: check_clippy_passed_2026-08-24
     miri:
-      status: unknown
+      # Pass 30 (2026-08-24): the previous `unknown` classification is superseded by
+      # the retrieved CI job log (run 32707535971, head 083e3ed9). Miri installed,
+      # compiled nros-core and ran the libtest suite; every test ahead of
+      # test_zero_copy_pubsub_guard_api passed. That test then stopped on
+      # `SystemTime::now()` (WallTimestamp::now) -> clock_gettime(CLOCK_REALTIME),
+      # which Miri isolation refuses. BLOCKED_TEST_ENVIRONMENT means: Miri executed,
+      # no UB was observed, and the suite could not proceed past a host-syscall
+      # dependency in one test. F30-01 replaces the incidental `Timestamp::now()`
+      # in that test with a fixed timestamp so the whole suite executes under
+      # isolation; transition to `executed_passed` requires observing a green
+      # safety-gate job with this remediation in place (per CLAIM-MIRI-001:
+      # configuration or installation never establishes execution or pass).
+      status: blocked_test_environment
+      observed_run: "32707535971"
+      observed_head: "083e3ed9"
+      failing_test: test_zero_copy_pubsub_guard_api
+      cause: wall_clock_syscall_under_miri_isolation
+      operation: SystemTime::now via WallTimestamp::now
+      safety_violation_observed: "false"
+      remediation: deterministic_timestamp_injected_F30-01
     benchmark:
       status: present_non_gating
     hardware:
@@ -81,11 +109,18 @@ records:
   # --workspace --all-targets` jobs both passed on real rustc 1.97.1 (runs
   # 32676158182 / 32676713846), after Pass 27 F-24 (real-rustc E0596 in
   # nros-core abort_initialized) was found via the §11.I.2 diagnostic annotation
-  # channel and fixed. The workspace `cargo test` job remains red ONLY pending
-  # F-19 trybuild .stderr blessing (harvest in flight over the same channel);
-  # the Miri job remains red and is being decoded (§11.I.2); fmt red = F-18
-  # owner decision; doc-gate red = F-20 needs credentialed push of
-  # docs/audit/F-20-ci-fetch-depth.patch.
+  # channel and fixed.
+  # Pass 29/30 update (2026-08-24, supersedes the issue list recorded above):
+  # the workspace `cargo test` job now passes (F29-01 TCP EOF frame-loss fix);
+  # fmt passes (F29-03, 26 files reformatted); the F-20 fetch-depth deficiency
+  # is implemented in .github/workflows/ci.yml at a098872d (all checkouts now
+  # fetch-depth: 0), with first executed confirmation pending on the next CI
+  # run; and the Miri failure is DECODED from job logs — it reached the
+  # nros-core suite and stopped at test_zero_copy_pubsub_guard_api on
+  # SystemTime::now() under isolation (environmental test dependency, no UB
+  # observed; see CORE-IPC-001 miri block). Pass 30 F30-01 removes that
+  # dependency and skips the inherently wall-clock-bound nros-types test under
+  # Miri only.
   - capability: CORE-IPC-002
     source:
       status: absent

@@ -9,4 +9,10 @@ license.workspace = true
 name = "nros_types"
 path = "src/lib.rs"
 
+[lints.rust]
+# The test suite uses `#[cfg_attr(miri, ignore)]` for the wall-clock test,
+# which cannot run under Miri isolation. Declare the `miri` cfg (set by
+# `cargo miri`) so check-cfg does not lint it as unexpected.
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(miri)"] }
+
 [dependencies]

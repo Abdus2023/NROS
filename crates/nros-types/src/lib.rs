@@ -224,6 +224,13 @@ mod tests {
     use super::*;
 
     #[test]
+    // Pass 30 (F30-01): this test's purpose is exercising the OS wall clock via
+    // `SystemTime::now()` -> `clock_gettime(CLOCK_REALTIME)`. Under Miri
+    // isolation REALTIME clocks are unavailable by design, so this test cannot
+    // run there; it is skipped under Miri only and continues to run in the
+    // native suite. (Monotonic clocks ARE supported under Miri isolation, so
+    // `test_monotonic_elapsed` below needs no such marker.)
+    #[cfg_attr(miri, ignore)]
     fn test_wall_timestamp_now() {
         let ts = WallTimestamp::now();
         assert!(ts.sec > 0);

@@ -1,5 +1,5 @@
 {
-  "_provenance": "Rewritten by AUDIT Pass 29 (2026-08-24). The previous version of this file dated from branch arena/01a0188d-nros and recorded every gate as NOT_RUN; that record was superseded by executed evidence. See AUDIT_PASS_29.md for the full findings, commands and outputs.",
+  "_provenance": "Rewritten by AUDIT Pass 29 (2026-08-24). The previous version of this file dated from branch arena/01a0188d-nros and recorded every gate as NOT_RUN; that record was superseded by executed evidence. See AUDIT_PASS_29.md for the full findings, commands and outputs. Pass 30 amendment (2026-08-24): Miri gate decoded from FAILING_CAUSE_UNKNOWN to BLOCKED_TEST_ENVIRONMENT via retrieved job logs, F30-01 deterministic-timestamp remediation applied (nros-core test), nros-types wall-clock test marked Miri-ignore; the representation gate's F-20 fetch-depth fix is now present in .github/workflows/ci.yml on main (a098872d), first executed confirmation pending the next CI run.",
   "repository": "Abdus2023/NROS",
   "branch": "arena/01a0325b-nros",
   "revision": "083e3ed (Pass 29.4) on top of main @ 48069dce",
@@ -37,23 +37,21 @@
       "evidence": "CI run 32707535971 -> success. Note this is report-only: the job does not pass -D warnings, matching README's stated 'report-only until a clippy-clean baseline is established'."
     },
     "miri": {
-      "status": "FAILING_CAUSE_UNKNOWN",
+      "status": "BLOCKED_TEST_ENVIRONMENT",
       "required": true,
-      "command": "cargo miri test -p nros-core --lib",
-      "evidence": "Failed in 40/40 recorded runs, unchanged by this pass. Step signature: 'Install Miri' success, 'Miri on nros-core' failure (exit 1), 'Miri on nros-types' skipped. Job logs are served from *.blob.core.windows.net, which is unreachable from the audit sandbox, and there is no NROS-authored annotation, so the cause cannot be decoded from outside CI.",
-      "note": "The step signature contradicts the premise of docs/audit/F-25-ci-miri-toolchain.patch: if the miri component were unavailable, the 'cargo miri setup' inside that same Install Miri step would have failed. F-25 has also never been exercised - arena/01a03242-nros @ dee4f028, the branch whose run is titled 'apply F-25 Miri toolchain fix', contains no ci.yml change at all.",
-      "two_candidate_causes": [
-        "cargo miri is not resolvable in that step -> toolchain problem",
-        "cargo miri runs and reports real undefined behaviour in nros-core's MaybeUninit / drop_in_place / raw-pointer code -> P0 soundness bug in the code the safety case rests on"
-      ],
-      "next_step": "git apply docs/audit/F-29-ci-miri-diagnostics.patch - gate-semantics-neutral; adds a read-only toolchain probe and mirrors the failure reason into workflow-command annotations, which ride the API rather than the blob host. Answers the question in one run. Not pushed: the app token lacks the workflows scope.",
+      "command": "cargo miri test -p nros-core --lib && cargo miri test -p nros-types --lib",
+      "evidence": "Pass 30 (2026-08-24): cause DECODED by retrieving the actual GitHub Actions job log of safety-gate in run 32707535971 (head 083e3ed9). The log shows: nightly-2026 toolchain installed, Miri component installed, `cargo miri setup` produced a sysroot, nros-core COMPILED under Miri, and the libtest suite began executing - every test ahead of `test_zero_copy_pubsub_guard_api` passed, including the unsafe ring tests (abandoned reservation, panic-in-drop double-drop regression, capacity 1, channel ownership, double-init/double-reserve prevention, destruction, read guard lifetime, full ring, SPSC ordering, string type, wraparound). The suite then stopped with `unsupported operation: clock_gettime with REALTIME clocks not available when isolation is enabled` at SystemTime::now() <- nros_types::WallTimestamp::now() (nros-types/src/lib.rs:21) called from nros-core/src/lib.rs test_zero_copy_pubsub_guard_api line ~767. 'Miri on nros-types' was skipped only because the nros-core step exited non-zero first. This is a TEST-ENVIRONMENT blocker, not observed unsafe-code UB: no Miri UB diagnostic has ever been emitted against nros-core.",
+      "classification": "BLOCKED_TEST_ENVIRONMENT means Miri executed and compiled the target, then the suite could not proceed past a host-syscall dependency in one test. It is deliberately distinct from PASSED (all tests executed green) and from FAILED_CODE (a UB report against NROS code). Neither of those has been observed yet.",
+      "remediation": "F30-01 (Pass 30): removed the incidental wall-clock dependency - test_zero_copy_pubsub_guard_api now uses a fixed `Timestamp { sec: 1, nanosec: 0 }`, and nros-types' inherently wall-clock-bound test_wall_timestamp_now is marked #[cfg_attr(miri, ignore)] (skipped under Miri only; still runs natively). test_monotonic_elapsed needs no marker: monotonic clocks and sleep are supported under Miri isolation. Isolation is intentionally left ENABLED - the fix removes the dependency rather than weakening Miri with -Zmiri-disable-isolation.",
+      "note": "The decoded cause CONFIRMS Pass 29's reasoning about docs/audit/F-25-ci-miri-toolchain.patch: Miri installed and executed fine, so the toolchain was never the problem; F-25 and the F-29 diagnostics patch are now moot for this failure. nros-types' Miri step will additionally exercise (and is expected to pass) its remaining 3 tests.",
+      "next_step": "Re-execute the safety-gate job with F30-01 in place; only a green execution of BOTH `cargo miri test -p nros-core --lib` and `-p nros-types --lib` may transition this gate to PASS (per CLAIM-MIRI-001: configuration or installation never establishes execution or pass). Then loom remains the outstanding concurrency-verification milestone.",
       "partial_substitute": "F29-12: all 8 unit-test suites (54 tests) were rebuilt from mrustc's generated C with -fsanitize=address,undefined -fno-sanitize-recover=all and run clean - zero sanitizer reports, so no heap-buffer-overflow, use-after-free, double-free or UBSan diagnostic in nros-core's unsafe ring code. LeakSanitizer's 1877 bytes at exit were attributed away from NROS: a no-unsafe control binary leaks 317 bytes of the same kind, 0 leak frames have a symbol naming RingBuffer, the deepest recurring frame is std::thread::Thread::new and the only test in any leak stack is the thread-spawning test_spsc_ordering. Repeatable via tools/offline-mrustc/probes/sanitizer.sh. THIS IS NOT A MIRI SUBSTITUTE: it cannot detect uninitialized reads (MemorySanitizer, impractical here) nor Rust-specific UB such as invalid &mut aliasing or invalid enum discriminants."
     },
     "loom": {
       "status": "NOT_RUN",
       "required": false,
       "command": "cargo test --test loom (needs the loom crate; crates.io is unreachable from the audit sandbox)",
-      "note": "Formal concurrency verification of the Acquire/Release ordering, reservation flags and wraparound remains outstanding. Miri is the only UB detector that has ever been wired into CI, and it is currently red for unknown reasons."
+      "note": "Formal concurrency verification of the Acquire/Release ordering, reservation flags and wraparound remains outstanding. Miri is the only UB detector that has ever been wired into CI; as of Pass 30 its failure is decoded (wall-clock syscall in one test, blocked_test_environment) and F30-01 remediation is applied, with executed re-verification pending."
     },
     "nros_init_compile": {
       "status": "PASS",
@@ -62,11 +60,11 @@
       "evidence": "CI job 'nros init generates a buildable NROS project' -> success in run 32707535971, for both templates. Also verified locally: golden-basic and golden-mobile_base compile and run under mrustc."
     },
     "doc_gate_representation": {
-      "status": "FAILING_FIX_NOT_PUSHABLE",
+      "status": "FIX_IMPLEMENTED_EXECUTION_PENDING",
       "required": true,
       "command": "cargo run -p nros-audit -- representation",
-      "evidence": "Failed in 40/40 runs. Cause established and it is NOT the data: docs/audit/F-20-ci-fetch-depth.patch was never applied, so the doc-gate job checked out at depth 1 and the snapshot's pinned source_revision (6a9cdec7...) did not resolve. All four recorded blob fingerprints match the actual blobs at that revision (verified via the contents API: architecture 04d3a0b15f27, capabilities 075ca21cb52d, evidence de3ba49b73c3, claims f4773c3a2bb3). With the revision resolvable, `nros-audit representation` and `nros-audit all` both pass locally (354 PASS, 0 FAIL, exit 0).",
-      "blocker": "Applying the patch requires the `workflows` scope; git push rejects .github/workflows/ci.yml without it."
+      "evidence": "Failed in 40/40 historical runs. Cause established and it was NEVER the data: the doc-gate job used to check out at depth 1, so the snapshot's pinned source_revision (6a9cdec7...) did not resolve. All four recorded blob fingerprints match the actual blobs at that revision (verified via the contents API: architecture 04d3a0b15f27, capabilities 075ca21cb52d, evidence de3ba49b73c3, claims f4773c3a2bb3). With the revision resolvable, `nros-audit representation` and `nros-audit all` both pass locally (354 PASS, 0 FAIL, exit 0).",
+      "update_2026-08-24": "F-20 is now IMPLEMENTED on main: a098872d ('Fix: Restore complete CI workflow with proper job definitions') adds fetch-depth: 0 to every checkout including doc-gate, so the pinned source_revision now resolves. The snapshot itself is NOT stale - a Pass 30 review confirmed it is an intentional historical content snapshot of the Pass-27 representation revision and must not be regenerated. Remaining step: observe one green doc-gate execution on a full-history checkout to transition this gate to PASS. No workflow-file push from the audit sandbox was required; the app token still lacks the workflows scope, so workflow edits continue to require a credentialed maintainer."
     },
     "doc_gate_python_validator": {
       "status": "PASS",

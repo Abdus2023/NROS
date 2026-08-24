@@ -763,8 +763,15 @@ mod tests {
         let (publisher, subscriber) = channel::<Twist>(1024);
         {
             let guard = publisher.allocate().unwrap();
+            // Pass 30 (F30-01): deterministic timestamp. This test previously used
+            // `Timestamp::now()`, which calls `SystemTime::now()` and therefore
+            // `clock_gettime(CLOCK_REALTIME)`; under Miri isolation that syscall is
+            // refused, so the safety suite aborted here before exercising the
+            // zero-copy guard API. The memory-safety property under test —
+            // publish/commit/receive through the SPSC ring — must not depend on
+            // host wall-clock availability, so the test now uses a fixed value.
             let twist = Twist {
-                timestamp: Timestamp::now(),
+                timestamp: Timestamp { sec: 1, nanosec: 0 },
                 linear: Vector3 {
                     x: 1.0,
                     y: 0.0,

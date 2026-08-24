@@ -102,9 +102,11 @@ println!("{}", *guard); // Deref
 
 ## Miri / Loom
 
-- Run: `cargo miri test -p nros-core`
+- Run: `cargo miri test -p nros-core --lib` (CI also runs `-p nros-types --lib`; both are hard gates)
 - Checks for UB in unsafe code: use of uninitialized memory, double free, etc.
-- Loom for concurrency: test interleavings of write_reserved, read_reserved, indices
+- Loom for concurrency: test interleavings of write_reserved, read_reserved, indices — **not yet executed; next major safety milestone after Miri is green**
+- **Pass 30 (2026-08-24) — Miri status decoded**: the CI safety-gate previously failed for an unknown reason. The retrieved job log (run 32707535971) shows Miri installed, compiled nros-core and ran the lib suite; every test ahead of `test_zero_copy_pubsub_guard_api` passed, then that test stopped on `SystemTime::now()` -> `clock_gettime(CLOCK_REALTIME)`, which Miri isolation refuses. No UB diagnostic has ever been emitted against this crate. Classification: `BLOCKED_TEST_ENVIRONMENT`, not a code-soundness failure.
+- **F30-01 remediation**: the suite's memory-safety tests must not depend on host wall-clock availability. `test_zero_copy_pubsub_guard_api` now uses a fixed `Timestamp { sec: 1, nanosec: 0 }`; nros-types' inherently wall-clock-bound `test_wall_timestamp_now` is `#[cfg_attr(miri, ignore)]` (native runs keep it). Miri isolation stays ENABLED — the fix removes the dependency rather than weakening the verifier with `-Zmiri-disable-isolation`.
 
 ## Future: RawMessageRing vs TypedRing (AUDIT Option C)
 
