@@ -363,6 +363,27 @@ tag diverge from the one `library/alloc` asked for.
 
 ---
 
+## 5b. Independent confirmation from real CI on this branch
+
+Pushing this branch triggered run
+[`32702101917`](https://github.com/Abdus2023/NROS/actions/runs/32702101917)
+(`arena/01a0325b-nros`), i.e. the *real* toolchain on GitHub-hosted runners:
+
+| Job | Base `48069dce` | This branch |
+|---|---|---|
+| **cargo test (workspace)** | **failure** (exit 101) | **success** |
+| cargo check (workspace, all targets) | success | success |
+| cargo clippy (workspace) | success | success |
+| nros init generates a buildable NROS project | success | success |
+| Provenance / SHA manifest | success | success |
+| cargo fmt --check | failure | failure (F29-03, not fixed) |
+| Claim / evidence / representation gate | failure | failure (F29-02 fix not pushable) |
+| Safety gate (Miri, hard) | failure | failure (F29-04, not fixed) |
+
+So F29-01's fix is confirmed by rustc and the real test harness, not only by mrustc:
+`cargo test` went from failing on the base commit to green. The three remaining red jobs
+are exactly the three this pass reports as unfixed, for the reasons given.
+
 ## 6. Changes made in this pass
 
 | File | Change |
