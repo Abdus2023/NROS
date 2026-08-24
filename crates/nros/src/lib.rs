@@ -5,9 +5,8 @@
 
 // Re-export macros as `nros::node`, `nros::subscribe`, etc
 pub use nros_macros::{
-    algorithm, algorithm_impl, callback, compute, distributed_node, interrupt, param, plugin, plugin_impl, publish, service,
-    shared_state, sim, subscribe, task, telemetry, time_sync,
-    node,
+    algorithm, algorithm_impl, callback, compute, distributed_node, interrupt, node, param, plugin,
+    plugin_impl, publish, service, shared_state, sim, subscribe, task, telemetry, time_sync,
 };
 
 // Re-export core types for prelude
@@ -23,13 +22,15 @@ pub mod prelude {
     // ambiguity with the `pub mod node`/`pub mod sim` modules below, which share those names
     // in the type namespace. Macros live in the macro namespace, but sourcing them directly
     // keeps the prelude unambiguous.
-    pub use nros_macros::{node, subscribe, publish, param, service, callback, time_sync, compute, interrupt, distributed_node, shared_state, task, sim};
+    pub use nros_macros::{
+        callback, compute, distributed_node, interrupt, node, param, publish, service,
+        shared_state, sim, subscribe, task, time_sync,
+    };
 
     // Canonical domain types — single source of truth
     pub use nros_types::{
-        WallTimestamp, MonotonicInstant, Vector3, Twist, MotorCommand, Odometry,
-        Point3D, PointCloud, ImageFormat, Image, ImuData,
-        ExecutionStats as NodeExecutionStats,
+        ExecutionStats as NodeExecutionStats, Image, ImageFormat, ImuData, MonotonicInstant,
+        MotorCommand, Odometry, Point3D, PointCloud, Twist, Vector3, WallTimestamp,
     };
     /// Backward-compat alias.
     pub type Timestamp = WallTimestamp;
@@ -39,28 +40,35 @@ pub mod prelude {
     // Core IPC — note: Producer/Consumer are the preferred type-enforced SPSC endpoints;
     // Publisher/Subscriber remain for backward compatibility.
     pub use nros_core::{
-        channel, Producer, Consumer, Publisher, Subscriber, RingBuffer,
-        WriteGuard, InitializedWriteGuard, ReadGuard, PerformanceStats,
-        BackpressurePolicy, ChannelConfig, DeliveryPolicy, ExecutionClass,
+        channel, BackpressurePolicy, ChannelConfig, Consumer, DeliveryPolicy, ExecutionClass,
+        InitializedWriteGuard, PerformanceStats, Producer, Publisher, ReadGuard, RingBuffer,
+        Subscriber, WriteGuard,
     };
 
     // Node — avoid re-exporting the canonical type names that now come from nros_types.
     pub use nros_node::{
-        VelocityController, LifecycleState, LifecycleNode,
-        ParameterServer, Parameter, ParameterValue,
+        LifecycleNode, LifecycleState, Parameter, ParameterServer, ParameterValue,
+        VelocityController,
     };
 
     // HAL
-    pub use nros_hal::{Sensor, SensorData, SensorConfig, DeviceInfo, SensorCapabilities, CameraDriver, LidarDriver, ImuDriver};
+    pub use nros_hal::{
+        CameraDriver, DeviceInfo, ImuDriver, LidarDriver, Sensor, SensorCapabilities, SensorConfig,
+        SensorData,
+    };
 
     // Transport
-    pub use nros_transport::{Serializable, MessageHeader, UdpTransport, TcpTransport, ServiceDiscovery};
+    pub use nros_transport::{
+        MessageHeader, Serializable, ServiceDiscovery, TcpTransport, UdpTransport,
+    };
 
     // Distributed
-    pub use nros_distributed::{RobotId, NodeRole, LeaderElection, DistributedState, TaskScheduler};
+    pub use nros_distributed::{
+        DistributedState, LeaderElection, NodeRole, RobotId, TaskScheduler,
+    };
 
     // Sim — re-exported under aliases to avoid clashing with canonical Vector3
-    pub use nros_sim::{SimulationWorld, Quaternion, Transform};
+    pub use nros_sim::{Quaternion, SimulationWorld, Transform};
 
     // Common
     pub use std::time::Duration;

@@ -83,7 +83,12 @@ pub struct Quaternion {
 
 impl Quaternion {
     pub fn identity() -> Self {
-        Quaternion { w: 1.0, x: 0.0, y: 0.0, z: 0.0 }
+        Quaternion {
+            w: 1.0,
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        }
     }
 
     pub fn from_euler(roll: f64, pitch: f64, yaw: f64) -> Self {
@@ -136,7 +141,12 @@ impl Quaternion {
     pub fn normalize(&self) -> Self {
         let mag = (self.w * self.w + self.x * self.x + self.y * self.y + self.z * self.z).sqrt();
         if mag > 1e-9 {
-            Self { w: self.w / mag, x: self.x / mag, y: self.y / mag, z: self.z / mag }
+            Self {
+                w: self.w / mag,
+                x: self.x / mag,
+                y: self.y / mag,
+                z: self.z / mag,
+            }
         } else {
             Self::identity()
         }
@@ -229,11 +239,24 @@ impl RigidBody {
 
 #[derive(Debug, Clone)]
 pub enum CollisionShape {
-    Box { size: Vector3 },
-    Sphere { radius: f64 },
-    Cylinder { radius: f64, height: f64 },
-    Mesh { vertices: Vec<Vector3>, triangles: Vec<[usize; 3]> },
-    Plane { normal: Vector3, distance: f64 },
+    Box {
+        size: Vector3,
+    },
+    Sphere {
+        radius: f64,
+    },
+    Cylinder {
+        radius: f64,
+        height: f64,
+    },
+    Mesh {
+        vertices: Vec<Vector3>,
+        triangles: Vec<[usize; 3]>,
+    },
+    Plane {
+        normal: Vector3,
+        distance: f64,
+    },
 }
 
 impl CollisionShape {
@@ -242,7 +265,9 @@ impl CollisionShape {
             Self::Box { size } => size.magnitude() / 2.0,
             Self::Sphere { radius } => *radius,
             Self::Cylinder { radius, height } => (radius * radius + height * height / 4.0).sqrt(),
-            Self::Mesh { vertices, .. } => vertices.iter().map(|v| v.magnitude()).fold(0.0, f64::max),
+            Self::Mesh { vertices, .. } => {
+                vertices.iter().map(|v| v.magnitude()).fold(0.0, f64::max)
+            }
             Self::Plane { .. } => f64::INFINITY,
         }
     }
@@ -392,7 +417,10 @@ impl SimulatedPhysicsEngine {
 
             // Damping
             let damping = 1.0 - entity.rigid_body.linear_damping * dt;
-            entity.rigid_body.linear_velocity = entity.rigid_body.linear_velocity.scale(damping.clamp(0.0, 1.0));
+            entity.rigid_body.linear_velocity = entity
+                .rigid_body
+                .linear_velocity
+                .scale(damping.clamp(0.0, 1.0));
 
             entity.transform.position = Vector3::new(
                 entity.transform.position.x + entity.rigid_body.linear_velocity.x * dt,
@@ -402,9 +430,21 @@ impl SimulatedPhysicsEngine {
 
             // Angular simplified — real Bullet uses quaternion integration
             let angular_accel = Vector3::new(
-                if entity.rigid_body.inertia.x > 1e-9 { entity.rigid_body.torque.x / entity.rigid_body.inertia.x } else { 0.0 },
-                if entity.rigid_body.inertia.y > 1e-9 { entity.rigid_body.torque.y / entity.rigid_body.inertia.y } else { 0.0 },
-                if entity.rigid_body.inertia.z > 1e-9 { entity.rigid_body.torque.z / entity.rigid_body.inertia.z } else { 0.0 },
+                if entity.rigid_body.inertia.x > 1e-9 {
+                    entity.rigid_body.torque.x / entity.rigid_body.inertia.x
+                } else {
+                    0.0
+                },
+                if entity.rigid_body.inertia.y > 1e-9 {
+                    entity.rigid_body.torque.y / entity.rigid_body.inertia.y
+                } else {
+                    0.0
+                },
+                if entity.rigid_body.inertia.z > 1e-9 {
+                    entity.rigid_body.torque.z / entity.rigid_body.inertia.z
+                } else {
+                    0.0
+                },
             );
 
             entity.rigid_body.angular_velocity = Vector3::new(
@@ -414,17 +454,26 @@ impl SimulatedPhysicsEngine {
             );
 
             let ang_damping = 1.0 - entity.rigid_body.angular_damping * dt;
-            entity.rigid_body.angular_velocity = entity.rigid_body.angular_velocity.scale(ang_damping.clamp(0.0, 1.0));
+            entity.rigid_body.angular_velocity = entity
+                .rigid_body
+                .angular_velocity
+                .scale(ang_damping.clamp(0.0, 1.0));
 
             // Integrate orientation via quaternion: q += 0.5 * q * ω * dt
-            let omega_quat = Quaternion { w: 0.0, x: entity.rigid_body.angular_velocity.x, y: entity.rigid_body.angular_velocity.y, z: entity.rigid_body.angular_velocity.z };
+            let omega_quat = Quaternion {
+                w: 0.0,
+                x: entity.rigid_body.angular_velocity.x,
+                y: entity.rigid_body.angular_velocity.y,
+                z: entity.rigid_body.angular_velocity.z,
+            };
             let q_dot = entity.transform.orientation.multiply(&omega_quat);
             entity.transform.orientation = Quaternion {
                 w: entity.transform.orientation.w + 0.5 * q_dot.w * dt,
                 x: entity.transform.orientation.x + 0.5 * q_dot.x * dt,
                 y: entity.transform.orientation.y + 0.5 * q_dot.y * dt,
                 z: entity.transform.orientation.z + 0.5 * q_dot.z * dt,
-            }.normalize();
+            }
+            .normalize();
 
             // Reset forces for next step — forces are per-step in this model
             entity.rigid_body.force = Vector3::zero();
@@ -444,7 +493,11 @@ impl SimulatedPhysicsEngine {
             }
 
             // Ground plane y=0
-            let radius = entity.collision_shape.as_ref().map(|s| s.bounding_radius()).unwrap_or(0.3);
+            let radius = entity
+                .collision_shape
+                .as_ref()
+                .map(|s| s.bounding_radius())
+                .unwrap_or(0.3);
             let min_y = ground_height + radius * 0.5;
 
             if entity.transform.position.y < min_y {
@@ -503,15 +556,33 @@ impl SimulatedPhysicsEngine {
 }
 
 impl PhysicsEngineTrait for SimulatedPhysicsEngine {
-    fn add_entity(&mut self, entity: Entity) -> EntityId { self.add_entity(entity) }
-    fn remove_entity(&mut self, id: EntityId) -> Option<Entity> { self.remove_entity(id) }
-    fn get_entity(&self, id: EntityId) -> Option<&Entity> { self.get_entity(id) }
-    fn get_entity_mut(&mut self, id: EntityId) -> Option<&mut Entity> { self.get_entity_mut(id) }
-    fn step(&mut self, delta_time: Duration) { self.step(delta_time) }
-    fn apply_force(&mut self, id: EntityId, force: Vector3) { self.apply_force(id, force) }
-    fn entity_count(&self) -> usize { self.entity_count() }
-    fn is_simulated(&self) -> bool { true }
-    fn name(&self) -> &'static str { "SimulatedPhysicsEngine (IMPLEMENTED — semi-implicit Euler)" }
+    fn add_entity(&mut self, entity: Entity) -> EntityId {
+        self.add_entity(entity)
+    }
+    fn remove_entity(&mut self, id: EntityId) -> Option<Entity> {
+        self.remove_entity(id)
+    }
+    fn get_entity(&self, id: EntityId) -> Option<&Entity> {
+        self.get_entity(id)
+    }
+    fn get_entity_mut(&mut self, id: EntityId) -> Option<&mut Entity> {
+        self.get_entity_mut(id)
+    }
+    fn step(&mut self, delta_time: Duration) {
+        self.step(delta_time)
+    }
+    fn apply_force(&mut self, id: EntityId, force: Vector3) {
+        self.apply_force(id, force)
+    }
+    fn entity_count(&self) -> usize {
+        self.entity_count()
+    }
+    fn is_simulated(&self) -> bool {
+        true
+    }
+    fn name(&self) -> &'static str {
+        "SimulatedPhysicsEngine (IMPLEMENTED — semi-implicit Euler)"
+    }
 }
 
 /// Backward compatibility — old code used PhysicsEngine, now alias to Simulated
@@ -531,26 +602,44 @@ pub struct BulletPhysicsEngine {
 
 impl BulletPhysicsEngine {
     pub fn new(gravity: Vector3, time_step_hz: f64) -> Self {
-        Self { inner: SimulatedPhysicsEngine::new(gravity, time_step_hz) }
+        Self {
+            inner: SimulatedPhysicsEngine::new(gravity, time_step_hz),
+        }
     }
 }
 
 impl PhysicsEngineTrait for BulletPhysicsEngine {
-    fn add_entity(&mut self, entity: Entity) -> EntityId { self.inner.add_entity(entity) }
-    fn remove_entity(&mut self, id: EntityId) -> Option<Entity> { self.inner.remove_entity(id) }
-    fn get_entity(&self, id: EntityId) -> Option<&Entity> { self.inner.get_entity(id) }
-    fn get_entity_mut(&mut self, id: EntityId) -> Option<&mut Entity> { self.inner.get_entity_mut(id) }
+    fn add_entity(&mut self, entity: Entity) -> EntityId {
+        self.inner.add_entity(entity)
+    }
+    fn remove_entity(&mut self, id: EntityId) -> Option<Entity> {
+        self.inner.remove_entity(id)
+    }
+    fn get_entity(&self, id: EntityId) -> Option<&Entity> {
+        self.inner.get_entity(id)
+    }
+    fn get_entity_mut(&mut self, id: EntityId) -> Option<&mut Entity> {
+        self.inner.get_entity_mut(id)
+    }
     fn step(&mut self, delta_time: Duration) {
         // Real: bullet_world.stepSimulation(delta_time.as_secs_f32(), 10, 1.0/240.0)
         self.inner.step(delta_time)
     }
-    fn apply_force(&mut self, id: EntityId, force: Vector3) { self.inner.apply_force(id, force) }
-    fn entity_count(&self) -> usize { self.inner.entity_count() }
+    fn apply_force(&mut self, id: EntityId, force: Vector3) {
+        self.inner.apply_force(id, force)
+    }
+    fn entity_count(&self) -> usize {
+        self.inner.entity_count()
+    }
     // Pass 24 (I-009): this engine delegates to SimulatedPhysicsEngine; it is not backed
     // by a real Bullet integration and must not claim to be. Return true (simulated)
     // until an actual Bullet backend is wired up.
-    fn is_simulated(&self) -> bool { true }
-    fn name(&self) -> &'static str { "BulletPhysicsEngine (SCAFFOLDED — would use bullet crate)" }
+    fn is_simulated(&self) -> bool {
+        true
+    }
+    fn name(&self) -> &'static str {
+        "BulletPhysicsEngine (SCAFFOLDED — would use bullet crate)"
+    }
 }
 
 // ============================================================================
@@ -571,7 +660,11 @@ impl SimulatedCamera {
         // Clamp to a 1x1 minimum and a positive finite FOV rather than panicking later.
         let width = width.max(1);
         let height = height.max(1);
-        let fov_rad = if fov_rad.is_finite() && fov_rad > 0.0 { fov_rad } else { std::f64::consts::FRAC_PI_2 };
+        let fov_rad = if fov_rad.is_finite() && fov_rad > 0.0 {
+            fov_rad
+        } else {
+            std::f64::consts::FRAC_PI_2
+        };
         SimulatedCamera {
             resolution: (width, height),
             fov_rad,
@@ -602,9 +695,9 @@ impl SimulatedCamera {
         for y in 0..height {
             for x in 0..width {
                 let idx = ((y * width + x) * 3) as usize;
-                image[idx] = (x * 255 / width) as u8;     // R horizontal gradient
+                image[idx] = (x * 255 / width) as u8; // R horizontal gradient
                 image[idx + 1] = (y * 255 / height) as u8; // G vertical gradient
-                image[idx + 2] = 128;                       // B constant
+                image[idx + 2] = 128; // B constant
             }
         }
 
@@ -632,7 +725,7 @@ impl SimulatedCamera {
                 if angle.abs() < self.fov_rad / 2.0 {
                     let u = ((angle / (self.fov_rad / 2.0) + 1.0) * 0.5 * width as f64) as u32;
                     let v = height / 2; // center
-                    // Draw small white square 10x10
+                                        // Draw small white square 10x10
                     for dy in 0..10 {
                         for dx in 0..10 {
                             let px = (u as i32 + dx as i32 - 5).clamp(0, width as i32 - 1) as u32;
@@ -661,12 +754,20 @@ pub struct SimulatedLidar {
 
 impl SimulatedLidar {
     pub fn new(range: f64, num_rays: usize, fov_rad: f64) -> Self {
-        SimulatedLidar { range, num_rays, fov_rad }
+        SimulatedLidar {
+            range,
+            num_rays,
+            fov_rad,
+        }
     }
 
     pub fn scan(&self, transform: &Transform, entities: &HashMap<EntityId, Entity>) -> Vec<f64> {
         let mut ranges = Vec::with_capacity(self.num_rays);
-        let angle_increment = if self.num_rays > 1 { self.fov_rad / (self.num_rays as f64) } else { 0.0 };
+        let angle_increment = if self.num_rays > 1 {
+            self.fov_rad / (self.num_rays as f64)
+        } else {
+            0.0
+        };
 
         for i in 0..self.num_rays {
             let angle = -self.fov_rad / 2.0 + (i as f64) * angle_increment;
@@ -677,7 +778,12 @@ impl SimulatedLidar {
         ranges
     }
 
-    fn raycast(&self, transform: &Transform, angle_rad: f64, entities: &HashMap<EntityId, Entity>) -> f64 {
+    fn raycast(
+        &self,
+        transform: &Transform,
+        angle_rad: f64,
+        entities: &HashMap<EntityId, Entity>,
+    ) -> f64 {
         let (_, _, yaw) = transform.orientation.to_euler();
         let ray_angle = yaw + angle_rad;
 
@@ -706,7 +812,11 @@ impl SimulatedLidar {
             let dot = ray_dir.dot(&to_entity.normalize());
             // Narrow beam 0.99 ~ 8 degrees acceptance
             if dot > 0.99 {
-                let radius = entity.collision_shape.as_ref().map(|s| s.bounding_radius()).unwrap_or(0.25);
+                let radius = entity
+                    .collision_shape
+                    .as_ref()
+                    .map(|s| s.bounding_radius())
+                    .unwrap_or(0.25);
                 let hit_dist = (distance - radius).max(0.0);
                 if hit_dist < min_range {
                     min_range = hit_dist;
@@ -732,7 +842,10 @@ impl SimulatedIMU {
     }
 
     pub fn new_with_noise(accel: f64, gyro: f64) -> Self {
-        Self { noise_accel: accel, noise_gyro: gyro }
+        Self {
+            noise_accel: accel,
+            noise_gyro: gyro,
+        }
     }
 
     pub fn read(&self, entity: &Entity, gravity: Vector3) -> (Vector3, Vector3) {
@@ -740,9 +853,12 @@ impl SimulatedIMU {
         // Simplified: world frame minus gravity.y
         let accel = if entity.rigid_body.mass > 1e-9 {
             Vector3::new(
-                entity.rigid_body.force.x / entity.rigid_body.mass + self.noise_accel * (pseudo_rand() - 0.5),
-                entity.rigid_body.force.y / entity.rigid_body.mass - gravity.y + self.noise_accel * (pseudo_rand() - 0.5),
-                entity.rigid_body.force.z / entity.rigid_body.mass + self.noise_accel * (pseudo_rand() - 0.5),
+                entity.rigid_body.force.x / entity.rigid_body.mass
+                    + self.noise_accel * (pseudo_rand() - 0.5),
+                entity.rigid_body.force.y / entity.rigid_body.mass - gravity.y
+                    + self.noise_accel * (pseudo_rand() - 0.5),
+                entity.rigid_body.force.z / entity.rigid_body.mass
+                    + self.noise_accel * (pseudo_rand() - 0.5),
             )
         } else {
             Vector3::new(0.0, -gravity.y, 0.0)
@@ -813,7 +929,11 @@ impl SimulationWorld {
     pub fn set_realtime_factor(&mut self, factor: f64) {
         // Pass 24: clamp to a finite, non-negative value. NaN/inf would propagate into
         // `Duration::from_secs_f64` and panic; a negative factor would rewind the clock.
-        self.realtime_factor = if factor.is_finite() && factor >= 0.0 { factor } else { 1.0 };
+        self.realtime_factor = if factor.is_finite() && factor >= 0.0 {
+            factor
+        } else {
+            1.0
+        };
     }
 
     pub fn enable_recording(&mut self, enable: bool) {
@@ -838,7 +958,10 @@ impl SimulationWorld {
         let id = self.physics.add_entity(entity);
         self.robot_id = Some(id);
 
-        println!("[Simulation] Spawned robot '{}' {} at {}", name, id, position);
+        println!(
+            "[Simulation] Spawned robot '{}' {} at {}",
+            name, id, position
+        );
 
         id
     }
@@ -857,11 +980,20 @@ impl SimulationWorld {
         };
 
         let id = self.physics.add_entity(entity);
-        println!("[Simulation] Spawned obstacle '{}' {} at {} size {}", name, id, position, size);
+        println!(
+            "[Simulation] Spawned obstacle '{}' {} at {} size {}",
+            name, id, position, size
+        );
         id
     }
 
-    pub fn spawn_sphere(&mut self, name: &str, position: Vector3, radius: f64, mass: f64) -> EntityId {
+    pub fn spawn_sphere(
+        &mut self,
+        name: &str,
+        position: Vector3,
+        radius: f64,
+        mass: f64,
+    ) -> EntityId {
         let entity = Entity {
             id: EntityId(0),
             name: name.to_string(),
@@ -869,25 +1001,38 @@ impl SimulationWorld {
                 position,
                 orientation: Quaternion::identity(),
             },
-            rigid_body: if mass > 0.0 { RigidBody::new(mass) } else { RigidBody::static_body() },
+            rigid_body: if mass > 0.0 {
+                RigidBody::new(mass)
+            } else {
+                RigidBody::static_body()
+            },
             collision_shape: Some(CollisionShape::Sphere { radius }),
             visual_mesh: Some("sphere.obj".to_string()),
         };
         let id = self.physics.add_entity(entity);
-        println!("[Simulation] Spawned sphere '{}' {} at {} radius {}", name, id, position, radius);
+        println!(
+            "[Simulation] Spawned sphere '{}' {} at {} radius {}",
+            name, id, position, radius
+        );
         id
     }
 
     pub fn add_camera(&mut self, width: u32, height: u32, fov_deg: f64) {
         let fov_rad = fov_deg.to_radians();
         self.camera = Some(SimulatedCamera::new(width, height, fov_rad));
-        println!("[Simulation] Added camera: {}x{}, FOV={:.1}° Vulkan renderer per nros.toml", width, height, fov_deg);
+        println!(
+            "[Simulation] Added camera: {}x{}, FOV={:.1}° Vulkan renderer per nros.toml",
+            width, height, fov_deg
+        );
     }
 
     pub fn add_lidar(&mut self, range: f64, num_rays: usize, fov_deg: f64) {
         let fov_rad = fov_deg.to_radians();
         self.lidar = Some(SimulatedLidar::new(range, num_rays, fov_rad));
-        println!("[Simulation] Added LiDAR: range={:.1}m, rays={}, FOV={:.1}°", range, num_rays, fov_deg);
+        println!(
+            "[Simulation] Added LiDAR: range={:.1}m, rays={}, FOV={:.1}°",
+            range, num_rays, fov_deg
+        );
     }
 
     pub fn add_imu(&mut self) {
@@ -905,7 +1050,12 @@ impl SimulationWorld {
             let state = WorldState {
                 time: self.time,
                 robot_pose: self.get_robot_pose(),
-                entity_poses: self.physics.entities.iter().map(|(id, e)| (*id, e.transform)).collect(),
+                entity_poses: self
+                    .physics
+                    .entities
+                    .iter()
+                    .map(|(id, e)| (*id, e.transform))
+                    .collect(),
             };
             self.recording.push(state);
         }
@@ -920,7 +1070,8 @@ impl SimulationWorld {
                 let velocity = Vector3::new(linear * yaw.cos(), 0.0, linear * yaw.sin());
 
                 self.physics.set_velocity(robot_id, velocity);
-                self.physics.set_angular_velocity(robot_id, Vector3::new(0.0, angular, 0.0));
+                self.physics
+                    .set_angular_velocity(robot_id, Vector3::new(0.0, angular, 0.0));
             }
         }
     }
@@ -943,9 +1094,9 @@ impl SimulationWorld {
     pub fn capture_camera(&self) -> Option<Vec<u8>> {
         self.camera.as_ref().and_then(|camera| {
             self.robot_id.and_then(|id| {
-                self.physics.get_entity(id).map(|robot| {
-                    camera.render(&robot.transform, &self.physics.entities)
-                })
+                self.physics
+                    .get_entity(id)
+                    .map(|robot| camera.render(&robot.transform, &self.physics.entities))
             })
         })
     }
@@ -953,9 +1104,9 @@ impl SimulationWorld {
     pub fn scan_lidar(&self) -> Option<Vec<f64>> {
         self.lidar.as_ref().and_then(|lidar| {
             self.robot_id.and_then(|id| {
-                self.physics.get_entity(id).map(|robot| {
-                    lidar.scan(&robot.transform, &self.physics.entities)
-                })
+                self.physics
+                    .get_entity(id)
+                    .map(|robot| lidar.scan(&robot.transform, &self.physics.entities))
             })
         })
     }
@@ -963,17 +1114,25 @@ impl SimulationWorld {
     pub fn read_imu(&self) -> Option<(Vector3, Vector3)> {
         self.imu.as_ref().and_then(|imu| {
             self.robot_id.and_then(|id| {
-                self.physics.get_entity(id).map(|robot| {
-                    imu.read(robot, self.physics.gravity)
-                })
+                self.physics
+                    .get_entity(id)
+                    .map(|robot| imu.read(robot, self.physics.gravity))
             })
         })
     }
 
     pub fn print_status(&self) {
         println!("\n=== Simulation Status ===");
-        println!("Time: {:.2}s (realtime factor {:.1}x)", self.time.as_secs_f64(), self.realtime_factor);
-        println!("Physics steps: {} @ {:.0} Hz", self.physics.step_count, 1.0 / self.physics.time_step.as_secs_f64());
+        println!(
+            "Time: {:.2}s (realtime factor {:.1}x)",
+            self.time.as_secs_f64(),
+            self.realtime_factor
+        );
+        println!(
+            "Physics steps: {} @ {:.0} Hz",
+            self.physics.step_count,
+            1.0 / self.physics.time_step.as_secs_f64()
+        );
         println!("Entities: {}", self.physics.entity_count());
         println!("Recording: {} states", self.recording.len());
 
@@ -984,10 +1143,19 @@ impl SimulationWorld {
 
     /// Deterministic replay per DESIGN.md §7.1 nros replay --speed=0.5 + §20.2 sim_test
     pub fn replay(&self, speed: f64) {
-        println!("[Simulation] Replaying {} states at {}x speed (deterministic)", self.recording.len(), speed);
+        println!(
+            "[Simulation] Replaying {} states at {}x speed (deterministic)",
+            self.recording.len(),
+            speed
+        );
         for state in &self.recording {
             if let Some((pos, yaw)) = state.robot_pose {
-                println!("  t={:.2}s pose={} yaw={:.1}°", state.time.as_secs_f64(), pos, yaw.to_degrees());
+                println!(
+                    "  t={:.2}s pose={} yaw={:.1}°",
+                    state.time.as_secs_f64(),
+                    pos,
+                    yaw.to_degrees()
+                );
             }
         }
     }
@@ -1039,7 +1207,10 @@ mod tests {
         let entity = Entity {
             id: EntityId(0),
             name: "box".into(),
-            transform: Transform { position: Vector3::new(0.0, 10.0, 0.0), orientation: Quaternion::identity() },
+            transform: Transform {
+                position: Vector3::new(0.0, 10.0, 0.0),
+                orientation: Quaternion::identity(),
+            },
             rigid_body: RigidBody::new(1.0),
             collision_shape: Some(CollisionShape::Sphere { radius: 0.5 }),
             visual_mesh: None,
@@ -1071,7 +1242,11 @@ mod tests {
     fn test_lidar_raycast() {
         let mut world = SimulationWorld::new();
         world.spawn_robot("robot", Vector3::new(0.0, 0.5, 0.0));
-        world.spawn_obstacle("obstacle", Vector3::new(3.0, 0.5, 0.0), Vector3::new(0.5, 1.0, 0.5));
+        world.spawn_obstacle(
+            "obstacle",
+            Vector3::new(3.0, 0.5, 0.0),
+            Vector3::new(0.5, 1.0, 0.5),
+        );
         world.add_lidar(10.0, 360, 360.0);
         let scan = world.scan_lidar().unwrap();
         assert_eq!(scan.len(), 360);
@@ -1100,18 +1275,30 @@ mod tests {
 
         // Zero/huge camera dimensions must not div-by-zero or overflow-alloc.
         let cam = SimulatedCamera::new(0, 0, 90.0f64.to_radians());
-        let frame = cam.render(&Transform {
-            position: Vector3::zero(),
-            orientation: Quaternion::identity(),
-        }, &HashMap::new());
-        assert!(!frame.is_empty(), "1x1 camera should produce a 3-byte frame");
+        let frame = cam.render(
+            &Transform {
+                position: Vector3::zero(),
+                orientation: Quaternion::identity(),
+            },
+            &HashMap::new(),
+        );
+        assert!(
+            !frame.is_empty(),
+            "1x1 camera should produce a 3-byte frame"
+        );
 
         let huge = SimulatedCamera::new(u32::MAX, u32::MAX, 1.0);
-        let frame = huge.render(&Transform {
-            position: Vector3::zero(),
-            orientation: Quaternion::identity(),
-        }, &HashMap::new());
-        assert!(frame.is_empty(), "huge resolution must be rejected, not allocated");
+        let frame = huge.render(
+            &Transform {
+                position: Vector3::zero(),
+                orientation: Quaternion::identity(),
+            },
+            &HashMap::new(),
+        );
+        assert!(
+            frame.is_empty(),
+            "huge resolution must be rejected, not allocated"
+        );
     }
 
     #[test]

@@ -2,22 +2,20 @@
 //! Demonstrates: Real-time control, parameter management, lifecycle, services, safety, deadline monitoring
 //! Implements DESIGN.md §3 Programming Model, §4 Real-Time Guarantees, §25 Artifact #2
 
+use std::collections::HashMap;
+use std::f64::consts::PI;
 use std::sync::{
-    Arc,
     atomic::{AtomicBool, AtomicU64, Ordering},
+    Arc,
 };
 use std::time::{Duration, Instant};
-use std::f64::consts::PI;
-use std::collections::HashMap;
 
 // ============================================================================
 // Core Types & Traits — Canonical types from nros-types per AUDIT Pass 12 INTEGRATION-001
 // Fixes duplication: nros-core::Twist vs nros-node::Twist — now single source of truth nros-types
 // ============================================================================
 
-pub use nros_types::{
-    WallTimestamp, Vector3, Twist, MotorCommand, Odometry,
-};
+pub use nros_types::{MotorCommand, Odometry, Twist, Vector3, WallTimestamp};
 
 // Backward compatibility aliases — old code used Timestamp, Vector3, etc in nros-node
 pub type Timestamp = WallTimestamp;
@@ -124,20 +122,39 @@ impl Parameter {
             | (ParameterValue::Int(_), ParameterValue::Int(_))
             | (ParameterValue::String(_), ParameterValue::String(_))
             | (ParameterValue::Bool(_), ParameterValue::Bool(_)) => {}
-            _ => return Err(format!("Type mismatch for parameter '{}': expected {:?}, got {:?}", self.name, self.value, new_value)),
+            _ => {
+                return Err(format!(
+                    "Type mismatch for parameter '{}': expected {:?}, got {:?}",
+                    self.name, self.value, new_value
+                ))
+            }
         }
 
         // Range check for float
         if let (Some(min), Some(max)) = (&self.min, &self.max) {
             match (min, new_value, max) {
-                (ParameterValue::Float(min_v), ParameterValue::Float(v), ParameterValue::Float(max_v)) => {
+                (
+                    ParameterValue::Float(min_v),
+                    ParameterValue::Float(v),
+                    ParameterValue::Float(max_v),
+                ) => {
                     if v < min_v || v > max_v {
-                        return Err(format!("Value {} out of range [{}, {}] for '{}'", v, min_v, max_v, self.name));
+                        return Err(format!(
+                            "Value {} out of range [{}, {}] for '{}'",
+                            v, min_v, max_v, self.name
+                        ));
                     }
                 }
-                (ParameterValue::Int(min_v), ParameterValue::Int(v), ParameterValue::Int(max_v)) => {
+                (
+                    ParameterValue::Int(min_v),
+                    ParameterValue::Int(v),
+                    ParameterValue::Int(max_v),
+                ) => {
                     if v < min_v || v > max_v {
-                        return Err(format!("Value {} out of range [{}, {}] for '{}'", v, min_v, max_v, self.name));
+                        return Err(format!(
+                            "Value {} out of range [{}, {}] for '{}'",
+                            v, min_v, max_v, self.name
+                        ));
                     }
                 }
                 _ => {}
@@ -182,7 +199,9 @@ impl ParameterServer {
     }
 
     pub fn set(&mut self, name: &str, value: ParameterValue) -> Result<ParameterValue, String> {
-        let param = self.parameters.get_mut(name)
+        let param = self
+            .parameters
+            .get_mut(name)
             .ok_or_else(|| format!("Parameter {} not found", name))?;
 
         if param.read_only {
@@ -230,7 +249,8 @@ impl ExecutionStats {
 
     pub fn record_execution(&self, duration_ns: u64, deadline_ns: u64) {
         self.callback_count.fetch_add(1, Ordering::Relaxed);
-        self.total_execution_time_ns.fetch_add(duration_ns, Ordering::Relaxed);
+        self.total_execution_time_ns
+            .fetch_add(duration_ns, Ordering::Relaxed);
 
         // Update max
         let mut current_max = self.max_execution_time_ns.load(Ordering::Relaxed);
@@ -482,7 +502,11 @@ impl VelocityController {
         // Check for command timeout — triggers emergency stop if no cmd within timeout
         if let Some(last_cmd) = self.last_cmd_time {
             if last_cmd.elapsed() > self.cmd_timeout {
-                println!("[WARN][{}] Command timeout ({} ms) - stopping robot", self.name, self.cmd_timeout.as_millis());
+                println!(
+                    "[WARN][{}] Command timeout ({} ms) - stopping robot",
+                    self.name,
+                    self.cmd_timeout.as_millis()
+                );
                 self.emergency_stop.store(true, Ordering::Release);
             }
         }
@@ -566,8 +590,15 @@ impl VelocityController {
         println!("Min execution time:  {:.2} μs", min);
         println!("Avg execution time:  {:.2} μs", avg);
         println!("Max execution time:  {:.2} μs", max);
-        println!("Deadline misses:     {} ({:.2}%)", misses, self.stats.miss_rate());
-        println!("Emergency stop:      {}", self.emergency_stop.load(Ordering::Relaxed));
+        println!(
+            "Deadline misses:     {} ({:.2}%)",
+            misses,
+            self.stats.miss_rate()
+        );
+        println!(
+            "Emergency stop:      {}",
+            self.emergency_stop.load(Ordering::Relaxed)
+        );
         println!("Wheel base:          {} m", self.wheel_base);
         println!("Max speed:           {} m/s", self.max_speed);
     }
@@ -602,7 +633,10 @@ impl LifecycleNode for VelocityController {
         println!("[{}] Configuring (state: {})...", self.name, self.state);
         self.reload_parameters();
         self.state = LifecycleState::Inactive;
-        println!("[{}] Configuration complete - max_speed: {} m/s, wheel_base: {} m", self.name, self.max_speed, self.wheel_base);
+        println!(
+            "[{}] Configuration complete - max_speed: {} m/s, wheel_base: {} m",
+            self.name, self.max_speed, self.wheel_base
+        );
         Ok(())
     }
 
@@ -703,13 +737,25 @@ mod tests {
     fn test_parameter_validation() {
         let mut node = VelocityController::new("test");
         // Valid
-        assert!(node.parameters_mut().set("max_speed", ParameterValue::Float(3.0)).is_ok());
+        assert!(node
+            .parameters_mut()
+            .set("max_speed", ParameterValue::Float(3.0))
+            .is_ok());
         // Out of range
-        assert!(node.parameters_mut().set("max_speed", ParameterValue::Float(10.0)).is_err());
+        assert!(node
+            .parameters_mut()
+            .set("max_speed", ParameterValue::Float(10.0))
+            .is_err());
         // Type mismatch
-        assert!(node.parameters_mut().set("max_speed", ParameterValue::Int(2)).is_err());
+        assert!(node
+            .parameters_mut()
+            .set("max_speed", ParameterValue::Int(2))
+            .is_err());
         // Not found
-        assert!(node.parameters_mut().set("unknown", ParameterValue::Float(1.0)).is_err());
+        assert!(node
+            .parameters_mut()
+            .set("unknown", ParameterValue::Float(1.0))
+            .is_err());
     }
 
     #[test]

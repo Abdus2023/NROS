@@ -13,32 +13,71 @@ use std::time::{Duration, Instant};
 #[derive(Debug, Clone)]
 pub enum Command {
     // Project management
-    Init { name: String, template: Option<String> },
-    Build { profile: BuildProfile, target: Option<String> },
-    Run { node: Option<String>, inspect: bool },
-    Test { filter: Option<String>, realtime: bool },
+    Init {
+        name: String,
+        template: Option<String>,
+    },
+    Build {
+        profile: BuildProfile,
+        target: Option<String>,
+    },
+    Run {
+        node: Option<String>,
+        inspect: bool,
+    },
+    Test {
+        filter: Option<String>,
+        realtime: bool,
+    },
 
     // Communication
-    Topic { action: TopicAction },
-    Service { action: ServiceAction },
-    Node { action: NodeAction },
+    Topic {
+        action: TopicAction,
+    },
+    Service {
+        action: ServiceAction,
+    },
+    Node {
+        action: NodeAction,
+    },
 
     // Recording and playback per §7.1 nros record / replay
-    Record { topics: Vec<String>, output: PathBuf, duration: Option<Duration> },
-    Replay { input: PathBuf, speed: f64, loop_playback: bool },
+    Record {
+        topics: Vec<String>,
+        output: PathBuf,
+        duration: Option<Duration>,
+    },
+    Replay {
+        input: PathBuf,
+        speed: f64,
+        loop_playback: bool,
+    },
 
     // Analysis per §7.1 nros check --timing --graph, profile
-    Analyze { input: PathBuf, analysis_type: AnalysisType },
-    Profile { duration: Duration, focus: Option<String> },
+    Analyze {
+        input: PathBuf,
+        analysis_type: AnalysisType,
+    },
+    Profile {
+        duration: Duration,
+        focus: Option<String>,
+    },
 
     // Fleet management per §21.2, §21.3 cloud integration
-    Fleet { action: FleetAction },
+    Fleet {
+        action: FleetAction,
+    },
 
     // Migration per §22.2
-    Migrate { action: MigrateAction },
+    Migrate {
+        action: MigrateAction,
+    },
 
     // Check per §7.1 static analysis
-    Check { timing: bool, graph: bool },
+    Check {
+        timing: bool,
+        graph: bool,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -107,18 +146,36 @@ pub enum AnalysisType {
 #[derive(Debug, Clone)]
 pub enum FleetAction {
     List,
-    Deploy { version: String, canary: Option<u32> },
+    Deploy {
+        version: String,
+        canary: Option<u32>,
+    },
     Status,
-    Exec { robot: String, command: String },
-    Login { fleet: String },
+    Exec {
+        robot: String,
+        command: String,
+    },
+    Login {
+        fleet: String,
+    },
 }
 
 #[derive(Debug, Clone)]
 pub enum MigrateAction {
-    Analyze { path: PathBuf },
-    Convert { input: PathBuf, output: PathBuf },
-    ConvertMsgs { input: PathBuf },
-    Test { ros2_bag: PathBuf, nros_recording: PathBuf },
+    Analyze {
+        path: PathBuf,
+    },
+    Convert {
+        input: PathBuf,
+        output: PathBuf,
+    },
+    ConvertMsgs {
+        input: PathBuf,
+    },
+    Test {
+        ros2_bag: PathBuf,
+        nros_recording: PathBuf,
+    },
 }
 
 // ============================================================================
@@ -136,7 +193,10 @@ impl ProjectInitializer {
 
         // Validate project name per cargo conventions
         if !Self::is_valid_project_name(name) {
-            return Err(format!("Invalid project name '{}': use alphanumeric, _, -, must start with alpha", name));
+            return Err(format!(
+                "Invalid project name '{}': use alphanumeric, _, -, must start with alpha",
+                name
+            ));
         }
 
         let base = PathBuf::from(name);
@@ -211,7 +271,10 @@ impl ProjectInitializer {
 
         println!("\n✅ Project initialized successfully at {}/", name);
         println!("   Next steps:");
-        println!("     cd {} && nros build --profile=realtime && nros run --inspect", name);
+        println!(
+            "     cd {} && nros build --profile=realtime && nros run --inspect",
+            name
+        );
         println!("     Open NROS Studio: http://localhost:8080 (live graph, metrics)");
 
         Ok(base)
@@ -220,10 +283,11 @@ impl ProjectInitializer {
     fn is_valid_project_name(name: &str) -> bool {
         let first = name.chars().next();
         match first {
-            Some(c) if c.is_alphabetic() || c == '_' => {},
+            Some(c) if c.is_alphabetic() || c == '_' => {}
             _ => return false,
         }
-        name.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+        name.chars()
+            .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
     }
 
     fn generate_toml(name: &str, template: &str) -> String {
@@ -500,16 +564,20 @@ impl BuildSystem {
             let mut cmd = std::process::Command::new("cargo");
             cmd.arg("build");
             match profile {
-                BuildProfile::Debug => {},
-                BuildProfile::Release => { cmd.arg("--release"); },
+                BuildProfile::Debug => {}
+                BuildProfile::Release => {
+                    cmd.arg("--release");
+                }
                 BuildProfile::Realtime => {
                     // NOTE: the generated/consumer project must define a [profile.realtime]
                     // section; otherwise cargo errors. `--features real-time` is passed as a
                     // single `--features <VALUE>` pair (Pass 24: keep VALUE attached so shells
                     // and older cargo versions don't misparse it).
                     cmd.args(["--profile", "realtime", "--features", "real-time"]);
-                },
-                BuildProfile::Embedded => { cmd.args(["--profile", "embedded"]); },
+                }
+                BuildProfile::Embedded => {
+                    cmd.args(["--profile", "embedded"]);
+                }
             }
             if let Some(t) = target {
                 cmd.args(["--target", t]);
@@ -531,7 +599,11 @@ impl BuildSystem {
                         for p in possible_paths {
                             if let Ok(meta) = std::fs::metadata(p) {
                                 real_binary_size_kb = Some(meta.len() / 1024);
-                                println!("   Measured binary size: {} KB at {} (real, not simulated)", real_binary_size_kb.unwrap(), p);
+                                println!(
+                                    "   Measured binary size: {} KB at {} (real, not simulated)",
+                                    real_binary_size_kb.unwrap(),
+                                    p
+                                );
                                 break;
                             }
                         }
@@ -542,7 +614,11 @@ impl BuildSystem {
                                     if let Ok(meta) = entry.metadata() {
                                         if meta.is_file() && meta.len() > 1024 {
                                             real_binary_size_kb = Some(meta.len() / 1024);
-                                            println!("   Measured binary size: {} KB at {:?} (real)", real_binary_size_kb.unwrap(), entry.path());
+                                            println!(
+                                                "   Measured binary size: {} KB at {:?} (real)",
+                                                real_binary_size_kb.unwrap(),
+                                                entry.path()
+                                            );
                                             break;
                                         }
                                     }
@@ -550,7 +626,13 @@ impl BuildSystem {
                             }
                         }
                     } else {
-                        println!("   Real cargo build failed (simulating instead): {}", String::from_utf8_lossy(&output.stderr).lines().next().unwrap_or("unknown error"));
+                        println!(
+                            "   Real cargo build failed (simulating instead): {}",
+                            String::from_utf8_lossy(&output.stderr)
+                                .lines()
+                                .next()
+                                .unwrap_or("unknown error")
+                        );
                     }
                 }
                 Err(e) => {
@@ -583,16 +665,26 @@ impl BuildSystem {
         // Override with real measured size if available
         if let Some(real_size) = real_binary_size_kb {
             output.binary_size_kb = real_size;
-            println!("\n✅ Real build measured size: {} KB (not simulated)", real_size);
+            println!(
+                "\n✅ Real build measured size: {} KB (not simulated)",
+                real_size
+            );
         } else {
             println!("\n⚠️  No real binary measured — using simulated size {} KB (see EVIDENCE_REGISTRY.md BuildSystem row)", output.binary_size_kb);
         }
 
-        println!("\n✅ Build completed in {:.2}s (real_build_success={})", elapsed.as_secs_f64(), real_build_success);
+        println!(
+            "\n✅ Build completed in {:.2}s (real_build_success={})",
+            elapsed.as_secs_f64(),
+            real_build_success
+        );
 
         Self::print_build_summary(&output);
 
-        if profile == BuildProfile::Embedded && output.binary_size_kb > 500 && real_binary_size_kb.is_none() {
+        if profile == BuildProfile::Embedded
+            && output.binary_size_kb > 500
+            && real_binary_size_kb.is_none()
+        {
             println!("⚠️  Embedded binary size {}KB > 500KB target is SIMULATED, real measurement would require cargo build + fs::metadata", output.binary_size_kb);
         }
 
@@ -603,8 +695,26 @@ impl BuildSystem {
         let (size_kb, features) = match profile {
             BuildProfile::Debug => (2300, vec!["debug symbols".into(), "no opt".into()]),
             BuildProfile::Release => (1120, vec!["-O3".into(), "LTO".into()]),
-            BuildProfile::Realtime => (950, vec!["-O3".into(), "LTO".into(), "CPU native".into(), "real-time guarantees".into(), "static pools".into()]),
-            BuildProfile::Embedded => (480, vec!["size".into(), "LTO".into(), "minimal runtime".into(), "no-std".into(), "static_pools".into()]),
+            BuildProfile::Realtime => (
+                950,
+                vec![
+                    "-O3".into(),
+                    "LTO".into(),
+                    "CPU native".into(),
+                    "real-time guarantees".into(),
+                    "static pools".into(),
+                ],
+            ),
+            BuildProfile::Embedded => (
+                480,
+                vec![
+                    "size".into(),
+                    "LTO".into(),
+                    "minimal runtime".into(),
+                    "no-std".into(),
+                    "static_pools".into(),
+                ],
+            ),
         };
 
         BuildOutput {
@@ -617,7 +727,10 @@ impl BuildSystem {
 
     fn print_build_summary(output: &BuildOutput) {
         println!("\n📊 Build Summary (SIMULATED per EVIDENCE_REGISTRY — real would measure target binary via cargo build):");
-        println!("   Profile: {} (elapsed {:?} simulated)", output.profile, output.elapsed);
+        println!(
+            "   Profile: {} (elapsed {:?} simulated)",
+            output.profile, output.elapsed
+        );
         // Per AUDIT P1: separate Simulated vs Measured — currently simulated sizes, not measured
         println!("   Binary size: {} KB ({} MB) [SIMULATED — would measure target/{{profile}}/binary via fs::metadata in real]", output.binary_size_kb, output.binary_size_kb as f64 / 1024.0);
         println!("   Features: {}", output.features.join(", "));
@@ -633,7 +746,9 @@ impl BuildSystem {
             BuildProfile::Realtime => {
                 println!("   Debug symbols: Limited (for profiler flamegraph)");
                 println!("   Optimizations: -O3, LTO, CPU native, static linking");
-                println!("   Real-time: pre-allocated memory pools, CPU pinning, deadline monitoring");
+                println!(
+                    "   Real-time: pre-allocated memory pools, CPU pinning, deadline monitoring"
+                );
                 println!("   Note: 950KB is SIMULATED target, real measurement would require cargo build --profile=realtime + ls -lh target/realtime/");
             }
             BuildProfile::Embedded => {
@@ -682,7 +797,11 @@ impl TopicInspector {
                 subscribers: vec!["/motor_driver".into(), "/safety_monitor".into()],
                 rate_hz: 10.0,
                 bandwidth: "1.2 KB/s".into(),
-                latency_us: LatencyStats { avg_us: 5.2, p99_us: 12.1, max_us: 18.7 },
+                latency_us: LatencyStats {
+                    avg_us: 5.2,
+                    p99_us: 12.1,
+                    max_us: 18.7,
+                },
             },
             TopicInfo {
                 name: "/odom".into(),
@@ -691,7 +810,11 @@ impl TopicInspector {
                 subscribers: vec!["/localization".into()],
                 rate_hz: 50.0,
                 bandwidth: "8.5 KB/s".into(),
-                latency_us: LatencyStats { avg_us: 6.1, p99_us: 11.0, max_us: 16.0 },
+                latency_us: LatencyStats {
+                    avg_us: 6.1,
+                    p99_us: 11.0,
+                    max_us: 16.0,
+                },
             },
             TopicInfo {
                 name: "/camera/image".into(),
@@ -700,7 +823,11 @@ impl TopicInspector {
                 subscribers: vec!["/object_detector".into()],
                 rate_hz: 30.0,
                 bandwidth: "25.8 MB/s".into(),
-                latency_us: LatencyStats { avg_us: 8.5, p99_us: 15.0, max_us: 22.0 },
+                latency_us: LatencyStats {
+                    avg_us: 8.5,
+                    p99_us: 15.0,
+                    max_us: 22.0,
+                },
             },
             TopicInfo {
                 name: "/scan".into(),
@@ -709,15 +836,25 @@ impl TopicInspector {
                 subscribers: vec!["/mapper".into()],
                 rate_hz: 10.0,
                 bandwidth: "450 KB/s".into(),
-                latency_us: LatencyStats { avg_us: 7.0, p99_us: 13.0, max_us: 19.0 },
+                latency_us: LatencyStats {
+                    avg_us: 7.0,
+                    p99_us: 13.0,
+                    max_us: 19.0,
+                },
             },
         ];
 
-        println!("{:<25} {:<30} {:>10} {:>12}", "Topic", "Type", "Rate (Hz)", "Bandwidth");
+        println!(
+            "{:<25} {:<30} {:>10} {:>12}",
+            "Topic", "Type", "Rate (Hz)", "Bandwidth"
+        );
         println!("{}", "-".repeat(80));
 
         for t in &topics {
-            println!("{:<25} {:<30} {:>10.1} {:>12}", t.name, t.msg_type, t.rate_hz, t.bandwidth);
+            println!(
+                "{:<25} {:<30} {:>10.1} {:>12}",
+                t.name, t.msg_type, t.rate_hz, t.bandwidth
+            );
         }
 
         topics
@@ -735,7 +872,10 @@ impl TopicInspector {
             println!("Subscribers: {} — {:?}", t.subscribers.len(), t.subscribers);
             println!("Rate:       {:.1} Hz", t.rate_hz);
             println!("Bandwidth:  {}", t.bandwidth);
-            println!("Latency:    avg={:.1}μs, p99={:.1}μs, max={:.1}μs", t.latency_us.avg_us, t.latency_us.p99_us, t.latency_us.max_us);
+            println!(
+                "Latency:    avg={:.1}μs, p99={:.1}μs, max={:.1}μs",
+                t.latency_us.avg_us, t.latency_us.p99_us, t.latency_us.max_us
+            );
             println!("\nPublishers:");
             for p in &t.publishers {
                 println!("  - {} (127.0.0.1:5000)", p);
@@ -746,19 +886,28 @@ impl TopicInspector {
             }
         } else {
             println!("Topic {} not found, but showing simulated info:", topic);
-            println!("Type: geometry_msgs/Twist, Rate: 10.2 Hz, Latency avg=5.2μs p99=12.1μs max=18.7μs");
+            println!(
+                "Type: geometry_msgs/Twist, Rate: 10.2 Hz, Latency avg=5.2μs p99=12.1μs max=18.7μs"
+            );
         }
 
         found
     }
 
     pub fn echo(topic: &str, count: usize) {
-        println!("👂 Listening to: {} (zero-copy numpy view in Python per §19.2)", topic);
+        println!(
+            "👂 Listening to: {} (zero-copy numpy view in Python per §19.2)",
+            topic
+        );
         println!("Press Ctrl+C to stop\n");
 
         for i in 0..count {
             std::thread::sleep(Duration::from_millis(500));
-            println!("[{}] linear: [1.5, 0.0, 0.0], angular: [0.0, 0.0, 0.5] (latency {:.1}μs)", i, 5.2 + (i as f64 * 0.1));
+            println!(
+                "[{}] linear: [1.5, 0.0, 0.0], angular: [0.0, 0.0, 0.5] (latency {:.1}μs)",
+                i,
+                5.2 + (i as f64 * 0.1)
+            );
         }
     }
 
@@ -828,7 +977,11 @@ impl Profiler {
 
         let top = vec![
             ("VelocityController::on_cmd_vel".to_string(), 245.3, 45.2),
-            ("ImageProcessor::process_frame (GPU)".to_string(), 189.7, 35.0),
+            (
+                "ImageProcessor::process_frame (GPU)".to_string(),
+                189.7,
+                35.0,
+            ),
             ("PathPlanner::compute_path".to_string(), 78.2, 14.4),
             ("Other".to_string(), 29.1, 5.4),
         ];
@@ -847,13 +1000,18 @@ impl Profiler {
         ];
 
         println!("\n\nCallback Execution Times (Deadline Monitoring §4.1):");
-        println!("{:<30} {:>10} {:>10} {:>10}", "Callback", "Avg (μs)", "P99 (μs)", "Max (μs)");
+        println!(
+            "{:<30} {:>10} {:>10} {:>10}",
+            "Callback", "Avg (μs)", "P99 (μs)", "Max (μs)"
+        );
         println!("{}", "-".repeat(65));
         for (name, avg, p99, max) in &callbacks {
             println!("{:<30} {:>10.1} {:>10.1} {:>10.1}", name, avg, p99, max);
         }
 
-        println!("\n\n⚠️  SIMULATED: flamegraph not actually written (profiler backend not implemented)");
+        println!(
+            "\n\n⚠️  SIMULATED: flamegraph not actually written (profiler backend not implemented)"
+        );
         println!("   Real implementation would write profile_output.svg; view with a browser.");
         println!("   Latency Heatmaps: end-to-end message timing per §4.3");
 
@@ -888,30 +1046,79 @@ impl FleetManager {
         println!("🤖 Fleet Status (fleet.yaml per §21.2):\n");
 
         let robots = vec![
-            RobotStatus { id: "robot_001".into(), online: true, zone: "zone_a".into(), version: "1.0.0".into(), health: "healthy".into(), cpu_pct: 45.0, memory_gb: 2.1 },
-            RobotStatus { id: "robot_002".into(), online: true, zone: "zone_b".into(), version: "1.0.0".into(), health: "warning:low_battery".into(), cpu_pct: 60.0, memory_gb: 3.2 },
-            RobotStatus { id: "robot_003".into(), online: false, zone: "zone_a".into(), version: "0.9.5".into(), health: "error:connection_lost".into(), cpu_pct: 0.0, memory_gb: 0.0 },
-            RobotStatus { id: "robot_004".into(), online: true, zone: "zone_c".into(), version: "1.0.0".into(), health: "healthy".into(), cpu_pct: 38.0, memory_gb: 1.8 },
+            RobotStatus {
+                id: "robot_001".into(),
+                online: true,
+                zone: "zone_a".into(),
+                version: "1.0.0".into(),
+                health: "healthy".into(),
+                cpu_pct: 45.0,
+                memory_gb: 2.1,
+            },
+            RobotStatus {
+                id: "robot_002".into(),
+                online: true,
+                zone: "zone_b".into(),
+                version: "1.0.0".into(),
+                health: "warning:low_battery".into(),
+                cpu_pct: 60.0,
+                memory_gb: 3.2,
+            },
+            RobotStatus {
+                id: "robot_003".into(),
+                online: false,
+                zone: "zone_a".into(),
+                version: "0.9.5".into(),
+                health: "error:connection_lost".into(),
+                cpu_pct: 0.0,
+                memory_gb: 0.0,
+            },
+            RobotStatus {
+                id: "robot_004".into(),
+                online: true,
+                zone: "zone_c".into(),
+                version: "1.0.0".into(),
+                health: "healthy".into(),
+                cpu_pct: 38.0,
+                memory_gb: 1.8,
+            },
         ];
 
-        println!("{:<12} {:<10} {:<10} {:<10} {:<25}", "ID", "Status", "Zone", "Version", "Health");
+        println!(
+            "{:<12} {:<10} {:<10} {:<10} {:<25}",
+            "ID", "Status", "Zone", "Version", "Health"
+        );
         println!("{}", "-".repeat(70));
 
         for r in &robots {
             let status = if r.online { "online" } else { "offline" };
-            println!("{:<12} {:<10} {:<10} {:<10} {:<25}", r.id, status, r.zone, r.version, r.health);
+            println!(
+                "{:<12} {:<10} {:<10} {:<10} {:<25}",
+                r.id, status, r.zone, r.version, r.health
+            );
         }
 
-        println!("\nTotal: {} robots ({} online, {} offline)", robots.len(), robots.iter().filter(|r| r.online).count(), robots.iter().filter(|r| !r.online).count());
+        println!(
+            "\nTotal: {} robots ({} online, {} offline)",
+            robots.len(),
+            robots.iter().filter(|r| r.online).count(),
+            robots.iter().filter(|r| !r.online).count()
+        );
 
         robots
     }
 
     pub fn deploy(version: &str, canary: Option<u32>) -> Result<(), String> {
-        println!("🚀 Deploying version: {} (Atomic Updates, Rollback on failure per §8.2)", version);
+        println!(
+            "🚀 Deploying version: {} (Atomic Updates, Rollback on failure per §8.2)",
+            version
+        );
 
         if let Some(pct) = canary {
-            println!("   Canary deployment: {}% — test on subset before fleet-wide per §8.2", pct);
+            println!(
+                "   Canary deployment: {}% — test on subset before fleet-wide per §8.2",
+                pct
+            );
         }
 
         println!("\nDeployment plan (fleet.yaml rolling strategy):");
@@ -941,7 +1148,10 @@ impl FleetManager {
             println!("    ✅ {} updated to {} successfully", robot, version);
         }
 
-        println!("\n✅ Deployment complete! All online robots running version {}", version);
+        println!(
+            "\n✅ Deployment complete! All online robots running version {}",
+            version
+        );
         println!("   Rollback on failure enabled — atomic updates");
 
         Ok(())
@@ -958,7 +1168,9 @@ impl FleetManager {
         println!("  Network:       12.5 MB/s (compressed via LZ4 30-60% saving)");
 
         println!("\nWarnings:");
-        println!("  • robot_002: Battery at 18% - charging recommended (telemetry alert <20% per §21.3)");
+        println!(
+            "  • robot_002: Battery at 18% - charging recommended (telemetry alert <20% per §21.3)"
+        );
         println!("  • robot_003: Connection lost - investigating, will rollback if update fails");
 
         println!("\nRecent Events (Black Box Logging tamper-proof per §9.2):");
@@ -972,13 +1184,19 @@ impl FleetManager {
     }
 
     pub fn exec(robot: &str, command: &str) {
-        println!("🤖 Executing on {}: '{}' (remote control via `nros cloud exec` per §21.3)", robot, command);
+        println!(
+            "🤖 Executing on {}: '{}' (remote control via `nros cloud exec` per §21.3)",
+            robot, command
+        );
         std::thread::sleep(Duration::from_millis(300));
         println!("  Output: Command executed successfully on {}", robot);
     }
 
     pub fn login(fleet: &str) {
-        println!("🔐 Logging into fleet: {} per §21.3 `nros cloud login --fleet=warehouse_fleet`", fleet);
+        println!(
+            "🔐 Logging into fleet: {} per §21.3 `nros cloud login --fleet=warehouse_fleet`",
+            fleet
+        );
         println!("  Authenticating with TLS 1.3, node certificates per §9.1...");
         println!("  ✅ Logged in, fleet has 4 robots");
     }
@@ -991,8 +1209,16 @@ impl FleetManager {
 pub struct Recorder;
 
 impl Recorder {
-    pub fn record(topics: &[String], output: &Path, duration: Option<Duration>) -> Result<(), String> {
-        println!("⏺️  Recording topics: {} → {}", topics.join(", "), output.display());
+    pub fn record(
+        topics: &[String],
+        output: &Path,
+        duration: Option<Duration>,
+    ) -> Result<(), String> {
+        println!(
+            "⏺️  Recording topics: {} → {}",
+            topics.join(", "),
+            output.display()
+        );
         if let Some(d) = duration {
             println!("   Duration: {:?}", d);
         }
@@ -1003,13 +1229,21 @@ impl Recorder {
         // Pass 24 (I-009): do NOT claim the file was saved — this is a SIMULATED
         // recorder that writes nothing. Reporting a successful save without creating
         // the artifact would be false evidence. Label it clearly.
-        println!("⚠️  SIMULATED: no file written at {} (recorder backend not implemented)", output.display());
+        println!(
+            "⚠️  SIMULATED: no file written at {} (recorder backend not implemented)",
+            output.display()
+        );
 
         Ok(())
     }
 
     pub fn replay(input: &Path, speed: f64, loop_playback: bool) -> Result<(), String> {
-        println!("▶️  Replaying {} at speed {}x loop={} — --analyze-latency per §20.3", input.display(), speed, loop_playback);
+        println!(
+            "▶️  Replaying {} at speed {}x loop={} — --analyze-latency per §20.3",
+            input.display(),
+            speed,
+            loop_playback
+        );
         std::thread::sleep(Duration::from_millis(300));
         println!("   Replay with timing analysis: end-to-end latency heatmap");
         Ok(())
@@ -1022,17 +1256,30 @@ impl Recorder {
                 println!("   /camera/image: 25.8 MB/s, /lidar: 450 KB/s");
             }
             AnalysisType::Latency => {
-                println!("📊 Analyzing latency for {}: P50=5.8μs P99=12.1μs Max=18.7μs per §18.1", input.display());
+                println!(
+                    "📊 Analyzing latency for {}: P50=5.8μs P99=12.1μs Max=18.7μs per §18.1",
+                    input.display()
+                );
             }
             AnalysisType::Timing => {
-                println!("⏱️  WCET analysis for {} per `nros check --timing`", input.display());
+                println!(
+                    "⏱️  WCET analysis for {} per `nros check --timing`",
+                    input.display()
+                );
             }
             AnalysisType::Graph => {
-                println!("🕸️  Validating communication graph for {} per `nros check --graph`", input.display());
+                println!(
+                    "🕸️  Validating communication graph for {} per `nros check --graph`",
+                    input.display()
+                );
                 println!("   Checks: all inputs have matching outputs, type compatibility, cycle detection (§5.2)");
             }
             AnalysisType::Compare { baseline } => {
-                println!("🔄 Comparing {} vs baseline {} per `nros migrate compare`", input.display(), baseline.display());
+                println!(
+                    "🔄 Comparing {} vs baseline {} per `nros migrate compare`",
+                    input.display(),
+                    baseline.display()
+                );
             }
         }
         Ok(())
@@ -1047,17 +1294,26 @@ pub struct MigrationTools;
 
 impl MigrationTools {
     pub fn analyze_ros2(path: &Path) -> Result<(), String> {
-        println!("🔍 Analyzing ROS2 package at: {} per `nros migrate analyze src/my_ros2_pkg`", path.display());
+        println!(
+            "🔍 Analyzing ROS2 package at: {} per `nros migrate analyze src/my_ros2_pkg`",
+            path.display()
+        );
         println!("   Generates report:");
         println!("   - Number of nodes: 12");
         println!("   - Topic dependencies: 23 topics, 5 services");
         println!("   - Custom message types: 4 (.msg → .mdl conversion needed per §5.1 MDL)");
-        println!("   - Estimated migration effort: 2 weeks (publisher/subscriber pattern conversion)");
+        println!(
+            "   - Estimated migration effort: 2 weeks (publisher/subscriber pattern conversion)"
+        );
         Ok(())
     }
 
     pub fn convert(input: &Path, output: &Path) -> Result<(), String> {
-        println!("🔄 Converting ROS2 → NROS: {} → {} per `nros migrate convert`", input.display(), output.display());
+        println!(
+            "🔄 Converting ROS2 → NROS: {} → {} per `nros migrate convert`",
+            input.display(),
+            output.display()
+        );
         println!("   Converts .msg files to .mdl format with compile-time bounds checking, unit conversions");
         println!("   Publisher/Subscriber: create_publisher<Msg>(topic, qos) → publish<T>(topic) + publish().await");
         std::thread::sleep(Duration::from_millis(300));
@@ -1148,27 +1404,41 @@ impl CLI {
                 }
             },
 
-            Command::Record { topics, output, duration } => {
-                Recorder::record(&topics, &output, duration)
-            }
+            Command::Record {
+                topics,
+                output,
+                duration,
+            } => Recorder::record(&topics, &output, duration),
 
-            Command::Replay { input, speed, loop_playback } => {
-                Recorder::replay(&input, speed, loop_playback)
-            }
+            Command::Replay {
+                input,
+                speed,
+                loop_playback,
+            } => Recorder::replay(&input, speed, loop_playback),
 
-            Command::Analyze { input, analysis_type } => {
-                Recorder::analyze(&input, &analysis_type)
-            }
+            Command::Analyze {
+                input,
+                analysis_type,
+            } => Recorder::analyze(&input, &analysis_type),
 
             Command::Migrate { action } => match action {
                 MigrateAction::Analyze { path } => MigrationTools::analyze_ros2(&path),
-                MigrateAction::Convert { input, output } => MigrationTools::convert(&input, &output),
+                MigrateAction::Convert { input, output } => {
+                    MigrationTools::convert(&input, &output)
+                }
                 MigrateAction::ConvertMsgs { input } => {
                     println!("Converting msgs at {}", input.display());
                     Ok(())
                 }
-                MigrateAction::Test { ros2_bag, nros_recording } => {
-                    println!("Testing migration: {} vs {}", ros2_bag.display(), nros_recording.display());
+                MigrateAction::Test {
+                    ros2_bag,
+                    nros_recording,
+                } => {
+                    println!(
+                        "Testing migration: {} vs {}",
+                        ros2_bag.display(),
+                        nros_recording.display()
+                    );
                     Ok(())
                 }
             },
@@ -1209,8 +1479,14 @@ mod tests {
 
     #[test]
     fn test_build_profile_parsing() {
-        assert_eq!(BuildProfile::from_str("realtime"), Some(BuildProfile::Realtime));
-        assert_eq!(BuildProfile::from_str("embedded"), Some(BuildProfile::Embedded));
+        assert_eq!(
+            BuildProfile::from_str("realtime"),
+            Some(BuildProfile::Realtime)
+        );
+        assert_eq!(
+            BuildProfile::from_str("embedded"),
+            Some(BuildProfile::Embedded)
+        );
         assert_eq!(BuildProfile::from_str("unknown"), None);
     }
 

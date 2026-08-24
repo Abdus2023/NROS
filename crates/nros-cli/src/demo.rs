@@ -1,8 +1,8 @@
 //! NROS CLI Tools Demo — Full interactive showcase per DESIGN.md §7, §20, §21
 
-use nros_cli::{Command, BuildProfile, TopicAction, FleetAction, CLI};
-use std::time::Duration;
+use nros_cli::{BuildProfile, Command, FleetAction, TopicAction, CLI};
 use std::path::PathBuf;
+use std::time::Duration;
 
 fn main() {
     println!("╔════════════════════════════════════════╗");
@@ -17,14 +17,21 @@ fn main() {
     // absolute paths (they contain '/'), so `nros-cli-demo` always panicked at this
     // `.unwrap()` — the advertised `cargo run -p nros-cli --bin nros-cli-demo` could never
     // complete. Create the temp dir, chdir into it, and use a plain relative name instead.
-    let tmp_dir = std::env::temp_dir().join(format!("nros_demo_init_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis()));
+    let tmp_dir = std::env::temp_dir().join(format!(
+        "nros_demo_init_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+    ));
     std::fs::create_dir_all(&tmp_dir).expect("create demo temp dir");
     std::env::set_current_dir(&tmp_dir).expect("chdir into demo temp dir");
     let demo_proj_name = "my_robot".to_string();
     CLI::run(Command::Init {
         name: demo_proj_name.clone(),
         template: Some("mobile_base".to_string()),
-    }).unwrap();
+    })
+    .unwrap();
     println!("   (demo project generated under {})", tmp_dir.display());
 
     std::thread::sleep(Duration::from_millis(800));
@@ -34,7 +41,8 @@ fn main() {
     CLI::run(Command::Build {
         profile: BuildProfile::Realtime,
         target: None,
-    }).unwrap();
+    })
+    .unwrap();
 
     std::thread::sleep(Duration::from_millis(800));
 
@@ -43,7 +51,8 @@ fn main() {
     CLI::run(Command::Build {
         profile: BuildProfile::Embedded,
         target: Some("armv7-unknown-linux-gnueabihf".to_string()),
-    }).unwrap();
+    })
+    .unwrap();
 
     std::thread::sleep(Duration::from_millis(800));
 
@@ -51,23 +60,30 @@ fn main() {
     println!("\n\n=== Command: nros topic list ===\n");
     CLI::run(Command::Topic {
         action: TopicAction::List,
-    }).unwrap();
+    })
+    .unwrap();
 
     std::thread::sleep(Duration::from_millis(800));
 
     // Demo: Topic info
     println!("\n\n=== Command: nros topic info /cmd_vel ===\n");
     CLI::run(Command::Topic {
-        action: TopicAction::Info { name: "/cmd_vel".to_string() },
-    }).unwrap();
+        action: TopicAction::Info {
+            name: "/cmd_vel".to_string(),
+        },
+    })
+    .unwrap();
 
     std::thread::sleep(Duration::from_millis(800));
 
     // Demo: Topic hz
     println!("\n\n=== Command: nros topic hz /cmd_vel ===\n");
     CLI::run(Command::Topic {
-        action: TopicAction::Hz { name: "/cmd_vel".to_string() },
-    }).unwrap();
+        action: TopicAction::Hz {
+            name: "/cmd_vel".to_string(),
+        },
+    })
+    .unwrap();
 
     std::thread::sleep(Duration::from_millis(800));
 
@@ -76,7 +92,8 @@ fn main() {
     CLI::run(Command::Profile {
         duration: Duration::from_secs(10),
         focus: None,
-    }).unwrap();
+    })
+    .unwrap();
 
     std::thread::sleep(Duration::from_millis(800));
 
@@ -86,7 +103,8 @@ fn main() {
         topics: vec!["/camera/*".into(), "/lidar".into()],
         output: PathBuf::from("recording.nros"),
         duration: Some(Duration::from_secs(10)),
-    }).unwrap();
+    })
+    .unwrap();
 
     std::thread::sleep(Duration::from_millis(800));
 
@@ -95,13 +113,15 @@ fn main() {
     CLI::run(Command::Analyze {
         input: PathBuf::from("recording.nros"),
         analysis_type: nros_cli::AnalysisType::Bandwidth,
-    }).unwrap();
+    })
+    .unwrap();
 
     // Demo: Fleet list
     println!("\n\n=== Command: nros fleet list (fleet.yaml §21.2) ===\n");
     CLI::run(Command::Fleet {
         action: FleetAction::List,
-    }).unwrap();
+    })
+    .unwrap();
 
     std::thread::sleep(Duration::from_millis(800));
 
@@ -109,7 +129,8 @@ fn main() {
     println!("\n\n=== Command: nros fleet status (cloud telemetry §21.3) ===\n");
     CLI::run(Command::Fleet {
         action: FleetAction::Status,
-    }).unwrap();
+    })
+    .unwrap();
 
     std::thread::sleep(Duration::from_millis(800));
 
@@ -120,7 +141,8 @@ fn main() {
             version: "1.1.0".to_string(),
             canary: Some(25),
         },
-    }).unwrap();
+    })
+    .unwrap();
 
     println!("\n\n╔════════════════════════════════════════╗");
     println!("║        CLI Demo Complete!              ║");

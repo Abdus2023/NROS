@@ -25,7 +25,9 @@ fn main() {
             representation::run();
         }
         _ => {
-            println!("Usage: nros-audit [claims|workspace|ci|benchmarks|safety|representation|all]");
+            println!(
+                "Usage: nros-audit [claims|workspace|ci|benchmarks|safety|representation|all]"
+            );
         }
     }
 }
@@ -35,7 +37,12 @@ fn gate_fail(msg: String) -> ! {
     // Actions workflow-command annotation, so the reason is visible on the check-run even
     // where raw job logs are unreachable (annotations ride the API, logs ride blob hosts).
     println!("❌ {}", msg);
-    println!("::error title=NROS audit gate::{}", msg.replace('%', "%25").replace('\r', "%0D").replace('\n', "%0A"));
+    println!(
+        "::error title=NROS audit gate::{}",
+        msg.replace('%', "%25")
+            .replace('\r', "%0D")
+            .replace('\n', "%0A")
+    );
     std::process::exit(1);
 }
 
@@ -43,7 +50,10 @@ fn check_workspace_inventory() {
     println!("🔍 DOC-GATE: workspace inventory");
     let cargo_toml = fs::read_to_string("Cargo.toml").unwrap_or_default();
     let readme = fs::read_to_string("README.md").unwrap_or_default();
-    let cargo_crates: Vec<&str> = cargo_toml.lines().filter(|l| l.contains("crates/")).collect();
+    let cargo_crates: Vec<&str> = cargo_toml
+        .lines()
+        .filter(|l| l.contains("crates/"))
+        .collect();
     println!("Cargo.toml workspace members: {}", cargo_crates.len());
     if readme.contains("8 crates") && cargo_crates.len() >= 10 {
         gate_fail("DOC-001: stale README crate inventory".to_string());
@@ -62,7 +72,10 @@ fn check_claims() {
     if evidence.contains("SIMULATED") || readme.contains("SIMULATED") {
         println!("✅ Simulation/evidence labeling present");
     } else {
-        gate_fail("DOC-002: evidence taxonomy labeling not detected in README.md or EVIDENCE_REGISTRY.md".to_string());
+        gate_fail(
+            "DOC-002: evidence taxonomy labeling not detected in README.md or EVIDENCE_REGISTRY.md"
+                .to_string(),
+        );
     }
     if evidence.contains("claim_allowed") {
         println!("✅ Evidence registry exposes claim_allowed");
@@ -82,7 +95,9 @@ fn check_ci() {
     } else {
         // Pass 29 (F29-08): was `println!("❌ ...")` followed by a fall-through to a
         // successful exit, so a missing workflow did not fail the gate.
-        gate_fail("CI-004: no CI workflow found (.github/workflows/ci.yml or docs/ci.yml)".to_string());
+        gate_fail(
+            "CI-004: no CI workflow found (.github/workflows/ci.yml or docs/ci.yml)".to_string(),
+        );
     }
 }
 
@@ -96,7 +111,10 @@ fn check_benchmarks() {
         // claim-without-evidence, not a warning. (The artifact being *present* still does
         // not validate the numbers — see the `benchmark_artifact_is_not_independent_validation`
         // invariant enforced by the representation gate.)
-        gate_fail("BENCH-005: benchmarks/results.json missing while README quotes benchmark figures".to_string());
+        gate_fail(
+            "BENCH-005: benchmarks/results.json missing while README quotes benchmark figures"
+                .to_string(),
+        );
     }
 }
 
@@ -104,8 +122,18 @@ fn check_safety_invariants() {
     println!("🔒 SAFETY-GATE: structural source checks");
     let core = fs::read_to_string("crates/nros-core/src/lib.rs").unwrap_or_default();
     let mut failures = 0;
-    if core.contains("pub fn init_with<F>") { failures += 1; println!("❌ safe init_with regression");  println!("::error title=NROS safety gate::safe init_with regression"); }
-    if core.contains("pub fn as_mut_ptr(&self)") && !core.contains("pub unsafe fn as_mut_ptr(&self)") { failures += 1; println!("❌ safe as_mut_ptr regression");  println!("::error title=NROS safety gate::safe as_mut_ptr regression"); }
+    if core.contains("pub fn init_with<F>") {
+        failures += 1;
+        println!("❌ safe init_with regression");
+        println!("::error title=NROS safety gate::safe init_with regression");
+    }
+    if core.contains("pub fn as_mut_ptr(&self)")
+        && !core.contains("pub unsafe fn as_mut_ptr(&self)")
+    {
+        failures += 1;
+        println!("❌ safe as_mut_ptr regression");
+        println!("::error title=NROS safety gate::safe as_mut_ptr regression");
+    }
     if failures == 0 {
         println!("✅ structural safety checks passed");
     } else {

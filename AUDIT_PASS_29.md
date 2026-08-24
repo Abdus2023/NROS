@@ -423,8 +423,35 @@ are exactly the three this pass reports as unfixed, for the reasons given.
 | `tools/offline-mrustc/stage2-vendor-stdlib.sh` | F29-05 items 6–9; §3 pin-table correction |
 | `tools/offline-mrustc/stage3-build-nros.sh` | F29-05 item 10 (suites now actually run, and fail the stage) |
 | `tools/offline-mrustc/README.md` | Pinning facts corrected to the real 1.90.0 lockfile; new tricks recorded |
+| 26 `.rs` files under `crates/` | F29-03 — reformatted; see §7. Formatting-only, no behaviour change; `tests/compile_fail/` fixtures excluded |
 
-Not changed, deliberately:
+## 7. The rustfmt reformat (F29-03)
+
+The 26 non-fixture `.rs` files under `crates/` were reformatted. The changes are all
+long-stable rustfmt defaults — one-line fn bodies expanded, struct literals expanded,
+imports reordered/grouped, trailing-comment alignment — nothing gated on a
+`style_edition`, and the repo has no `rustfmt.toml`.
+
+Two deliberate exclusions:
+
+* `crates/nros-core/tests/compile_fail/*.rs` (4 files). `cargo fmt --all` formats
+  declared/auto-discovered *targets*; those files are trybuild **fixtures**, not targets,
+  so the gate never inspects them. Reformatting them would only churn files whose
+  committed `.stderr` quotes source lines verbatim.
+* No `rustfmt.toml` was added — the gate should keep checking rustfmt's defaults.
+
+**Verified locally:** the full offline stage 3 was re-run from a clean output directory
+against the reformatted tree — 54 tests pass, 6 demos, both golden templates, both facade
+examples (real `#[nros::node]` expansion), and all five probe suites still pass, with
+`STAGE3_COMPLETE` / exit 0.
+
+**The remaining uncertainty is honest and specific:** the rustfmt used here is a WASM
+build whose version could not be determined, so it may disagree with CI's stable rustfmt
+on some detail. That is checkable in one CI cycle — the `cargo fmt --check` job on this
+branch is the oracle. If it stays red, `git revert` the formatting commit; the diff is
+formatting-only and carries no behaviour change.
+
+## 8. Not changed, deliberately
 
 * **The Miri workflow (F29-04).** The repo's F-25 patch is unapplied, and the branch
   whose run is titled "apply F-25 Miri toolchain fix" (`arena/01a03242-nros` @
@@ -434,4 +461,3 @@ Not changed, deliberately:
   that is already red would not be an improvement anyone could check.
 * **The scope of `check_safety_invariants()` (F29-08).** Deciding which additional
   invariants it should enforce is a design decision, not a defect fix.
-* **The rustfmt reformat (F29-03)** — see §7.

@@ -3,16 +3,21 @@
 //! Status: SCAFFOLDED-IMPLEMENTED — single-process, deterministic, priority-based, deadline monitoring (not yet enforcement)
 //! Would become real-time executor with CPU affinity, NUMA awareness, memory pools, interrupt handling, DMA coordination per DESIGN.md §15
 
+use crate::{ChannelConfig, ExecutionClass};
 use std::collections::{BinaryHeap, HashMap};
-use std::sync::{Arc, atomic::{AtomicU64, Ordering}};
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc,
+};
 use std::time::{Duration, Instant};
-use crate::{ExecutionClass, ChannelConfig};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct TaskId(pub u64);
 
 impl TaskId {
-    pub fn new(id: u64) -> Self { Self(id) }
+    pub fn new(id: u64) -> Self {
+        Self(id)
+    }
 }
 
 // Note: Eq/PartialEq compare ALL fields. The earlier manual impl only compared (priority, id),
@@ -25,7 +30,7 @@ pub struct CallbackDescriptor {
     pub execution_class: ExecutionClass,
     pub priority: u8, // 0-255, 200+ reserved safety-critical per DESIGN.md §15.1
     pub deadline: Option<Duration>, // e.g., 1000us for control_loop
-    pub period: Option<Duration>,   // e.g., 10ms for 100Hz
+    pub period: Option<Duration>, // e.g., 10ms for 100Hz
     pub cpu_affinity: Option<Vec<usize>>, // Pin to specific cores per DESIGN.md §15.1
 }
 
@@ -184,7 +189,11 @@ impl Executor {
 
     /// Simple run loop — runs until ready queue empty or max iterations
     /// Real executor would loop forever, handling timers, subscriptions, shutdown coordinator per DESIGN.md §15
-    pub fn run_until_empty_with<F>(&mut self, mut callback_runner: F, max_iterations: usize) -> usize
+    pub fn run_until_empty_with<F>(
+        &mut self,
+        mut callback_runner: F,
+        max_iterations: usize,
+    ) -> usize
     where
         F: FnMut(&CallbackDescriptor) -> Duration,
     {
@@ -210,8 +219,13 @@ impl Executor {
     pub fn print_stats(&self) {
         println!("\n=== Executor Stats (Deadline Monitoring, not Enforcement per AUDIT) ===");
         for (id, stats) in &self.execution_stats {
-            println!("Task {:?} ({}): count={}, avg={:?}, max={:?}, min={:?}, misses={}",
-                id.0, self.tasks.get(id).map(|d| d.name.as_str()).unwrap_or("unknown"),
+            println!(
+                "Task {:?} ({}): count={}, avg={:?}, max={:?}, min={:?}, misses={}",
+                id.0,
+                self.tasks
+                    .get(id)
+                    .map(|d| d.name.as_str())
+                    .unwrap_or("unknown"),
                 stats.execution_count,
                 stats.avg_execution_time(),
                 stats.max_execution_time,
@@ -223,7 +237,9 @@ impl Executor {
 }
 
 impl Default for Executor {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 // ── Realtime Lint Layer — per AUDIT Pass 15 §26 ────────────────────────────
@@ -237,7 +253,12 @@ pub struct RealtimeLint {
 }
 
 impl RealtimeLint {
-    pub fn new() -> Self { Self { errors: Vec::new(), warnings: Vec::new() } }
+    pub fn new() -> Self {
+        Self {
+            errors: Vec::new(),
+            warnings: Vec::new(),
+        }
+    }
 
     /// Check if callback contains forbidden operations for HardRealtime
     /// Real implementation would parse Rust source via syn, check for Vec, String, HashMap, Box, Arc clone, println!, format!, filesystem, blocking lock, SystemTime
@@ -254,11 +275,17 @@ impl RealtimeLint {
         }
     }
 
-    pub fn has_errors(&self) -> bool { !self.errors.is_empty() }
+    pub fn has_errors(&self) -> bool {
+        !self.errors.is_empty()
+    }
 
     pub fn print(&self) {
-        for e in &self.errors { println!("{}", e); }
-        for w in &self.warnings { println!("{}", w); }
+        for e in &self.errors {
+            println!("{}", e);
+        }
+        for w in &self.warnings {
+            println!("{}", w);
+        }
         if self.errors.is_empty() {
             println!("Realtime lint: No hard realtime violations found (for checked patterns)");
         }
@@ -272,8 +299,24 @@ mod tests {
     #[test]
     fn test_executor_priority_ordering() {
         let mut executor = Executor::new();
-        let low = CallbackDescriptor { id: TaskId(0), name: "low".into(), execution_class: ExecutionClass::Normal, priority: 10, deadline: None, period: None, cpu_affinity: None };
-        let high = CallbackDescriptor { id: TaskId(0), name: "high".into(), execution_class: ExecutionClass::HardRealtime, priority: 200, deadline: Some(Duration::from_micros(1000)), period: None, cpu_affinity: None };
+        let low = CallbackDescriptor {
+            id: TaskId(0),
+            name: "low".into(),
+            execution_class: ExecutionClass::Normal,
+            priority: 10,
+            deadline: None,
+            period: None,
+            cpu_affinity: None,
+        };
+        let high = CallbackDescriptor {
+            id: TaskId(0),
+            name: "high".into(),
+            execution_class: ExecutionClass::HardRealtime,
+            priority: 200,
+            deadline: Some(Duration::from_micros(1000)),
+            period: None,
+            cpu_affinity: None,
+        };
 
         let low_id = executor.register(low);
         let high_id = executor.register(high);
@@ -283,10 +326,14 @@ mod tests {
         executor.wake(high_id);
 
         // High priority should run first
-        let first = executor.run_once_with(|_| Duration::from_micros(10)).unwrap();
+        let first = executor
+            .run_once_with(|_| Duration::from_micros(10))
+            .unwrap();
         assert_eq!(first.0, high_id);
 
-        let second = executor.run_once_with(|_| Duration::from_micros(10)).unwrap();
+        let second = executor
+            .run_once_with(|_| Duration::from_micros(10))
+            .unwrap();
         assert_eq!(second.0, low_id);
     }
 
@@ -300,7 +347,7 @@ mod tests {
             priority: 200,
             deadline: Some(Duration::from_micros(1000)),
             period: Some(Duration::from_millis(1)),
-            cpu_affinity: Some(vec![2,3]),
+            cpu_affinity: Some(vec![2, 3]),
         };
         let id = executor.register(desc);
         executor.wake(id);

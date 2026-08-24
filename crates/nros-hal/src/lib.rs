@@ -73,8 +73,15 @@ pub struct DeviceInfo {
 
 impl std::fmt::Display for DeviceInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} [{}] {:04x}:{:04x} SN:{}", self.name, 
-            format!("{:?}", self.device_class), self.vendor_id, self.product_id, self.serial_number)
+        write!(
+            f,
+            "{} [{}] {:04x}:{:04x} SN:{}",
+            self.name,
+            format!("{:?}", self.device_class),
+            self.vendor_id,
+            self.product_id,
+            self.serial_number
+        )
     }
 }
 
@@ -273,19 +280,31 @@ pub trait DmaBufferTrait {
 }
 
 impl DmaBufferTrait for SimulatedDmaBuffer {
-    fn id(&self) -> usize { self.id }
-    fn size(&self) -> usize { self.size }
-    fn is_simulated(&self) -> bool { true }
+    fn id(&self) -> usize {
+        self.id
+    }
+    fn size(&self) -> usize {
+        self.size
+    }
+    fn is_simulated(&self) -> bool {
+        true
+    }
 }
 
 impl DmaBufferTrait for RealDmaBuffer {
-    fn id(&self) -> usize { self.id }
-    fn size(&self) -> usize { self.size }
+    fn id(&self) -> usize {
+        self.id
+    }
+    fn size(&self) -> usize {
+        self.size
+    }
     // Pass 24 (I-009): this buffer is currently backed by a Vec<u8>
     // (`new_scaffolded`), not a real memfd/DMA-BUF, so it must report simulated
     // until the mmap/dma_buf_attach path is implemented. `is_real_dma()` already
     // returns false on the concrete type.
-    fn is_simulated(&self) -> bool { true }
+    fn is_simulated(&self) -> bool {
+        true
+    }
 }
 
 // ── DMA Ownership State Machine — per AUDIT Pass 14 DMA-001, CACHE-001 ──────
@@ -307,17 +326,29 @@ pub struct DmaBufferState<State> {
 
 impl DmaBufferState<OwnedByCpu> {
     pub fn new(id: usize, size: usize) -> Self {
-        Self { id, size, data: std::sync::Arc::new(vec![0u8; size]), _marker: std::marker::PhantomData }
+        Self {
+            id,
+            size,
+            data: std::sync::Arc::new(vec![0u8; size]),
+            _marker: std::marker::PhantomData,
+        }
     }
 
     /// Submit to device — transfers ownership CPU -> Device, requires cache clean
     pub fn submit(self) -> DmaBufferState<OwnedByDevice> {
         // Real would: cache clean (clean cache to memory), memory barrier, DMA fence
         // println!("[DMA] CPU -> Device ownership transfer, cache clean, id {}", self.id);
-        DmaBufferState { id: self.id, size: self.size, data: self.data, _marker: std::marker::PhantomData }
+        DmaBufferState {
+            id: self.id,
+            size: self.size,
+            data: self.data,
+            _marker: std::marker::PhantomData,
+        }
     }
 
-    pub fn as_slice(&self) -> &[u8] { &self.data }
+    pub fn as_slice(&self) -> &[u8] {
+        &self.data
+    }
     pub fn as_mut_slice(&mut self) -> &mut Vec<u8> {
         std::sync::Arc::make_mut(&mut self.data)
     }
@@ -328,11 +359,18 @@ impl DmaBufferState<OwnedByDevice> {
     pub fn complete(self) -> DmaBufferState<OwnedByCpu> {
         // Real would: DMA fence, cache invalidate (invalidate cache to see device writes), memory barrier
         // println!("[DMA] Device -> CPU ownership transfer, cache invalidate, id {}", self.id);
-        DmaBufferState { id: self.id, size: self.size, data: self.data, _marker: std::marker::PhantomData }
+        DmaBufferState {
+            id: self.id,
+            size: self.size,
+            data: self.data,
+            _marker: std::marker::PhantomData,
+        }
     }
 
     // No as_mut_slice here — prevents CPU modifies DMA-owned memory without unsafe escape hatch
-    pub fn as_slice(&self) -> &[u8] { &self.data }
+    pub fn as_slice(&self) -> &[u8] {
+        &self.data
+    }
 }
 
 /// Cache coherency contract per AUDIT Pass 14 CACHE-001
@@ -453,8 +491,12 @@ impl CameraDriver {
             .checked_mul(height as u64)
             .and_then(|px| px.checked_mul(bytes_per_pixel))
             .filter(|&s| s <= 64 * 1024 * 1024)
-            .ok_or_else(|| format!("Invalid/camera resolution {}x{}: frame too large", width, height))?
-            as usize;
+            .ok_or_else(|| {
+                format!(
+                    "Invalid/camera resolution {}x{}: frame too large",
+                    width, height
+                )
+            })? as usize;
 
         // Simulate frame capture with DMA — real: VIDIOC_DQBUF + memmap pointer
         let (data, dma_id) = if self.config.use_dma && !self.dma_buffers.is_empty() {
@@ -526,7 +568,10 @@ impl Sensor for CameraDriver {
             self.dma_buffers = (0..config.buffer_count)
                 .map(|i| DmaBuffer::new(i, buffer_size))
                 .collect();
-            println!("[Camera] Allocated {} DMA buffers {} bytes each (zero-copy)", config.buffer_count, buffer_size);
+            println!(
+                "[Camera] Allocated {} DMA buffers {} bytes each (zero-copy)",
+                config.buffer_count, buffer_size
+            );
         }
 
         Ok(())
@@ -543,7 +588,10 @@ impl Sensor for CameraDriver {
     }
 
     fn stop(&mut self) -> Result<(), String> {
-        println!("[Camera] Stopping stream — {} frames captured", self.frame_count);
+        println!(
+            "[Camera] Stopping stream — {} frames captured",
+            self.frame_count
+        );
         self.is_streaming = false;
         Ok(())
     }
@@ -661,7 +709,10 @@ impl Sensor for LidarDriver {
     }
 
     fn start(&mut self) -> Result<(), String> {
-        println!("[LiDAR] Starting scan at {:.1} Hz, Trigger: {:?}", self.config.rate_hz, self.config.trigger_mode);
+        println!(
+            "[LiDAR] Starting scan at {:.1} Hz, Trigger: {:?}",
+            self.config.rate_hz, self.config.trigger_mode
+        );
         self.is_scanning = true;
         self.scan_count = 0;
         Ok(())
@@ -735,7 +786,10 @@ impl ImuDriver {
                 name: name.to_string(),
                 serial_number: "IMU001".to_string(),
             },
-            config: SensorConfig { rate_hz: 200.0, ..Default::default() },
+            config: SensorConfig {
+                rate_hz: 200.0,
+                ..Default::default()
+            },
             is_streaming: false,
             sequence: 0,
         }
@@ -750,9 +804,21 @@ impl ImuDriver {
         self.sequence += 1;
         Ok(ImuData {
             timestamp: Timestamp::now(),
-            linear_acceleration: Vector3 { x: 0.02 * (self.sequence as f64 * 0.01).sin(), y: 0.0, z: 9.81 },
-            angular_velocity: Vector3 { x: 0.0, y: 0.0, z: 0.01 * (self.sequence as f64 * 0.005).cos() },
-            orientation: Vector3 { x: 0.0, y: 0.0, z: 0.0 },
+            linear_acceleration: Vector3 {
+                x: 0.02 * (self.sequence as f64 * 0.01).sin(),
+                y: 0.0,
+                z: 9.81,
+            },
+            angular_velocity: Vector3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.01 * (self.sequence as f64 * 0.005).cos(),
+            },
+            orientation: Vector3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
             sequence: self.sequence,
         })
     }
@@ -856,7 +922,10 @@ impl SensorSynchronizer {
     pub fn try_synchronize(&mut self) -> Option<SynchronizedData> {
         self.sync_attempts += 1;
 
-        if self.camera_buffer.is_empty() || self.lidar_buffer.is_empty() || self.imu_buffer.is_empty() {
+        if self.camera_buffer.is_empty()
+            || self.lidar_buffer.is_empty()
+            || self.imu_buffer.is_empty()
+        {
             return None;
         }
 
@@ -918,7 +987,11 @@ impl SensorSynchronizer {
     }
 
     pub fn buffered_counts(&self) -> (usize, usize, usize) {
-        (self.camera_buffer.len(), self.lidar_buffer.len(), self.imu_buffer.len())
+        (
+            self.camera_buffer.len(),
+            self.lidar_buffer.len(),
+            self.imu_buffer.len(),
+        )
     }
 }
 
@@ -938,7 +1011,11 @@ impl SensorManager {
     }
 
     pub fn register_sensor(&mut self, name: String, sensor: Box<dyn Sensor>) {
-        println!("[SensorManager] Registering {}: {}", name, sensor.device_info());
+        println!(
+            "[SensorManager] Registering {}: {}",
+            name,
+            sensor.device_info()
+        );
         self.sensors.insert(name, sensor);
     }
 
@@ -981,7 +1058,12 @@ impl SensorManager {
             let caps = sensor.capabilities();
             println!(
                 "  {}: {:.0}-{:.0} Hz, HW trigger: {}, Zero-copy: {}, DMA: {}",
-                name, caps.min_rate_hz, caps.max_rate_hz, caps.supports_hardware_trigger, caps.supports_zero_copy, caps.supports_dma
+                name,
+                caps.min_rate_hz,
+                caps.max_rate_hz,
+                caps.supports_hardware_trigger,
+                caps.supports_zero_copy,
+                caps.supports_dma
             );
         }
     }
@@ -1008,7 +1090,12 @@ mod tests {
     #[test]
     fn test_camera_dma() {
         let mut cam = CameraDriver::new("test");
-        cam.configure(SensorConfig { use_dma: true, buffer_count: 4, ..Default::default() }).unwrap();
+        cam.configure(SensorConfig {
+            use_dma: true,
+            buffer_count: 4,
+            ..Default::default()
+        })
+        .unwrap();
         cam.start().unwrap();
         let frame = cam.capture_frame().unwrap();
         assert_eq!(frame.width, 640);
@@ -1045,7 +1132,12 @@ mod tests {
         };
         let cloud = PointCloud {
             timestamp: ts,
-            points: vec![Point3D { x: 0.0, y: 0.0, z: 0.0, intensity: 1.0 }],
+            points: vec![Point3D {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+                intensity: 1.0,
+            }],
             scan_id: 1,
         };
         let imu = ImuData {

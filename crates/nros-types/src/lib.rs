@@ -19,7 +19,10 @@ pub struct WallTimestamp {
 impl WallTimestamp {
     pub fn now() -> Self {
         let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-        Self { sec: now.as_secs(), nanosec: now.subsec_nanos() }
+        Self {
+            sec: now.as_secs(),
+            nanosec: now.subsec_nanos(),
+        }
     }
 
     pub fn to_duration(&self) -> Duration {
@@ -28,7 +31,9 @@ impl WallTimestamp {
 }
 
 impl Default for WallTimestamp {
-    fn default() -> Self { Self { sec: 0, nanosec: 0 } }
+    fn default() -> Self {
+        Self { sec: 0, nanosec: 0 }
+    }
 }
 
 /// Monotonic instant — local latency measurement, deadline monitoring
@@ -39,9 +44,17 @@ pub struct MonotonicInstant {
 }
 
 impl MonotonicInstant {
-    pub fn now() -> Self { Self { instant: Instant::now() } }
-    pub fn elapsed(&self) -> Duration { self.instant.elapsed() }
-    pub fn elapsed_ns(&self) -> u64 { self.instant.elapsed().as_nanos() as u64 }
+    pub fn now() -> Self {
+        Self {
+            instant: Instant::now(),
+        }
+    }
+    pub fn elapsed(&self) -> Duration {
+        self.instant.elapsed()
+    }
+    pub fn elapsed_ns(&self) -> u64 {
+        self.instant.elapsed().as_nanos() as u64
+    }
     pub fn duration_since(&self, earlier: Self) -> Duration {
         self.instant.duration_since(earlier.instant)
     }
@@ -65,13 +78,21 @@ pub struct Vector3 {
 }
 
 impl Vector3 {
-    pub fn new(x: f64, y: f64, z: f64) -> Self { Self { x, y, z } }
-    pub fn zero() -> Self { Self::new(0.0, 0.0, 0.0) }
-    pub fn magnitude(&self) -> f64 { (self.x*self.x + self.y*self.y + self.z*self.z).sqrt() }
+    pub fn new(x: f64, y: f64, z: f64) -> Self {
+        Self { x, y, z }
+    }
+    pub fn zero() -> Self {
+        Self::new(0.0, 0.0, 0.0)
+    }
+    pub fn magnitude(&self) -> f64 {
+        (self.x * self.x + self.y * self.y + self.z * self.z).sqrt()
+    }
 }
 
 impl Default for Vector3 {
-    fn default() -> Self { Self::zero() }
+    fn default() -> Self {
+        Self::zero()
+    }
 }
 
 // ── Messages — canonical definitions ───────────────────────────────────────
@@ -86,7 +107,11 @@ pub struct Twist {
 
 impl Default for Twist {
     fn default() -> Self {
-        Self { timestamp: WallTimestamp::default(), linear: Vector3::default(), angular: Vector3::default() }
+        Self {
+            timestamp: WallTimestamp::default(),
+            linear: Vector3::default(),
+            angular: Vector3::default(),
+        }
     }
 }
 
@@ -102,7 +127,13 @@ pub struct MotorCommand {
 
 impl Default for MotorCommand {
     fn default() -> Self {
-        Self { timestamp: WallTimestamp::default(), left_velocity: 0.0, right_velocity: 0.0, left_torque: 0.0, right_torque: 0.0 }
+        Self {
+            timestamp: WallTimestamp::default(),
+            left_velocity: 0.0,
+            right_velocity: 0.0,
+            left_torque: 0.0,
+            right_torque: 0.0,
+        }
     }
 }
 
