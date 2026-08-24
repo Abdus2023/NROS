@@ -140,12 +140,8 @@ fn diag_emit(title: &str, msg: &str) {
         } else {
             format!("::error title={}::{}", tl, c)
         };
-        // Dual-stream emission: the runner parses workflow commands on both.
-        // stdout() is line-buffered through a lock — write raw bytes each time.
         let _ = std::io::stderr().write_all(line.as_bytes());
         let _ = std::io::stderr().write_all(b"\n");
-        let _ = std::io::stdout().write_all(line.as_bytes());
-        let _ = std::io::stdout().write_all(b"\n");
     }
     let _ = std::io::stderr().flush();
     let _ = std::io::stdout().flush();
@@ -163,6 +159,45 @@ fn diag_phase(name: &str, f: impl FnOnce()) {
                 .or_else(|| payload.downcast_ref::<String>().cloned())
                 .unwrap_or_else(|| "non-string panic payload".to_string());
             diag_emit(&format!("Pass27-DIAG phase {} PANIC", name), &msg);
+        }
+    }
+}
+
+/// Run a shell command with its output redirected to a log file, emitting a
+/// heartbeat annotation every 3 seconds while it runs (evidence: the previous
+/// process died ~33s into a heavy `cargo test` compile with zero trace — heartbeats
+/// pinpoint whether the killer is load-correlated and when exactly it strikes).
+fn diag_run_heartbeated(tag: &str, shell_cmd: &str, log: &str) -> (Option<i32>, String) {
+    let _ = std::fs::remove_file(log);
+    let cmd = format!("{} > {} 2>&1", shell_cmd, log);
+    let mut child = match std::process::Command::new("bash").args(["-c", &cmd]).spawn() {
+        Ok(c) => c,
+        Err(e) => {
+            diag_emit(&format!("Pass27-DIAG {} spawn", tag), &format!("spawn failed: {}", e));
+            return (None, String::new());
+        }
+    };
+    let mut ticks = 0u32;
+    loop {
+        match child.try_wait() {
+            Ok(Some(st)) => {
+                diag_emit(&format!("Pass27-DIAG {}", tag), &format!("exit after {} heartbeat(s), status={:?}", ticks, st.code()));
+                return (st.code(), std::fs::read_to_string(log).unwrap_or_default());
+            }
+            Ok(None) => {
+                ticks += 1;
+                let lines = std::fs::read_to_string(log).map(|s| s.lines().count()).unwrap_or(0);
+                let last = std::fs::read_to_string(log)
+                    .ok()
+                    .and_then(|s| s.lines().rev().find(|l| !l.trim().is_empty()).map(|l| l.chars().take(180).collect::<String>()))
+                    .unwrap_or_else(|| "<no output yet>".to_string());
+                diag_emit(&format!("Pass27-DIAG {}", tag), &format!("hb{}: {} log lines; last: {}", ticks, lines, last));
+                std::thread::sleep(std::time::Duration::from_secs(20));
+            }
+            Err(e) => {
+                diag_emit(&format!("Pass27-DIAG {}", tag), &format!("try_wait error: {}", e));
+                return (None, String::new());
+            }
         }
     }
 }
@@ -199,21 +234,13 @@ fn ci_diag_forward_cargo_check() {
 /// annotations so they can be transcribed verbatim into tests/compile_fail/.
 /// Never affects the exit code; no-op outside CI.
 fn ci_diag_harvest_trybuild_wip() {
-    diag_emit("Pass27-DIAG trybuild", "hb1: spawning cargo test -p nros-core --test trybuild");
-    let out = std::process::Command::new("cargo")
-        .args(["test", "-p", "nros-core", "--test", "trybuild", "--", "--nocapture"])
-        .output();
-    match &out {
-        Ok(o) => diag_emit(
-            "Pass27-DIAG trybuild",
-            &format!(
-                "hb2: cargo test status={:?}; stderr tail: {}",
-                o.status.code(),
-                String::from_utf8_lossy(&o.stderr).chars().rev().take(1500).collect::<String>().chars().rev().collect::<String>()
-            ),
-        ),
-        Err(e) => diag_emit("Pass27-DIAG trybuild", &format!("hb2: spawn error {}", e)),
-    }
+    let (_code, log) = diag_run_heartbeated(
+        "trybuild-run",
+        "cargo test -p nros-core --test trybuild",
+        "/tmp/diag_trybuild.log",
+    );
+    let tail: String = log.chars().rev().take(2500).collect::<String>().chars().rev().collect();
+    diag_emit("Pass27-DIAG trybuild", &format!("log tail:\n{}", tail));
     let mut files: Vec<std::path::PathBuf> = Vec::new();
     fn walk(dir: &std::path::Path, depth: u32, acc: &mut Vec<std::path::PathBuf>) {
         if depth > 8 {
@@ -271,15 +298,7 @@ fn ci_diag_harvest_trybuild_wip() {
     files.sort();
     files.dedup();
     if files.is_empty() {
-        let msg = match &out {
-            Ok(o) => format!(
-                "no wip/*.stderr produced; status={:?}; trybuild stdout tail: {}",
-                o.status.code(),
-                String::from_utf8_lossy(&o.stdout).chars().rev().take(3000).collect::<String>().chars().rev().collect::<String>()
-            ),
-            Err(e) => format!("no wip/*.stderr produced; could not run trybuild: {}", e),
-        };
-        diag_emit("Pass27-DIAG trybuild", &msg);
+        diag_emit("Pass27-DIAG trybuild", "no wip/*.stderr produced (see log tail above; wip path should be named in it)");
         return;
     }
     diag_emit("Pass27-DIAG trybuild", &format!("{} wip stderr file(s) found", files.len()));
@@ -293,77 +312,65 @@ fn ci_diag_harvest_trybuild_wip() {
 /// (workspace)` job by running the same command here and forwarding failing-test
 /// lines and the summary tail as annotations.
 fn ci_diag_forward_test_suite() {
-    let out = std::process::Command::new("cargo")
-        .args(["test", "--workspace", "--all-targets", "--no-fail-fast", "--message-format", "short"])
-        .output();
-    match out {
-        Err(e) => diag_emit("Pass27-DIAG test-suite spawn", &format!("failed to spawn cargo: {}", e)),
-        Ok(o) => {
-            let text = String::from_utf8_lossy(&o.stdout);
-            let stderr_tail: String = String::from_utf8_lossy(&o.stderr).chars().rev().take(3000).collect::<String>().chars().rev().collect();
-            let mut hits: Vec<&str> = text
-                .lines()
-                .filter(|l| {
-                    l.contains("FAILED")
-                        || l.contains("panicked at")
-                        || l.starts_with("failures:")
-                        || l.contains("test result: FAILED")
-                        || (l.contains("error") && !l.contains("0 error"))
-                })
-                .collect();
-            hits.truncate(15);
-            diag_emit(
-                "Pass27-DIAG test-suite",
-                &format!(
-                    "status={:?}\nhits:\n{}\nstderr tail:\n{}",
-                    o.status.code(),
-                    if hits.is_empty() { "<none>".to_string() } else { hits.join("\n") },
-                    stderr_tail
-                ),
-            );
-        }
-    }
+    let (code, log) = diag_run_heartbeated(
+        "test-suite-run",
+        "cargo test --workspace --all-targets --no-fail-fast",
+        "/tmp/diag_tests.log",
+    );
+    let mut hits: Vec<&str> = log
+        .lines()
+        .filter(|l| {
+            l.contains("FAILED")
+                || l.contains("panicked at")
+                || l.starts_with("failures:")
+                || l.contains("test result: FAILED")
+                || (l.contains("error") && !l.contains("0 error"))
+        })
+        .collect();
+    hits.truncate(15);
+    let tail: String = log.chars().rev().take(2000).collect::<String>().chars().rev().collect();
+    diag_emit(
+        "Pass27-DIAG test-suite",
+        &format!(
+            "status={:?}\nhits:\n{}\nlog tail:\n{}",
+            code,
+            if hits.is_empty() { "<none>".to_string() } else { hits.join("\n") },
+            tail
+        ),
+    );
 }
 
 /// TEMPORARY Pass 27 CI diagnostic, fourth phase: decode the red Miri job by
 /// reproducing it here (rustup on the runner can reach the dist server even
 /// though the audit sandbox cannot) and forwarding Miri's verdict.
 fn ci_diag_forward_miri() {
-    let script = "rustup default nightly >/dev/null 2>&1; \
-                  rustup component add miri >/dev/null 2>&1; \
-                  cargo miri setup >/dev/null 2>&1; \
-                  cargo miri test -p nros-core --lib 2>&1; \
-                  rustup default stable >/dev/null 2>&1";
-    let out = std::process::Command::new("bash").args(["-c", script]).output();
-    match out {
-        Err(e) => diag_emit("Pass27-DIAG miri spawn", &format!("failed to spawn bash: {}", e)),
-        Ok(o) => {
-            let text = String::from_utf8_lossy(&o.stdout);
-            let mut hits: Vec<&str> = text
-                .lines()
-                .filter(|l| {
-                    l.contains("error")
-                        || l.contains("Undefined Behavior")
-                        || l.contains("UB")
-                        || l.contains("data race")
-                        || l.contains("aborting")
-                        || l.contains("test result")
-                })
-                .collect();
-            hits.truncate(20);
-            let tail: Vec<&str> = text.lines().collect();
-            let start = tail.len().saturating_sub(24);
-            let tail_joined: String = tail[start..].join("\n").chars().rev().take(6000).collect::<String>().chars().rev().collect();
-            diag_emit(
-                "Pass27-DIAG miri",
-                &format!(
-                    "hits:\n{}\noutput tail:\n{}",
-                    if hits.is_empty() { "<none>".to_string() } else { hits.join("\n") },
-                    tail_joined
-                ),
-            );
-        }
-    }
+    let script = "rustup default nightly; \
+                  rustup component add miri; \
+                  cargo miri setup; \
+                  cargo miri test -p nros-core --lib; \
+                  rustup default stable";
+    let (_code, log) = diag_run_heartbeated("miri-run", script, "/tmp/diag_miri.log");
+    let mut hits: Vec<&str> = log
+        .lines()
+        .filter(|l| {
+            l.contains("error")
+                || l.contains("Undefined Behavior")
+                || l.contains("UB")
+                || l.contains("data race")
+                || l.contains("aborting")
+                || l.contains("test result")
+        })
+        .collect();
+    hits.truncate(16);
+    let tail: String = log.chars().rev().take(5000).collect::<String>().chars().rev().collect();
+    diag_emit(
+        "Pass27-DIAG miri",
+        &format!(
+            "hits:\n{}\nlog tail:\n{}",
+            if hits.is_empty() { "<none>".to_string() } else { hits.join("\n") },
+            tail
+        ),
+    );
 }
 
 fn gate_fail(msg: String) -> ! {
