@@ -53,13 +53,81 @@ fn ci_diag_run_all() {
     diag_phase("miri", || ci_diag_forward_miri());
 }
 
+/// Strip ANSI CSI sequences (cargo's colored output) — they were the suspected
+/// poison that stopped the runner's command stream mid-flight in diag #2/#3.
+fn diag_strip_ansi(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out = String::with_capacity(s.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == 0x1B && i + 1 < bytes.len() && bytes[i + 1] == b'[' {
+            // CSI: ESC [ <params> <final byte 0x40..=0x7E>
+            i += 2;
+            while i < bytes.len() && !(0x40..=0x7E).contains(&bytes[i]) {
+                i += 1;
+            }
+            i += 1; // skip final byte
+        } else if bytes[i] == 0x1B && i + 1 < bytes.len() && bytes[i + 1] == b']' {
+            // OSC: ESC ] ... (BEL | ESC\)
+            i += 2;
+            while i < bytes.len() && bytes[i] != 0x07 && !(bytes[i] == 0x1B && i + 1 < bytes.len() && bytes[i + 1] == b'\\') {
+                i += 1;
+            }
+            i += 1;
+        } else {
+            // Re-copy the full UTF-8 char starting at i (multi-byte safe).
+            let ch_len = utf8_len(bytes[i]);
+            out.push_str(&s[i..(i + ch_len).min(s.len())]);
+            i += ch_len;
+        }
+    }
+    out
+}
+
+fn utf8_len(b: u8) -> usize {
+    if b < 0x80 { 1 } else if b >= 0xF0 { 4 } else if b >= 0xE0 { 3 } else if b >= 0xC0 { 2 } else { 1 }
+}
+
 fn diag_esc(s: &str) -> String {
-    s.replace('%', "%25").replace('\r', "%0D").replace('\n', "%0A")
+    diag_strip_ansi(s)
+        .replace('%', "%25")
+        .replace('\r', "%0D")
+        .replace('\n', "%0A")
 }
 
 fn diag_emit(title: &str, msg: &str) {
+    use std::io::Write;
     let t: String = msg.chars().take(60_000).collect();
-    eprintln!("::error title={}::{}", title, diag_esc(&t));
+    // Chunk to 2000-char annotations: large single messages may be dropped.
+    let cleaned = diag_esc(&t);
+    let tl: String = title.chars().take(200).collect();
+    let mut chunks: Vec<String> = Vec::new();
+    let mut cur = String::new();
+    for c in cleaned.chars() {
+        cur.push(c);
+        if cur.len() >= 1900 {
+            chunks.push(std::mem::take(&mut cur));
+        }
+    }
+    if !cur.is_empty() || chunks.is_empty() {
+        chunks.push(cur);
+    }
+    let n = chunks.len();
+    for (i, c) in chunks.iter().enumerate() {
+        let line = if n > 1 {
+            format!("::error title={} ({}/{})::{}", tl, i + 1, n, c)
+        } else {
+            format!("::error title={}::{}", tl, c)
+        };
+        // Dual-stream emission: the runner parses workflow commands on both.
+        // stdout() is line-buffered through a lock — write raw bytes each time.
+        let _ = std::io::stderr().write_all(line.as_bytes());
+        let _ = std::io::stderr().write_all(b"\n");
+        let _ = std::io::stdout().write_all(line.as_bytes());
+        let _ = std::io::stdout().write_all(b"\n");
+    }
+    let _ = std::io::stderr().flush();
+    let _ = std::io::stdout().flush();
 }
 
 fn diag_phase(name: &str, f: impl FnOnce()) {
@@ -89,37 +157,18 @@ fn ci_diag_forward_cargo_check() {
     let out = match out {
         Ok(o) => o,
         Err(e) => {
-            eprintln!("::error title=Pass27-DIAG spawn::failed to spawn cargo: {}", e);
+            diag_emit("Pass27-DIAG spawn", &format!("failed to spawn cargo: {}", e));
             return;
         }
     };
     let text = String::from_utf8_lossy(&out.stderr);
-    let esc = |s: &str| -> String {
-        s.replace('%', "%25").replace('\r', "%0D").replace('\n', "%0A")
-    };
-    // Error-bearing lines first, then the compiler/cargo tail for context. Capped
-    // so we stay well under the 50-annotation check-run limit.
-    let mut emitted = 0usize;
-    for line in text.lines().filter(|l| l.contains("error")) {
-        if emitted >= 30 {
-            break;
-        }
-        let t: String = line.chars().take(480).collect();
-        eprintln!("::error title=Pass27-DIAG rustc::{}", esc(&t));
-        emitted += 1;
-    }
-    let tail: Vec<&str> = text.lines().collect();
-    for line in tail.iter().rev().take(12).rev() {
-        if emitted >= 40 {
-            break;
-        }
-        if line.trim().is_empty() {
-            continue;
-        }
-        let t: String = line.chars().take(480).collect();
-        eprintln!("::error title=Pass27-DIAG tail::{}", esc(&t));
-        emitted += 1;
-    }
+    let mut errors: Vec<&str> = text.lines().filter(|l| l.contains("error")).collect();
+    errors.truncate(20);
+    let joined_errors = if errors.is_empty() { "<none>".to_string() } else { errors.join("\n") };
+    diag_emit("Pass27-DIAG check-errors", &format!("status={:?}\n{}", out.status.code(), joined_errors));
+    let tail: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
+    let start = tail.len().saturating_sub(4);
+    diag_emit("Pass27-DIAG check-tail", &tail[start..].join("\n"));
 }
 
 /// TEMPORARY Pass 27 CI diagnostic, second half (F-19): the trybuild negative
@@ -129,9 +178,6 @@ fn ci_diag_forward_cargo_check() {
 /// annotations so they can be transcribed verbatim into tests/compile_fail/.
 /// Never affects the exit code; no-op outside CI.
 fn ci_diag_harvest_trybuild_wip() {
-    let esc = |s: &str| -> String {
-        s.replace('%', "%25").replace('\r', "%0D").replace('\n', "%0A")
-    };
     let out = std::process::Command::new("cargo")
         .args(["test", "-p", "nros-core", "--test", "trybuild", "--", "--nocapture"])
         .output();
@@ -167,7 +213,15 @@ fn ci_diag_harvest_trybuild_wip() {
             }
         }
     }
-    for cand in ["wip", "crates/nros-core/wip", "target/wip", "target/debug/wip", "target/release/wip"] {
+    for cand in [
+        "wip",
+        "crates/nros-core/wip",
+        "target/wip",
+        "target/debug/wip",
+        "target/release/wip",
+        "target/tests/trybuild/wip",
+        "target/tests/wip",
+    ] {
         let p = std::path::Path::new(cand);
         if p.is_dir() {
             if let Ok(rd) = std::fs::read_dir(p) {
@@ -185,18 +239,20 @@ fn ci_diag_harvest_trybuild_wip() {
     files.dedup();
     if files.is_empty() {
         let msg = match &out {
-            Ok(o) => format!("no wip/*.stderr produced; trybuild stdout tail: {}", String::from_utf8_lossy(&o.stdout).chars().rev().take(2000).collect::<String>().chars().rev().collect::<String>()),
+            Ok(o) => format!(
+                "no wip/*.stderr produced; status={:?}; trybuild stdout tail: {}",
+                o.status.code(),
+                String::from_utf8_lossy(&o.stdout).chars().rev().take(3000).collect::<String>().chars().rev().collect::<String>()
+            ),
             Err(e) => format!("no wip/*.stderr produced; could not run trybuild: {}", e),
         };
-        let t: String = msg.chars().take(4000).collect();
-        eprintln!("::error title=Pass27-DIAG trybuild::{}", esc(&t));
+        diag_emit("Pass27-DIAG trybuild", &msg);
         return;
     }
-    eprintln!("::error title=Pass27-DIAG trybuild::{} wip stderr file(s) found", files.len());
+    diag_emit("Pass27-DIAG trybuild", &format!("{} wip stderr file(s) found", files.len()));
     for fp in files.iter().take(8) {
         let content = std::fs::read_to_string(fp).unwrap_or_default();
-        let t: String = content.chars().take(60_000).collect();
-        eprintln!("::error title=Pass27-DIAG trybuild file {}::{}", fp.display(), esc(&t));
+        diag_emit(&format!("Pass27-DIAG trybuild file {}", fp.display()), &content);
     }
 }
 
