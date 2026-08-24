@@ -286,11 +286,19 @@ impl<'a, T> InitializedWriteGuard<'a, T> {
         // intentionally leaked (producer-side wedges: subsequent try_reserve returns
         // None for this ring) rather than re-entering T::drop on already-destroyed
         // memory. Degraded-ring beats UB.
+        // Pass 27 follow-up (F-24, real-rustc E0596): `(*this.ptr)` resolves `this.ptr`
+        // through ManuallyDrop's Deref, and as a place mutably borrowed by drop_in_place
+        // step, rustc requires DerefMut ⇒ an `&mut this` — rejected on an immutable
+        // binding (mrustc accepted it; it never borrow-checks). Read the raw pointer
+        // out through a shared Deref first (Copy), then deref the local: no borrow of
+        // `this` is involved at all. Also cheap-keep the ring reference for the same reason.
         let this = std::mem::ManuallyDrop::new(self);
+        let slot = this.ptr;
+        let ring = this.ring;
         unsafe {
-            ptr::drop_in_place((*this.ptr).as_mut_ptr());
+            ptr::drop_in_place((*slot).as_mut_ptr());
         }
-        this.ring.write_reserved.0.store(false, Ordering::Release);
+        ring.write_reserved.0.store(false, Ordering::Release);
     }
 }
 
