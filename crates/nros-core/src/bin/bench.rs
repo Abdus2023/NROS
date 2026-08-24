@@ -172,9 +172,11 @@ fn main() {
 
     let consumer = thread::spawn(move || {
         let mut local_latencies = Vec::with_capacity(iterations);
+        let mut received = 0usize;
 
         loop {
             if let Some(_guard) = subscriber.try_recv() {
+                received += 1;
                 // Real latency: now - publish Instant from queue
                 let now = Instant::now();
                 let publish_instant = {
@@ -186,7 +188,17 @@ fn main() {
                     local_latencies.push(latency_ns);
                 }
 
-                if local_latencies.len() >= iterations {
+                // Pass 29 (F29-09): terminate on messages RECEIVED, not on latency
+                // samples recorded. The old condition was
+                // `local_latencies.len() >= iterations`, but a sample is only recorded
+                // when the shared instant queue yielded one — so any receive that found
+                // the queue empty consumed a message without advancing the counter. The
+                // producer publishes exactly `iterations` messages, so a single such
+                // race made the exit condition permanently unreachable and the consumer
+                // spun forever after the producer finished. Measured hang rate before
+                // this fix: 2/12 runs at 2 000 iterations and 1/3 runs at 100 000.
+                // This is why the CI `benchmarks` job has never completed.
+                if received >= iterations {
                     break;
                 }
             } else {
@@ -216,11 +228,14 @@ fn main() {
                         z: 0.5,
                     },
                 };
-                guard.write_value(twist).commit();
-                // Store publish Instant for latency measurement (must be after commit to measure queue + transport)
-                // Actually store before commit for more accurate: publish_time is before commit, but we want to measure time from publish call
-                // For simplicity, push publish_time into queue
+                // Pass 29 (F29-09): enqueue the publish instant BEFORE commit. The old
+                // order committed the message first and pushed the instant afterwards,
+                // which let the consumer observe the message while the queue was still
+                // empty — that receive then contributed no latency sample (see the
+                // consumer's exit condition). Enqueuing first also makes the sample
+                // slightly more honest: it brackets the whole publish path.
                 publish_queue.lock().unwrap().push_back(publish_time);
+                guard.write_value(twist).commit();
                 break;
             } else {
                 thread::yield_now();
