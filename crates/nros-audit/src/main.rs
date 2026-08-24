@@ -10,13 +10,12 @@ fn main() {
     let cmd = args.get(1).map(|s| s.as_str()).unwrap_or("claims");
 
     // TEMPORARY Pass 27 CI diagnostic (removed once the residual rustc defect is
-    // fixed): forward the errors of the failing `cargo check --workspace
-    // --all-targets` as workflow-command annotations so they are readable through
-    // the check-runs API where raw job logs are unreachable. Active only for the
-    // `all` subcommand used by the governance job; no effect on gate semantics.
+    // fixed): forward the output of the red CI commands as workflow-command
+    // annotations so they are readable through the check-runs API where raw job
+    // logs are unreachable. Active only for the `all` subcommand used by the
+    // governance job; no effect on gate semantics, each phase panic-isolated.
     if cmd == "all" {
-        ci_diag_forward_cargo_check();
-        ci_diag_harvest_trybuild_wip();
+        ci_diag_run_all();
     }
 
     match cmd {
@@ -40,17 +39,50 @@ fn main() {
     }
 }
 
-/// TEMPORARY Pass 27 CI diagnostic — see call site. Runs the command that is red
-/// in CI (`cargo check --workspace --all-targets`) and re-emits its error output
-/// as `::error` workflow commands, which surface as check-run annotations
-/// (API-readable) even though raw job logs (Azure blob hosts) are unreachable
-/// from the audit workstation. No-ops outside GitHub Actions. Gate semantics are
-/// unchanged: this function never exits non-zero by itself.
-fn ci_diag_forward_cargo_check() {
+/// TEMPORARY Pass 27 CI diagnostic — orchestrator. Each phase is isolated so a
+/// panic in one cannot silence the next (the previous revision lost the trybuild
+/// harvest silently — every phase now emits begin/end markers and panics are
+/// forwarded as annotations themselves).
+fn ci_diag_run_all() {
     if std::env::var_os("CI").is_none() {
         return;
     }
-    eprintln!("::error title=Pass27-DIAG marker::diag channel active — forwarding cargo check stderr");
+    diag_phase("check", || ci_diag_forward_cargo_check());
+    diag_phase("trybuild", || ci_diag_harvest_trybuild_wip());
+    diag_phase("test-suite", || ci_diag_forward_test_suite());
+    diag_phase("miri", || ci_diag_forward_miri());
+}
+
+fn diag_esc(s: &str) -> String {
+    s.replace('%', "%25").replace('\r', "%0D").replace('\n', "%0A")
+}
+
+fn diag_emit(title: &str, msg: &str) {
+    let t: String = msg.chars().take(60_000).collect();
+    eprintln!("::error title={}::{}", title, diag_esc(&t));
+}
+
+fn diag_phase(name: &str, f: impl FnOnce()) {
+    diag_emit(&format!("Pass27-DIAG phase {}", name), "begin");
+    let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
+    match r {
+        Ok(()) => diag_emit(&format!("Pass27-DIAG phase {}", name), "end ok"),
+        Err(payload) => {
+            let msg = payload
+                .downcast_ref::<&str>()
+                .map(|s| s.to_string())
+                .or_else(|| payload.downcast_ref::<String>().cloned())
+                .unwrap_or_else(|| "non-string panic payload".to_string());
+            diag_emit(&format!("Pass27-DIAG phase {} PANIC", name), &msg);
+        }
+    }
+}
+
+/// TEMPORARY Pass 27 CI diagnostic — see call site. Runs `cargo check
+/// --workspace --all-targets` and re-emits its error output as `::error`
+/// workflow commands (check-run annotations are API-readable even though raw
+/// job logs ride blob hosts unreachable from the audit workstation).
+fn ci_diag_forward_cargo_check() {
     let out = std::process::Command::new("cargo")
         .args(["check", "--workspace", "--all-targets", "--message-format", "short"])
         .output();
@@ -165,6 +197,83 @@ fn ci_diag_harvest_trybuild_wip() {
         let content = std::fs::read_to_string(fp).unwrap_or_default();
         let t: String = content.chars().take(60_000).collect();
         eprintln!("::error title=Pass27-DIAG trybuild file {}::{}", fp.display(), esc(&t));
+    }
+}
+
+/// TEMPORARY Pass 27 CI diagnostic, third phase: decode the red `cargo test
+/// (workspace)` job by running the same command here and forwarding failing-test
+/// lines and the summary tail as annotations.
+fn ci_diag_forward_test_suite() {
+    let out = std::process::Command::new("cargo")
+        .args(["test", "--workspace", "--all-targets", "--no-fail-fast", "--message-format", "short"])
+        .output();
+    match out {
+        Err(e) => diag_emit("Pass27-DIAG test-suite spawn", &format!("failed to spawn cargo: {}", e)),
+        Ok(o) => {
+            let text = String::from_utf8_lossy(&o.stdout);
+            let stderr_tail: String = String::from_utf8_lossy(&o.stderr).chars().rev().take(3000).collect::<String>().chars().rev().collect();
+            let mut hits: Vec<&str> = text
+                .lines()
+                .filter(|l| {
+                    l.contains("FAILED")
+                        || l.contains("panicked at")
+                        || l.starts_with("failures:")
+                        || l.contains("test result: FAILED")
+                        || (l.contains("error") && !l.contains("0 error"))
+                })
+                .collect();
+            hits.truncate(15);
+            diag_emit(
+                "Pass27-DIAG test-suite",
+                &format!(
+                    "status={:?}\nhits:\n{}\nstderr tail:\n{}",
+                    o.status.code(),
+                    if hits.is_empty() { "<none>".to_string() } else { hits.join("\n") },
+                    stderr_tail
+                ),
+            );
+        }
+    }
+}
+
+/// TEMPORARY Pass 27 CI diagnostic, fourth phase: decode the red Miri job by
+/// reproducing it here (rustup on the runner can reach the dist server even
+/// though the audit sandbox cannot) and forwarding Miri's verdict.
+fn ci_diag_forward_miri() {
+    let script = "rustup default nightly >/dev/null 2>&1; \
+                  rustup component add miri >/dev/null 2>&1; \
+                  cargo miri setup >/dev/null 2>&1; \
+                  cargo miri test -p nros-core --lib 2>&1; \
+                  rustup default stable >/dev/null 2>&1";
+    let out = std::process::Command::new("bash").args(["-c", script]).output();
+    match out {
+        Err(e) => diag_emit("Pass27-DIAG miri spawn", &format!("failed to spawn bash: {}", e)),
+        Ok(o) => {
+            let text = String::from_utf8_lossy(&o.stdout);
+            let mut hits: Vec<&str> = text
+                .lines()
+                .filter(|l| {
+                    l.contains("error")
+                        || l.contains("Undefined Behavior")
+                        || l.contains("UB")
+                        || l.contains("data race")
+                        || l.contains("aborting")
+                        || l.contains("test result")
+                })
+                .collect();
+            hits.truncate(20);
+            let tail: Vec<&str> = text.lines().collect();
+            let start = tail.len().saturating_sub(24);
+            let tail_joined: String = tail[start..].join("\n").chars().rev().take(6000).collect::<String>().chars().rev().collect();
+            diag_emit(
+                "Pass27-DIAG miri",
+                &format!(
+                    "hits:\n{}\noutput tail:\n{}",
+                    if hits.is_empty() { "<none>".to_string() } else { hits.join("\n") },
+                    tail_joined
+                ),
+            );
+        }
     }
 }
 
