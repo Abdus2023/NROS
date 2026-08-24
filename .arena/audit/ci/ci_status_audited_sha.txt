@@ -1,0 +1,21 @@
+=== Run 32693805857 (push to 48069dce, the audited head) ===
+  nros init generates a buildable NROS project                  success
+  cargo fmt --check                                             failure
+  cargo check (workspace, all targets)                          success
+  Provenance / SHA manifest                                     success
+  cargo test (workspace)                                        failure
+  Claim / evidence / representation gate                        failure
+  cargo clippy (workspace)                                      success
+  Safety gate (Miri, hard)                                      failure
+  Benchmarks (report-only, non-blocking)                        pending
+
+=== Run 32692431585 (push to b6a32b0a, parent of audited head) ===
+  cargo clippy (workspace)                                      success
+  cargo test (workspace)                                        failure
+  Benchmarks (report-only, non-blocking)                        pending
+  cargo fmt --check                                             failure
+  Claim / evidence / representation gate                        failure
+  Safety gate (Miri, hard)                                      failure
+  cargo check (workspace, all targets)                          success
+  Provenance / SHA manifest                                     success
+  nros init generates a buildable NROS project                  success
