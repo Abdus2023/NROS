@@ -14,14 +14,23 @@ use std::path::PathBuf;
 /// so this test previously failed spuriously on its fixture paths (found by the
 /// first real CI `cargo test --workspace` run; the test had never executed).
 fn rep_path(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/representation").join(name)
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../docs/representation")
+        .join(name)
 }
 
 fn docs_path(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/documentation").join(name)
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../docs/documentation")
+        .join(name)
 }
 
-const MANIFESTS: &[&str] = &["architecture.yaml", "capabilities.yaml", "evidence.yaml", "claims.yaml"];
+const MANIFESTS: &[&str] = &[
+    "architecture.yaml",
+    "capabilities.yaml",
+    "evidence.yaml",
+    "claims.yaml",
+];
 
 fn read(name: &str) -> String {
     fs::read_to_string(rep_path(name)).expect("representation fixture must exist")
@@ -40,7 +49,10 @@ fn snapshot_declares_source_and_snapshot_revision_separately() {
 fn snapshot_declares_all_normative_manifest_fingerprints() {
     let text = read("snapshot.yaml");
     for manifest in MANIFESTS {
-        assert!(text.contains(&format!("{}: \"", manifest)), "missing fingerprint for {manifest}");
+        assert!(
+            text.contains(&format!("{}: \"", manifest)),
+            "missing fingerprint for {manifest}"
+        );
     }
     assert!(text.contains("algorithm: git_blob_sha1"));
 }
@@ -67,6 +79,12 @@ fn schema_and_snapshot_are_present() {
     // documentation-reference schema the validator enforces); previously this
     // asserted a non-existent docs/representation/schema.yaml and could never
     // have passed anywhere.
-    assert!(docs_path("schema.yaml").is_file(), "documentation schema must exist");
-    assert!(rep_path("snapshot.yaml").is_file(), "representation snapshot must exist");
+    assert!(
+        docs_path("schema.yaml").is_file(),
+        "documentation schema must exist"
+    );
+    assert!(
+        rep_path("snapshot.yaml").is_file(),
+        "representation snapshot must exist"
+    );
 }

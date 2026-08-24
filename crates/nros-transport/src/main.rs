@@ -2,9 +2,17 @@
 //! Shows serialization, UDP/TCP, compression, discovery
 
 use nros_transport::{
-    Twist, Vector3, MessageHeader, Serializable, UdpTransport, TcpTransport,
-    ServiceDiscovery, ServiceInfo, CompressionEngine, LargePayload,
+    CompressionEngine,
     CompressionEngineTrait, // Pass 27 fix: should_compress/is_simulated are trait methods (E0599 without import)
+    LargePayload,
+    MessageHeader,
+    Serializable,
+    ServiceDiscovery,
+    ServiceInfo,
+    TcpTransport,
+    Twist,
+    UdpTransport,
+    Vector3,
 };
 use std::time::Duration;
 
@@ -19,33 +27,65 @@ fn main() {
     // Test serialization
     println!("=== Serialization Test (Zero-copy FlatBuffers in real NROS) ===");
     let twist = Twist {
-        linear: Vector3 { x: 1.5, y: 0.0, z: 0.0 },
-        angular: Vector3 { x: 0.0, y: 0.0, z: 0.5 },
+        linear: Vector3 {
+            x: 1.5,
+            y: 0.0,
+            z: 0.0,
+        },
+        angular: Vector3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.5,
+        },
     };
 
     let mut buffer = Vec::new();
     twist.serialize(&mut buffer).unwrap();
-    println!("Serialized Twist size: {} bytes (target 48, vs ROS2 ~200+ with overhead)", buffer.len());
+    println!(
+        "Serialized Twist size: {} bytes (target 48, vs ROS2 ~200+ with overhead)",
+        buffer.len()
+    );
 
     let deserialized = Twist::deserialize(&buffer).unwrap();
-    println!("Deserialized: linear.x = {:.2}, angular.z = {:.2}", deserialized.linear.x, deserialized.angular.z);
+    println!(
+        "Deserialized: linear.x = {:.2}, angular.z = {:.2}",
+        deserialized.linear.x, deserialized.angular.z
+    );
 
     // Header
     let header = MessageHeader::new(0, buffer.len() as u32, 1);
-    println!("Header size: {} bytes, magic: 0x{:08x} (NROS), version: {}", MessageHeader::SIZE, header.magic, header.version);
+    println!(
+        "Header size: {} bytes, magic: 0x{:08x} (NROS), version: {}",
+        MessageHeader::SIZE,
+        header.magic,
+        header.version
+    );
 
     // Compression demo
     println!("\n=== Compression Test (LZ4 in real, threshold 1KB) ===");
     let engine = CompressionEngine::new(1024);
     let small = vec![0u8; 48];
     let large = vec![1u8; 2048];
-    println!("Small (48 bytes) should_compress: {} (no)", engine.should_compress(&small));
-    println!("Large (2KB) should_compress: {} (yes, 30-60% bandwidth saving)", engine.should_compress(&large));
+    println!(
+        "Small (48 bytes) should_compress: {} (no)",
+        engine.should_compress(&small)
+    );
+    println!(
+        "Large (2KB) should_compress: {} (yes, 30-60% bandwidth saving)",
+        engine.should_compress(&large)
+    );
     let compressed = engine.compress(&large);
-    println!("Compressed flag: {}, size: {} (placeholder, real LZ4 would be ~60% size)", compressed[0], compressed.len());
+    println!(
+        "Compressed flag: {}, size: {} (placeholder, real LZ4 would be ~60% size)",
+        compressed[0],
+        compressed.len()
+    );
 
     // Large payload test
-    let large_payload = LargePayload { id: 42, data: vec![0xAA; 5000] };
+    let large_payload = LargePayload {
+        id: 42,
+        data: vec![0xAA; 5000],
+    };
     let mut large_buf = Vec::new();
     large_payload.serialize(&mut large_buf).unwrap();
     println!("Large payload (5KB image/pointcloud) serialized: {} bytes, would trigger FD passing in real NROS for > threshold", large_buf.len());
@@ -62,8 +102,16 @@ fn main() {
     println!("Publishing 100 messages via UDP (non-blocking)...");
     for i in 0..100 {
         let msg = Twist {
-            linear: Vector3 { x: i as f64 * 0.01, y: 0.0, z: 0.0 },
-            angular: Vector3 { x: 0.0, y: 0.0, z: 0.1 },
+            linear: Vector3 {
+                x: i as f64 * 0.01,
+                y: 0.0,
+                z: 0.0,
+            },
+            angular: Vector3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.1,
+            },
         };
         publisher.publish("/cmd_vel", &msg).unwrap();
         std::thread::sleep(Duration::from_millis(1)); // Simulate 1KHz
@@ -77,13 +125,22 @@ fn main() {
         if let Ok(Some((msg, header))) = subscriber.receive::<Twist>(&mut recv_buf) {
             received_count += 1;
             if received_count % 20 == 0 {
-                println!("  Received #{}: linear.x = {:.2}, seq={}, age={}ms", received_count, msg.linear.x, header.sequence, header.age_ms());
+                println!(
+                    "  Received #{}: linear.x = {:.2}, seq={}, age={}ms",
+                    received_count,
+                    msg.linear.x,
+                    header.sequence,
+                    header.age_ms()
+                );
             }
         }
         std::thread::sleep(Duration::from_millis(1));
     }
 
-    println!("Received {} / 100 messages (UDP BestEffort may drop, but localhost should be 100%)", received_count);
+    println!(
+        "Received {} / 100 messages (UDP BestEffort may drop, but localhost should be 100%)",
+        received_count
+    );
     publisher.stats().print();
     subscriber.stats().print();
 
@@ -105,18 +162,35 @@ fn main() {
             println!("Publishing 10 reliable commands via TCP...");
             for i in 0..10 {
                 let msg = Twist {
-                    linear: Vector3 { x: i as f64, y: 0.0, z: 0.0 },
-                    angular: Vector3 { x: 0.0, y: 0.0, z: 1.0 },
+                    linear: Vector3 {
+                        x: i as f64,
+                        y: 0.0,
+                        z: 0.0,
+                    },
+                    angular: Vector3 {
+                        x: 0.0,
+                        y: 0.0,
+                        z: 1.0,
+                    },
                 };
                 match client.publish("/commands", &msg) {
-                    Ok(_) => println!("  Sent reliable command {} (with retries as per QoS Reliable max_retries)", i + 1),
-                    Err(e) => println!("  Error: {} (expected in demo as server accept loop not implemented)", e),
+                    Ok(_) => println!(
+                        "  Sent reliable command {} (with retries as per QoS Reliable max_retries)",
+                        i + 1
+                    ),
+                    Err(e) => println!(
+                        "  Error: {} (expected in demo as server accept loop not implemented)",
+                        e
+                    ),
                 }
                 std::thread::sleep(Duration::from_millis(20));
             }
             client.stats().print();
         }
-        Err(e) => println!("Connect failed (server accept loop not running in demo, but API validated): {}", e),
+        Err(e) => println!(
+            "Connect failed (server accept loop not running in demo, but API validated): {}",
+            e
+        ),
     }
 
     // Service Discovery Test
@@ -124,31 +198,40 @@ fn main() {
 
     let discovery = ServiceDiscovery::new(7000).unwrap();
 
-    discovery.announce(ServiceInfo {
-        topic: "/camera/image".to_string(),
-        transport: "udp-multicast".to_string(),
-        address: "224.0.0.1:5001".parse().unwrap(),
-        message_type: "sensor_msgs/Image".to_string(),
-    }).unwrap();
+    discovery
+        .announce(ServiceInfo {
+            topic: "/camera/image".to_string(),
+            transport: "udp-multicast".to_string(),
+            address: "224.0.0.1:5001".parse().unwrap(),
+            message_type: "sensor_msgs/Image".to_string(),
+        })
+        .unwrap();
 
-    discovery.announce(ServiceInfo {
-        topic: "/cmd_vel".to_string(),
-        transport: "tcp".to_string(),
-        address: "127.0.0.1:6000".parse().unwrap(),
-        message_type: "geometry_msgs/Twist".to_string(),
-    }).unwrap();
+    discovery
+        .announce(ServiceInfo {
+            topic: "/cmd_vel".to_string(),
+            transport: "tcp".to_string(),
+            address: "127.0.0.1:6000".parse().unwrap(),
+            message_type: "geometry_msgs/Twist".to_string(),
+        })
+        .unwrap();
 
-    discovery.announce(ServiceInfo {
-        topic: "/global/status".to_string(),
-        transport: "udp-multicast".to_string(),
-        address: "224.0.0.1:5000".parse().unwrap(),
-        message_type: "nros_msgs/Status".to_string(),
-    }).unwrap();
+    discovery
+        .announce(ServiceInfo {
+            topic: "/global/status".to_string(),
+            transport: "udp-multicast".to_string(),
+            address: "224.0.0.1:5000".parse().unwrap(),
+            message_type: "nros_msgs/Status".to_string(),
+        })
+        .unwrap();
 
     discovery.list_services();
 
     if let Some(info) = discovery.discover("/cmd_vel") {
-        println!("\nDiscovered /cmd_vel: {} at {} via {}", info.message_type, info.address, info.transport);
+        println!(
+            "\nDiscovered /cmd_vel: {} at {} via {}",
+            info.message_type, info.address, info.transport
+        );
     }
 
     println!("\n=== Performance Summary (from DESIGN.md §14, §18) ===");

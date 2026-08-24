@@ -65,6 +65,23 @@ This document provides an in-depth technical comparison between NROS (Native Rob
 
 ### 2.1 Message Latency
 
+> ⚠️ **These are design targets, not measurements.** The NROS column below has never
+> been produced by an executed run in this repository. Its source,
+> `benchmarks/results.json`, states in its own `notes` that it is *"a TEMPLATE artifact"*
+> carrying *"repository-reported"* figures that are *"NOT independently verified"*, and
+> `EVIDENCE_REGISTRY.md` §Performance Claims records both this row (🟡) and the 46x/15x
+> headline (🔴 *"Not independently established"*) as unsupported — this repository
+> contains no ROS2 baseline measured under matching conditions.
+>
+> What has actually been executed: same-thread SPSC publish+consume at
+> **110.90 ns/op (9.02M msg/s**, 64 B payload, cap 1024**)** via
+> `tools/offline-mrustc/probes/microbench.rs` at commit `835165df`, independently
+> reproducing Pass 27's 112 ns/op; and cross-thread end-to-end means of 156.52 μs
+> (`benchmarks/results_e2b-sandbox-2vcpu_20260824.json`) and 588.21 μs (Pass 27 artifact)
+> on shared, unpinned 2-vCPU sandboxes — figures dominated by thread scheduling rather
+> than by the ring buffer. Neither number is comparable to the ROS2 column, which was
+> measured on different hardware under different conditions.
+
 | Metric | ROS2 (Humble) | NROS | Improvement |
 |--------|---------------|------|-------------|
 | Mean Latency | 287 μs | 6.2 μs | **46x faster** |
@@ -500,8 +517,8 @@ bridge.publish_nros("/cmd_vel", "/ros2/cmd_vel")?;
 - High power consumption
 
 ### NROS Strengths
-- True real-time performance (6.2 μs latency)
-- 46x lower latency, 15x higher throughput
+- Real-time-oriented design (monotonic-clock deadline monitoring, `ExecutionClass::HardRealtime`, no allocation or blocking in the hard-realtime path) — *the `<10 μs` latency target is not yet demonstrated; see the caveat in §2.1*
+- Same-thread SPSC ring measured at 110.90 ns/op (9.02M msg/s) — *the 46x/15x ROS2 ratios remain unverified design targets, not measurements*
 - 79% less memory usage
 - Safety certified (ISO 26262, IEC 61508)
 - Built-in fleet management

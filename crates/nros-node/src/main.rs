@@ -1,7 +1,7 @@
 //! NROS Velocity Controller Node Demo
 //! Simulates lifecycle transitions, control loop, emergency stop, performance test
 
-use nros_node::{VelocityController, LifecycleNode, Twist, Vector3, Timestamp, ParameterValue};
+use nros_node::{LifecycleNode, ParameterValue, Timestamp, Twist, Vector3, VelocityController};
 use std::time::{Duration, Instant};
 
 fn main() {
@@ -19,7 +19,7 @@ fn main() {
 
     // Lifecycle transitions — matches DESIGN.md §3 node lifecycle
     node.on_configure().unwrap();
-    
+
     // Demonstrate parameter manipulation
     println!("\n--- Parameter Demo ---");
     println!("Current parameters:");
@@ -31,14 +31,19 @@ fn main() {
 
     // Try to set invalid param
     println!("\nAttempting invalid param set (max_speed = 10.0, max is 5.0)...");
-    match node.parameters_mut().set("max_speed", ParameterValue::Float(10.0)) {
+    match node
+        .parameters_mut()
+        .set("max_speed", ParameterValue::Float(10.0))
+    {
         Ok(_) => println!("Unexpected success"),
         Err(e) => println!("Correctly rejected: {}", e),
     }
 
     // Valid param set
     println!("Setting max_speed = 2.5...");
-    node.parameters_mut().set("max_speed", ParameterValue::Float(2.5)).unwrap();
+    node.parameters_mut()
+        .set("max_speed", ParameterValue::Float(2.5))
+        .unwrap();
     node.reload_parameters();
     println!("Reloaded, new max_speed validated");
 
@@ -67,18 +72,32 @@ fn main() {
 
     for (i, cmd) in test_commands.iter().enumerate() {
         println!("--- Command {} ---", i + 1);
-        println!("Input: linear={:.2} m/s, angular={:.2} rad/s", cmd.linear.x, cmd.angular.z);
+        println!(
+            "Input: linear={:.2} m/s, angular={:.2} rad/s",
+            cmd.linear.x, cmd.angular.z
+        );
 
         match node.on_cmd_vel(cmd) {
             Ok(motor_cmd) => {
                 println!("Output:");
-                println!("  Left motor:  {:.2} rad/s, {:.2} Nm", motor_cmd.left_velocity, motor_cmd.left_torque);
-                println!("  Right motor: {:.2} rad/s, {:.2} Nm", motor_cmd.right_velocity, motor_cmd.right_torque);
+                println!(
+                    "  Left motor:  {:.2} rad/s, {:.2} Nm",
+                    motor_cmd.left_velocity, motor_cmd.left_torque
+                );
+                println!(
+                    "  Right motor: {:.2} rad/s, {:.2} Nm",
+                    motor_cmd.right_velocity, motor_cmd.right_torque
+                );
 
                 let odom = node.compute_odometry(&motor_cmd, 0.01);
-                println!("Odometry: x={:.2}, y={:.2}, theta={:.2}, v={:.2} m/s, ω={:.2} rad/s",
-                    odom.position.x, odom.position.y, odom.orientation.z,
-                    odom.linear_velocity.x, odom.angular_velocity.z);
+                println!(
+                    "Odometry: x={:.2}, y={:.2}, theta={:.2}, v={:.2} m/s, ω={:.2} rad/s",
+                    odom.position.x,
+                    odom.position.y,
+                    odom.orientation.z,
+                    odom.linear_velocity.x,
+                    odom.angular_velocity.z
+                );
             }
             Err(e) => println!("Error: {}", e),
         }
@@ -131,9 +150,14 @@ fn main() {
     let elapsed = start.elapsed();
 
     println!("Total time: {:.2?}", elapsed);
-    println!("Throughput: {:.0} callbacks/sec", 10000.0 / elapsed.as_secs_f64());
-    println!("Target: 1000 Hz control loop = 1000 callbacks/sec — achieved {:.0}x",
-        (10000.0 / elapsed.as_secs_f64()) / 1000.0);
+    println!(
+        "Throughput: {:.0} callbacks/sec",
+        10000.0 / elapsed.as_secs_f64()
+    );
+    println!(
+        "Target: 1000 Hz control loop = 1000 callbacks/sec — achieved {:.0}x",
+        (10000.0 / elapsed.as_secs_f64()) / 1000.0
+    );
 
     node.print_stats();
 

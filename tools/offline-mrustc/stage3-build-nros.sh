@@ -11,6 +11,19 @@ M=$T/mrustc-master
 MRUSTC=$M/bin/mrustc
 STD=$M/output-1.90.0
 NOUT=$T/nros-out
+
+# Pass 28: make the locally built zlib visible to EVERY gcc/g++ invocation, not just
+# the one in stage 1. mrustc's src/memory_dump.cpp includes <zlib.h> and its Makefile
+# links -lz; `make -f minicargo.mk` (stage 2) re-links bin/mrustc through a recursive
+# make that does not inherit stage 1's command-line LINKFLAGS, so it dies with
+# "cannot find -lz" unless the toolchain search path is set in the environment.
+# CPATH / LIBRARY_PATH are honoured by gcc for compile and link; LD_LIBRARY_PATH is
+# needed at run time because that re-link does not carry an -rpath.
+if [ ! -e /usr/include/zlib.h ]; then
+  export CPATH="$T/zlib/include${CPATH:+:$CPATH}"
+  export LIBRARY_PATH="$T/zlib/lib${LIBRARY_PATH:+:$LIBRARY_PATH}"
+  export LD_LIBRARY_PATH="$T/zlib/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+fi
 F=$T/facade-out
 mkdir -p $NOUT $F
 SELF=$(dirname "$(readlink -f "$0")")
@@ -54,7 +67,25 @@ mc $NROS/crates/nros-node/src/lib.rs        $NOUT/test-nros_node        nros_nod
 # nros-distributed --test: mrustc typechecker crash (trick #11) — use dist-probe instead.
 
 echo "=== 3.3 run unit suites ==="
-for t in $NOUT/test-nros_*; do case "$t" in *.c|*.txt) continue;; esac; ./$t | tail -1; done
+# Pass 28 fix: $NOUT is an absolute path, so the old `./$t` expanded to
+# `./​/home/user/.cache/nros-toolchain/nros-out/test-nros_core` and *every* suite failed
+# to launch ("No such file or directory"). Worse, the pipeline's exit status came from
+# `tail`, and this script runs under `set -u` (not `-e`), so stage 3 continued and still
+# printed STAGE3_COMPLETE having executed zero tests. Run each suite directly, show its
+# real result line, and fail the stage if any suite fails.
+suite_fail=0
+for t in "$NOUT"/test-nros_*; do
+  case "$t" in *.c|*.txt) continue;; esac
+  name=$(basename "$t")
+  if out=$("$t" 2>&1); then
+    printf "  PASS %-20s %s\n" "$name" "$(printf '%s\n' "$out" | grep 'test result' | tail -1)"
+  else
+    printf "  FAIL %-20s\n" "$name"
+    printf '%s\n' "$out" | tail -8
+    suite_fail=1
+  fi
+done
+[ "$suite_fail" = 0 ] || { echo "!! one or more unit suites failed"; exit 1; }
 
 echo "=== 3.4 demo/other bins ==="
 mc $NROS/crates/nros-core/src/main.rs        $NOUT/demo-core        demo_core        bin \

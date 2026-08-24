@@ -25,14 +25,14 @@ pub trait Serializable: Sized {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MessageHeader {
-    pub magic: u32,           // 0x4E524F53 ("NROS")
-    pub version: u16,         // Protocol version
-    pub message_type: u16,    // Message type ID per MDL hash
-    pub payload_size: u32,    // Size of payload in bytes
-    pub timestamp_sec: u64,   // Timestamp seconds — for sync tolerance 5ms
-    pub timestamp_nsec: u32,  // Timestamp nanoseconds
-    pub sequence: u64,        // Sequence number for ordering + loss detection
-    pub checksum: u32,        // CRC32 checksum — future: integrity
+    pub magic: u32,          // 0x4E524F53 ("NROS")
+    pub version: u16,        // Protocol version
+    pub message_type: u16,   // Message type ID per MDL hash
+    pub payload_size: u32,   // Size of payload in bytes
+    pub timestamp_sec: u64,  // Timestamp seconds — for sync tolerance 5ms
+    pub timestamp_nsec: u32, // Timestamp nanoseconds
+    pub sequence: u64,       // Sequence number for ordering + loss detection
+    pub checksum: u32,       // CRC32 checksum — future: integrity
 }
 
 impl MessageHeader {
@@ -107,7 +107,10 @@ impl MessageHeader {
                 sum = sum.wrapping_add(b as u32);
             }
             if sum != self.checksum {
-                return Err(format!("Checksum mismatch: expected {:08x}, computed {:08x} — corruption detected", self.checksum, sum));
+                return Err(format!(
+                    "Checksum mismatch: expected {:08x}, computed {:08x} — corruption detected",
+                    self.checksum, sum
+                ));
             }
             Ok(())
         }
@@ -115,7 +118,11 @@ impl MessageHeader {
 
     pub fn validate(&self) -> Result<(), String> {
         if self.magic != Self::MAGIC {
-            return Err(format!("Invalid magic number: expected {:08x}, got {:08x}", Self::MAGIC, self.magic));
+            return Err(format!(
+                "Invalid magic number: expected {:08x}, got {:08x}",
+                Self::MAGIC,
+                self.magic
+            ));
         }
         if self.version != Self::VERSION {
             return Err(format!("Unsupported protocol version: {}", self.version));
@@ -139,7 +146,11 @@ impl MessageHeader {
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
         if bytes.len() < Self::SIZE {
-            return Err(format!("Buffer too small: {} < {}", bytes.len(), Self::SIZE));
+            return Err(format!(
+                "Buffer too small: {} < {}",
+                bytes.len(),
+                Self::SIZE
+            ));
         }
 
         Ok(MessageHeader {
@@ -177,7 +188,11 @@ pub struct Vector3 {
 
 impl Default for Vector3 {
     fn default() -> Self {
-        Self { x: 0.0, y: 0.0, z: 0.0 }
+        Self {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        }
     }
 }
 
@@ -265,13 +280,15 @@ impl Serializable for LargePayload {
         let len = u32::from_le_bytes(buffer[8..12].try_into().unwrap()) as usize;
         // Pass 24: checked_add guards against `12 + len` wrapping usize on 32-bit targets
         // and defeating the bounds check (same class as the UDP/TCP payload_size hardening).
-        let needed = 12usize.checked_add(len).ok_or("LargePayload length overflow")?;
+        let needed = 12usize
+            .checked_add(len)
+            .ok_or("LargePayload length overflow")?;
         if buffer.len() < needed {
             return Err("LargePayload incomplete".to_string());
         }
         Ok(Self {
             id,
-            data: buffer[12..12+len].to_vec(),
+            data: buffer[12..12 + len].to_vec(),
         })
     }
 
@@ -312,7 +329,9 @@ impl MockCompressionEngine {
 }
 
 impl CompressionEngineTrait for MockCompressionEngine {
-    fn should_compress(&self, data: &[u8]) -> bool { data.len() > self.threshold_bytes }
+    fn should_compress(&self, data: &[u8]) -> bool {
+        data.len() > self.threshold_bytes
+    }
 
     fn compress(&self, data: &[u8]) -> Vec<u8> {
         let mut compressed = Vec::with_capacity(data.len() + 1);
@@ -322,19 +341,27 @@ impl CompressionEngineTrait for MockCompressionEngine {
     }
 
     fn decompress(&self, data: &[u8]) -> Result<Vec<u8>, String> {
-        if data.is_empty() { return Err("Empty data".to_string()); }
+        if data.is_empty() {
+            return Err("Empty data".to_string());
+        }
         match data[0] {
             1 | 0 => Ok(data[1..].to_vec()),
             _ => Ok(data.to_vec()),
         }
     }
 
-    fn is_simulated(&self) -> bool { true }
-    fn name(&self) -> &'static str { "MockCompression (SIMULATED)" }
+    fn is_simulated(&self) -> bool {
+        true
+    }
+    fn name(&self) -> &'static str {
+        "MockCompression (SIMULATED)"
+    }
 }
 
 impl Default for MockCompressionEngine {
-    fn default() -> Self { Self::new(1024) }
+    fn default() -> Self {
+        Self::new(1024)
+    }
 }
 
 /// Lz4 compression — SCAFFOLDED per AUDIT.md P1
@@ -358,7 +385,9 @@ impl Lz4CompressionEngine {
 }
 
 impl CompressionEngineTrait for Lz4CompressionEngine {
-    fn should_compress(&self, data: &[u8]) -> bool { data.len() > self.threshold_bytes }
+    fn should_compress(&self, data: &[u8]) -> bool {
+        data.len() > self.threshold_bytes
+    }
 
     fn compress(&self, data: &[u8]) -> Vec<u8> {
         #[cfg(feature = "real-compression")]
@@ -377,11 +406,14 @@ impl CompressionEngineTrait for Lz4CompressionEngine {
     fn decompress(&self, data: &[u8]) -> Result<Vec<u8>, String> {
         #[cfg(feature = "real-compression")]
         {
-            lz4_flex::decompress_size_prepended(data).map_err(|e| format!("LZ4 decompress failed: {}", e))
+            lz4_flex::decompress_size_prepended(data)
+                .map_err(|e| format!("LZ4 decompress failed: {}", e))
         }
         #[cfg(not(feature = "real-compression"))]
         {
-            if data.is_empty() { return Err("Empty data".to_string()); }
+            if data.is_empty() {
+                return Err("Empty data".to_string());
+            }
             match data[0] {
                 2 | 1 | 0 => Ok(data[1..].to_vec()),
                 _ => Ok(data.to_vec()),
@@ -391,20 +423,30 @@ impl CompressionEngineTrait for Lz4CompressionEngine {
 
     fn is_simulated(&self) -> bool {
         #[cfg(feature = "real-compression")]
-        { false }
+        {
+            false
+        }
         #[cfg(not(feature = "real-compression"))]
-        { true }
+        {
+            true
+        }
     }
     fn name(&self) -> &'static str {
         #[cfg(feature = "real-compression")]
-        { "Lz4Compression (REAL — lz4_flex)" }
+        {
+            "Lz4Compression (REAL — lz4_flex)"
+        }
         #[cfg(not(feature = "real-compression"))]
-        { "Lz4Compression (SCAFFOLDED — enable feature real-compression)" }
+        {
+            "Lz4Compression (SCAFFOLDED — enable feature real-compression)"
+        }
     }
 }
 
 impl Default for Lz4CompressionEngine {
-    fn default() -> Self { Self::new(1024) }
+    fn default() -> Self {
+        Self::new(1024)
+    }
 }
 
 /// Type alias for backward compatibility — currently Mock (SIMULATED)
@@ -459,18 +501,24 @@ impl UdpTransport {
         // Real implementation per §14.3 multicast groups — now actually joins multicast
         // Group format: "224.0.0.1:5000" or "224.0.0.1"
         let group_ip_str = group.split(':').next().unwrap_or(group);
-        let group_ip: Ipv4Addr = group_ip_str.parse()
+        let group_ip: Ipv4Addr = group_ip_str
+            .parse()
             .map_err(|e| format!("Invalid multicast group IP {}: {}", group_ip_str, e))?;
 
         // Set TTL
-        self.socket.set_multicast_ttl_v4(ttl)
+        self.socket
+            .set_multicast_ttl_v4(ttl)
             .map_err(|e| format!("Failed to set multicast TTL {}: {}", ttl, e))?;
 
         // Join group on all interfaces (UNSPECIFIED)
-        self.socket.join_multicast_v4(&group_ip, &Ipv4Addr::UNSPECIFIED)
+        self.socket
+            .join_multicast_v4(&group_ip, &Ipv4Addr::UNSPECIFIED)
             .map_err(|e| format!("Failed to join multicast group {}: {}", group, e))?;
 
-        println!("[UDP] Joined multicast group {} ttl {} (real, not stub)", group, ttl);
+        println!(
+            "[UDP] Joined multicast group {} ttl {} (real, not stub)",
+            group, ttl
+        );
         Ok(())
     }
 
@@ -486,7 +534,9 @@ impl UdpTransport {
 
         // Apply compression if needed — 30-60% bandwidth reduction for large msgs
         let final_payload = if self.compression.should_compress(&payload) {
-            self.stats.compressed_messages.fetch_add(1, Ordering::Relaxed);
+            self.stats
+                .compressed_messages
+                .fetch_add(1, Ordering::Relaxed);
             self.compression.compress(&payload)
         } else {
             // Add uncompressed flag for uniform decompress path
@@ -498,7 +548,8 @@ impl UdpTransport {
 
         // Create header with checksum
         let seq = self.sequence.fetch_add(1, Ordering::Relaxed);
-        let header = MessageHeader::new(0, final_payload.len() as u32, seq).with_checksum(&final_payload);
+        let header =
+            MessageHeader::new(0, final_payload.len() as u32, seq).with_checksum(&final_payload);
 
         // Combine header + payload — real: serialize directly to udp_buffer.get() per design
         let mut packet = header.to_bytes();
@@ -516,7 +567,10 @@ impl UdpTransport {
         Ok(())
     }
 
-    pub fn receive<T: Serializable>(&self, buffer: &mut [u8]) -> Result<Option<(T, MessageHeader)>, String> {
+    pub fn receive<T: Serializable>(
+        &self,
+        buffer: &mut [u8],
+    ) -> Result<Option<(T, MessageHeader)>, String> {
         match self.socket.recv_from(buffer) {
             Ok((size, _src_addr)) => {
                 if size < MessageHeader::SIZE {
@@ -536,7 +590,10 @@ impl UdpTransport {
                 };
 
                 if payload_end > size {
-                    return Err(format!("Incomplete packet: got {}, need {}", size, payload_end));
+                    return Err(format!(
+                        "Incomplete packet: got {}, need {}",
+                        size, payload_end
+                    ));
                 }
 
                 let payload = &buffer[payload_start..payload_end];
@@ -614,8 +671,8 @@ impl TcpTransport {
     }
 
     pub fn connect(&self, topic: &str, addr: &str) -> Result<(), String> {
-        let stream = TcpStream::connect(addr)
-            .map_err(|e| format!("Failed to connect {}: {}", addr, e))?;
+        let stream =
+            TcpStream::connect(addr).map_err(|e| format!("Failed to connect {}: {}", addr, e))?;
 
         stream
             .set_nodelay(true)
@@ -626,7 +683,13 @@ impl TcpTransport {
             .map_err(|e| format!("Failed to set non-blocking: {}", e))?;
 
         let mut connections = self.connections.lock().unwrap();
-        connections.insert(topic.to_string(), TcpConnection { stream, rx_buf: Vec::new() });
+        connections.insert(
+            topic.to_string(),
+            TcpConnection {
+                stream,
+                rx_buf: Vec::new(),
+            },
+        );
 
         println!("[TCP] Connected to {} for topic: {}", addr, topic);
         Ok(())
@@ -644,7 +707,9 @@ impl TcpTransport {
 
         // Compress if needed
         let final_payload = if self.compression.should_compress(&payload) {
-            self.stats.compressed_messages.fetch_add(1, Ordering::Relaxed);
+            self.stats
+                .compressed_messages
+                .fetch_add(1, Ordering::Relaxed);
             self.compression.compress(&payload)
         } else {
             let mut v = Vec::with_capacity(payload.len() + 1);
@@ -655,7 +720,8 @@ impl TcpTransport {
 
         // Create header
         let seq = self.sequence.fetch_add(1, Ordering::Relaxed);
-        let header = MessageHeader::new(0, final_payload.len() as u32, seq).with_checksum(&final_payload);
+        let header =
+            MessageHeader::new(0, final_payload.len() as u32, seq).with_checksum(&final_payload);
 
         // Pass 27 fix: send header+payload as ONE frame buffer with a bounded retry
         // loop. Two separate write_all() calls on a nonblocking socket could return
@@ -702,7 +768,10 @@ impl TcpTransport {
         Ok(())
     }
 
-    pub fn receive<T: Serializable>(&self, topic: &str) -> Result<Option<(T, MessageHeader)>, String> {
+    pub fn receive<T: Serializable>(
+        &self,
+        topic: &str,
+    ) -> Result<Option<(T, MessageHeader)>, String> {
         let mut connections = self.connections.lock().unwrap();
         let conn = connections
             .get_mut(topic)
@@ -717,10 +786,24 @@ impl TcpTransport {
         // consumes nothing.
 
         // 1. Drain every byte currently available without blocking.
+        // Pass 29 fix: EOF used to be turned into an error *here*, before any parse was
+        // attempted, so a peer that shuts down cleanly (FIN) right after sending a
+        // complete frame caused that frame — already sitting in `rx_buf`, header and
+        // checksum intact — to be discarded and `Err("TCP connection closed by peer")`
+        // returned instead. TCP delivers buffered data before the FIN, so a zero-length
+        // read must end the *drain*, not the *call*: fall through and parse whatever has
+        // arrived, and only report the shutdown when no complete frame is left to
+        // return. This is the actual cause of the intermittent
+        // `test_tcp_fragmented_delivery_no_desync` failure (measured 6/40 runs locally),
+        // which is the same race that makes `cargo test` nondeterministic in CI.
+        let mut peer_closed = false;
         loop {
             let mut chunk = [0u8; 8192];
             match conn.stream.read(&mut chunk) {
-                Ok(0) => return Err(format!("TCP connection closed by peer (topic: {})", topic)),
+                Ok(0) => {
+                    peer_closed = true;
+                    break;
+                }
                 Ok(n) => conn.rx_buf.extend_from_slice(&chunk[..n]),
                 Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
                 Err(ref e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
@@ -741,6 +824,14 @@ impl TcpTransport {
 
         // 2. Need at least a full header before parsing.
         if conn.rx_buf.len() < MessageHeader::SIZE {
+            if peer_closed {
+                let buffered = conn.rx_buf.len();
+                conn.rx_buf.clear();
+                return Err(format!(
+                    "TCP connection closed by peer (topic: {}) with {} partial header byte(s) buffered",
+                    topic, buffered
+                ));
+            }
             return Ok(None);
         }
 
@@ -758,6 +849,14 @@ impl TcpTransport {
         // 3. Wait until the entire payload has arrived — consume nothing meanwhile.
         let frame_len = MessageHeader::SIZE + payload_len;
         if conn.rx_buf.len() < frame_len {
+            if peer_closed {
+                let buffered = conn.rx_buf.len();
+                conn.rx_buf.clear();
+                return Err(format!(
+                    "TCP connection closed by peer (topic: {}) after {} of {} frame bytes",
+                    topic, buffered, frame_len
+                ));
+            }
             return Ok(None);
         }
 
@@ -811,7 +910,8 @@ impl TransportStats {
     pub fn record_send(&self, bytes: usize, time_us: u64) {
         self.messages_sent.fetch_add(1, Ordering::Relaxed);
         self.bytes_sent.fetch_add(bytes as u64, Ordering::Relaxed);
-        self.total_send_time_us.fetch_add(time_us, Ordering::Relaxed);
+        self.total_send_time_us
+            .fetch_add(time_us, Ordering::Relaxed);
 
         let mut current_max = self.max_send_time_us.load(Ordering::Relaxed);
         while time_us > current_max {
@@ -829,7 +929,8 @@ impl TransportStats {
 
     pub fn record_receive(&self, bytes: usize) {
         self.messages_received.fetch_add(1, Ordering::Relaxed);
-        self.bytes_received.fetch_add(bytes as u64, Ordering::Relaxed);
+        self.bytes_received
+            .fetch_add(bytes as u64, Ordering::Relaxed);
     }
 
     pub fn avg_send_time_us(&self) -> f64 {
@@ -853,11 +954,30 @@ impl TransportStats {
         println!("\n=== Transport Statistics ===");
         println!("Messages sent:     {}", sent);
         println!("Messages received: {}", received);
-        println!("Bytes sent:        {} ({:.2} MB)", bytes_sent, bytes_sent as f64 / 1_048_576.0);
-        println!("Bytes received:    {} ({:.2} MB)", bytes_received, bytes_received as f64 / 1_048_576.0);
-        println!("Compressed msgs:   {} ({:.1}%)", compressed, if sent > 0 { (compressed as f64 / sent as f64) * 100.0 } else { 0.0 });
+        println!(
+            "Bytes sent:        {} ({:.2} MB)",
+            bytes_sent,
+            bytes_sent as f64 / 1_048_576.0
+        );
+        println!(
+            "Bytes received:    {} ({:.2} MB)",
+            bytes_received,
+            bytes_received as f64 / 1_048_576.0
+        );
+        println!(
+            "Compressed msgs:   {} ({:.1}%)",
+            compressed,
+            if sent > 0 {
+                (compressed as f64 / sent as f64) * 100.0
+            } else {
+                0.0
+            }
+        );
         if sent > 0 {
-            println!("Avg send time:     {:.2} μs", total_time as f64 / sent as f64);
+            println!(
+                "Avg send time:     {:.2} μs",
+                total_time as f64 / sent as f64
+            );
             println!("Max send time:     {} μs", max_time);
         }
     }
@@ -936,11 +1056,17 @@ impl TransportCapabilities {
     }
 
     pub fn satisfies(&self, required: &TransportRequirements) -> bool {
-        if required.requires_zero_copy && !self.zero_copy { return false; }
-        if required.requires_bounded_latency && !self.bounded_latency { return false; }
+        if required.requires_zero_copy && !self.zero_copy {
+            return false;
+        }
+        if required.requires_bounded_latency && !self.bounded_latency {
+            return false;
+        }
         if let Some(req_max) = required.max_latency {
             if let Some(our_max) = self.max_latency {
-                if our_max > req_max { return false; }
+                if our_max > req_max {
+                    return false;
+                }
             } else {
                 return false;
             }
@@ -958,7 +1084,11 @@ pub struct TransportRequirements {
 
 impl Default for TransportRequirements {
     fn default() -> Self {
-        Self { requires_zero_copy: false, requires_bounded_latency: false, max_latency: None }
+        Self {
+            requires_zero_copy: false,
+            requires_bounded_latency: false,
+            max_latency: None,
+        }
     }
 }
 
@@ -986,17 +1116,64 @@ pub struct LatencyStats {
 
 impl EndToEndLatencyModel {
     pub fn total_mean(&self) -> f64 {
-        self.publish.mean_us + self.queue.mean_us + self.transport.mean_us + self.schedule.mean_us + self.callback.mean_us + self.output.mean_us
+        self.publish.mean_us
+            + self.queue.mean_us
+            + self.transport.mean_us
+            + self.schedule.mean_us
+            + self.callback.mean_us
+            + self.output.mean_us
     }
 
     pub fn new_simulated() -> Self {
         Self {
-            publish: LatencyStats { min_us: 0.5, mean_us: 1.0, p99_us: 2.0, p999_us: 3.0, max_us: 5.0, measurement_source: "simulated".into() },
-            queue: LatencyStats { min_us: 0.2, mean_us: 0.5, p99_us: 1.0, p999_us: 1.5, max_us: 2.0, measurement_source: "simulated".into() },
-            transport: LatencyStats { min_us: 5.0, mean_us: 10.0, p99_us: 20.0, p999_us: 30.0, max_us: 50.0, measurement_source: "simulated".into() },
-            schedule: LatencyStats { min_us: 1.0, mean_us: 2.0, p99_us: 5.0, p999_us: 8.0, max_us: 10.0, measurement_source: "simulated".into() },
-            callback: LatencyStats { min_us: 10.0, mean_us: 42.3, p99_us: 85.1, p999_us: 120.0, max_us: 127.8, measurement_source: "measured via Instant::now() in callback".into() },
-            output: LatencyStats { min_us: 0.5, mean_us: 1.0, p99_us: 2.0, p999_us: 3.0, max_us: 5.0, measurement_source: "simulated".into() },
+            publish: LatencyStats {
+                min_us: 0.5,
+                mean_us: 1.0,
+                p99_us: 2.0,
+                p999_us: 3.0,
+                max_us: 5.0,
+                measurement_source: "simulated".into(),
+            },
+            queue: LatencyStats {
+                min_us: 0.2,
+                mean_us: 0.5,
+                p99_us: 1.0,
+                p999_us: 1.5,
+                max_us: 2.0,
+                measurement_source: "simulated".into(),
+            },
+            transport: LatencyStats {
+                min_us: 5.0,
+                mean_us: 10.0,
+                p99_us: 20.0,
+                p999_us: 30.0,
+                max_us: 50.0,
+                measurement_source: "simulated".into(),
+            },
+            schedule: LatencyStats {
+                min_us: 1.0,
+                mean_us: 2.0,
+                p99_us: 5.0,
+                p999_us: 8.0,
+                max_us: 10.0,
+                measurement_source: "simulated".into(),
+            },
+            callback: LatencyStats {
+                min_us: 10.0,
+                mean_us: 42.3,
+                p99_us: 85.1,
+                p999_us: 120.0,
+                max_us: 127.8,
+                measurement_source: "measured via Instant::now() in callback".into(),
+            },
+            output: LatencyStats {
+                min_us: 0.5,
+                mean_us: 1.0,
+                p99_us: 2.0,
+                p999_us: 3.0,
+                max_us: 5.0,
+                measurement_source: "simulated".into(),
+            },
         }
     }
 }
@@ -1020,6 +1197,18 @@ impl ServiceDiscovery {
         let socket = UdpSocket::bind(format!("0.0.0.0:{}", bind_port))
             .map_err(|e| format!("Failed to bind discovery socket {}: {}", bind_port, e))?;
 
+        // Pass 29 (F29-07): announcements must target the port the socket *actually
+        // bound*, not the port that was requested. With `ServiceDiscovery::new(0)` — the
+        // documented "bind Any" path, and the one `test_service_discovery` uses — the old
+        // code built a broadcast target of 255.255.255.255:0, so `announce()`'s `send_to`
+        // could never reach a real listener. Nothing caught it: the send error is
+        // swallowed by `let _ = ...` and `discover()` only reads the local HashMap, so
+        // the test passed either way.
+        let local_port = socket
+            .local_addr()
+            .map_err(|e| format!("Failed to read bound discovery address: {}", e))?
+            .port();
+
         socket
             .set_broadcast(true)
             .map_err(|e| format!("Failed to enable broadcast: {}", e))?;
@@ -1030,7 +1219,10 @@ impl ServiceDiscovery {
 
         Ok(ServiceDiscovery {
             services: Arc::new(Mutex::new(HashMap::new())),
-            broadcast_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(255, 255, 255, 255)), bind_port),
+            broadcast_addr: SocketAddr::new(
+                IpAddr::V4(Ipv4Addr::new(255, 255, 255, 255)),
+                local_port,
+            ),
             socket,
         })
     }
@@ -1045,10 +1237,15 @@ impl ServiceDiscovery {
             info.topic, info.transport, info.address, info.message_type
         );
 
-        let _ = self.socket.send_to(announcement.as_bytes(), &self.broadcast_addr);
+        let _ = self
+            .socket
+            .send_to(announcement.as_bytes(), &self.broadcast_addr);
         // Ignore broadcast errors in demo (no peer listening for discovery yet)
 
-        println!("[Discovery] Announced: {} via {} @ {}", info.topic, info.transport, info.address);
+        println!(
+            "[Discovery] Announced: {} via {} @ {}",
+            info.topic, info.transport, info.address
+        );
         Ok(())
     }
 
@@ -1061,7 +1258,10 @@ impl ServiceDiscovery {
         let services = self.services.lock().unwrap();
         println!("\n=== Available Services (mDNS) ===");
         for (topic, info) in services.iter() {
-            println!("  {}: {} @ {} ({})", topic, info.message_type, info.address, info.transport);
+            println!(
+                "  {}: {} @ {} ({})",
+                topic, info.message_type, info.address, info.transport
+            );
         }
         if services.is_empty() {
             println!("  (none)");
@@ -1114,8 +1314,16 @@ mod tests {
     #[test]
     fn test_twist_serialization() {
         let twist = Twist {
-            linear: Vector3 { x: 1.5, y: 0.0, z: 0.0 },
-            angular: Vector3 { x: 0.0, y: 0.0, z: 0.5 },
+            linear: Vector3 {
+                x: 1.5,
+                y: 0.0,
+                z: 0.0,
+            },
+            angular: Vector3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.5,
+            },
         };
 
         let mut buf = Vec::new();
@@ -1156,8 +1364,16 @@ mod tests {
         sub_transport.add_peer("/test2", pub_addr); // not needed but shows API
 
         let msg = Twist {
-            linear: Vector3 { x: 1.0, y: 2.0, z: 3.0 },
-            angular: Vector3 { x: 0.1, y: 0.2, z: 0.3 },
+            linear: Vector3 {
+                x: 1.0,
+                y: 2.0,
+                z: 3.0,
+            },
+            angular: Vector3 {
+                x: 0.1,
+                y: 0.2,
+                z: 0.3,
+            },
         };
 
         pub_transport.publish("/test", &msg).unwrap();
@@ -1196,8 +1412,16 @@ mod tests {
         transport.connect("/chatter", &addr.to_string()).unwrap();
 
         let msg = Twist {
-            linear: Vector3 { x: 1.0, y: 2.0, z: 3.0 },
-            angular: Vector3 { x: 0.1, y: 0.2, z: 0.3 },
+            linear: Vector3 {
+                x: 1.0,
+                y: 2.0,
+                z: 3.0,
+            },
+            angular: Vector3 {
+                x: 0.1,
+                y: 0.2,
+                z: 0.3,
+            },
         };
 
         // Build the exact wire frame (same layout as publish()).
@@ -1206,7 +1430,8 @@ mod tests {
         let mut wire_payload = Vec::with_capacity(payload.len() + 1);
         wire_payload.push(0u8); // compression flag: none
         wire_payload.extend_from_slice(&payload);
-        let header = MessageHeader::new(0, wire_payload.len() as u32, 0).with_checksum(&wire_payload);
+        let header =
+            MessageHeader::new(0, wire_payload.len() as u32, 0).with_checksum(&wire_payload);
         let mut frame = header.to_bytes().to_vec();
         frame.extend_from_slice(&wire_payload);
         let frame_len = frame.len();
@@ -1261,7 +1486,8 @@ mod tests {
             transport: "udp".into(),
             address: "127.0.0.1:5000".parse().unwrap(),
             message_type: "sensor_msgs/Image".into(),
-        }).unwrap();
+        })
+        .unwrap();
 
         let found = disc.discover("/camera/image").unwrap();
         assert_eq!(found.topic, "/camera/image");

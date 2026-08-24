@@ -3,12 +3,12 @@
 //! Run: cargo run -p nros-core --bin bench -- --iterations 100000 --output benchmarks/results.json
 //! This separates correctness (cargo test) from performance (cargo bench / artifact)
 
-use nros_core::{channel, Twist, Vector3, Timestamp, PerformanceStats};
-use std::sync::{Arc, atomic::Ordering};
-use std::thread;
-use std::time::{Duration, Instant};
+use nros_core::{channel, PerformanceStats, Timestamp, Twist, Vector3};
 use std::fs;
 use std::path::PathBuf;
+use std::sync::{atomic::Ordering, Arc};
+use std::thread;
+use std::time::{Duration, Instant};
 
 #[derive(Debug)]
 struct BenchmarkEnv {
@@ -52,9 +52,9 @@ fn get_cpu_model() -> String {
         fs::read_to_string("/proc/cpuinfo")
             .ok()
             .and_then(|s| {
-                s.lines().find(|l| l.starts_with("model name")).map(|l| {
-                    l.split(':').nth(1).unwrap_or("unknown").trim().to_string()
-                })
+                s.lines()
+                    .find(|l| l.starts_with("model name"))
+                    .map(|l| l.split(':').nth(1).unwrap_or("unknown").trim().to_string())
             })
             .unwrap_or_else(|| "unknown".to_string())
     }
@@ -128,7 +128,12 @@ fn main() {
     }
 
     println!("NROS Core Benchmark Artifact Generator");
-    println!("Iterations: {}, Capacity: {}, Output: {}", iterations, capacity, output.display());
+    println!(
+        "Iterations: {}, Capacity: {}, Output: {}",
+        iterations,
+        capacity,
+        output.display()
+    );
     println!("Using monotonic clock (Instant) per AUDIT CORE-007 fix");
 
     let (os, kernel) = get_os_info();
@@ -158,7 +163,8 @@ fn main() {
     let (publisher, subscriber) = channel::<Twist>(capacity);
 
     // Shared queue of publish Instants for true end-to-end latency measurement (fixes CORE-012)
-    let publish_queue: Arc<std::sync::Mutex<VecDeque<Instant>>> = Arc::new(std::sync::Mutex::new(VecDeque::with_capacity(iterations)));
+    let publish_queue: Arc<std::sync::Mutex<VecDeque<Instant>>> =
+        Arc::new(std::sync::Mutex::new(VecDeque::with_capacity(iterations)));
     let publish_queue_clone = publish_queue.clone();
 
     let latencies = Arc::new(std::sync::Mutex::new(Vec::with_capacity(iterations)));
@@ -166,9 +172,11 @@ fn main() {
 
     let consumer = thread::spawn(move || {
         let mut local_latencies = Vec::with_capacity(iterations);
+        let mut received = 0usize;
 
         loop {
             if let Some(_guard) = subscriber.try_recv() {
+                received += 1;
                 // Real latency: now - publish Instant from queue
                 let now = Instant::now();
                 let publish_instant = {
@@ -180,7 +188,17 @@ fn main() {
                     local_latencies.push(latency_ns);
                 }
 
-                if local_latencies.len() >= iterations {
+                // Pass 29 (F29-09): terminate on messages RECEIVED, not on latency
+                // samples recorded. The old condition was
+                // `local_latencies.len() >= iterations`, but a sample is only recorded
+                // when the shared instant queue yielded one — so any receive that found
+                // the queue empty consumed a message without advancing the counter. The
+                // producer publishes exactly `iterations` messages, so a single such
+                // race made the exit condition permanently unreachable and the consumer
+                // spun forever after the producer finished. Measured hang rate before
+                // this fix: 2/12 runs at 2 000 iterations and 1/3 runs at 100 000.
+                // This is why the CI `benchmarks` job has never completed.
+                if received >= iterations {
                     break;
                 }
             } else {
@@ -197,12 +215,27 @@ fn main() {
         let publish_time = Instant::now();
         loop {
             if let Some(guard) = publisher.allocate() {
-                let twist = Twist { timestamp: Timestamp::now(), linear: Vector3 { x: 1.0, y: 0.0, z: 0.0 }, angular: Vector3 { x: 0.0, y: 0.0, z: 0.5 } };
-                guard.write_value(twist).commit();
-                // Store publish Instant for latency measurement (must be after commit to measure queue + transport)
-                // Actually store before commit for more accurate: publish_time is before commit, but we want to measure time from publish call
-                // For simplicity, push publish_time into queue
+                let twist = Twist {
+                    timestamp: Timestamp::now(),
+                    linear: Vector3 {
+                        x: 1.0,
+                        y: 0.0,
+                        z: 0.0,
+                    },
+                    angular: Vector3 {
+                        x: 0.0,
+                        y: 0.0,
+                        z: 0.5,
+                    },
+                };
+                // Pass 29 (F29-09): enqueue the publish instant BEFORE commit. The old
+                // order committed the message first and pushed the instant afterwards,
+                // which let the consumer observe the message while the queue was still
+                // empty — that receive then contributed no latency sample (see the
+                // consumer's exit condition). Enqueuing first also makes the sample
+                // slightly more honest: it brackets the whole publish path.
                 publish_queue.lock().unwrap().push_back(publish_time);
+                guard.write_value(twist).commit();
                 break;
             } else {
                 thread::yield_now();
@@ -219,7 +252,11 @@ fn main() {
     let mut sorted = latencies_vec.clone();
     sorted.sort_unstable();
 
-    let mean = if sorted.is_empty() { 0.0 } else { sorted.iter().sum::<u64>() as f64 / sorted.len() as f64 / 1000.0 };
+    let mean = if sorted.is_empty() {
+        0.0
+    } else {
+        sorted.iter().sum::<u64>() as f64 / sorted.len() as f64 / 1000.0
+    };
     let min = sorted.first().map(|v| *v as f64 / 1000.0).unwrap_or(0.0);
     let max = sorted.last().map(|v| *v as f64 / 1000.0).unwrap_or(0.0);
     let p50 = percentile(&sorted, 50.0);
@@ -227,9 +264,15 @@ fn main() {
     let p99 = percentile(&sorted, 99.0);
     let p999 = percentile(&sorted, 99.9);
 
-    let variance = if sorted.is_empty() { 0.0 } else {
+    let variance = if sorted.is_empty() {
+        0.0
+    } else {
         let mean_ns = sorted.iter().sum::<u64>() as f64 / sorted.len() as f64;
-        sorted.iter().map(|v| (*v as f64 - mean_ns).powi(2)).sum::<f64>() / sorted.len() as f64
+        sorted
+            .iter()
+            .map(|v| (*v as f64 - mean_ns).powi(2))
+            .sum::<f64>()
+            / sorted.len() as f64
     };
     let stddev = variance.sqrt() / 1000.0;
 
@@ -348,7 +391,7 @@ fn chrono_like_timestamp() -> String {
 }
 
 // We need serde for Serialize derive, but we don't have serde dependency
-// To avoid adding dependency, we implement manual Serialize via Debug? 
+// To avoid adding dependency, we implement manual Serialize via Debug?
 // Actually we have serde::Serialize derive but crate doesn't depend on serde
 // Let's make it compile without serde by removing derive and using manual JSON as above
 // The structs above have #[derive(serde::Serialize)] which will fail without serde

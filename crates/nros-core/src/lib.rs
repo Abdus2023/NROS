@@ -40,7 +40,7 @@ pub struct RingBuffer<T> {
     capacity: usize,
     write_idx: AlignedU64, // committed next
     _pad1: [u8; CACHE_LINE_SIZE - 8],
-    read_idx: AlignedU64,  // next to read
+    read_idx: AlignedU64, // next to read
     _pad2: [u8; CACHE_LINE_SIZE - 8],
     write_reserved: AlignedBool,
     _pad3: [u8; CACHE_LINE_SIZE - 1],
@@ -90,7 +90,12 @@ impl<T> RingBuffer<T> {
     /// Reserve slot for writing — returns uninitialized guard
     /// Enforces at most one outstanding reservation (fixes CORE-001)
     pub fn try_reserve(&self) -> Option<WriteGuard<'_, T>> {
-        if self.write_reserved.0.compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed).is_err() {
+        if self
+            .write_reserved
+            .0
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .is_err()
+        {
             return None;
         }
         let write = self.write_idx.0.load(Ordering::Relaxed);
@@ -111,7 +116,12 @@ impl<T> RingBuffer<T> {
 
     /// Receive slot — returns guard owning slot (fixes CORE-002)
     pub fn try_read(&self) -> Option<ReadGuard<'_, T>> {
-        if self.read_reserved.0.compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed).is_err() {
+        if self
+            .read_reserved
+            .0
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .is_err()
+        {
             return None;
         }
         let read = self.read_idx.0.load(Ordering::Relaxed);
@@ -136,9 +146,15 @@ impl<T> RingBuffer<T> {
         write.wrapping_sub(read) as usize
     }
 
-    pub fn is_empty(&self) -> bool { self.len() == 0 }
-    pub fn capacity(&self) -> usize { self.capacity }
-    pub fn is_full(&self) -> bool { self.len() >= self.capacity }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    pub fn capacity(&self) -> usize {
+        self.capacity
+    }
+    pub fn is_full(&self) -> bool {
+        self.len() >= self.capacity
+    }
 }
 
 impl<T> Drop for RingBuffer<T> {
@@ -165,7 +181,9 @@ impl<T> Drop for RingBuffer<T> {
         // Pass 27 fix: matches the ZST branch in new() — no allocation was ever made
         // for a zero-size layout, so dealloc must not be called with one (UB).
         if layout.size() != 0 {
-            unsafe { dealloc(self.buffer as *mut u8, layout); }
+            unsafe {
+                dealloc(self.buffer as *mut u8, layout);
+            }
         }
     }
 }
@@ -195,7 +213,9 @@ impl<'a, T> WriteGuard<'a, T> {
     /// Write value — consumes uninitialized guard, returns initialized guard
     /// Prevents double initialization and commit without init (fixes CORE-011, CORE-014, INIT-002)
     pub fn write_value(self, value: T) -> InitializedWriteGuard<'a, T> {
-        unsafe { (*self.ptr).write(value); }
+        unsafe {
+            (*self.ptr).write(value);
+        }
         let guard = InitializedWriteGuard {
             ptr: self.ptr,
             ring: self.ring,
@@ -270,7 +290,10 @@ impl<'a, T> InitializedWriteGuard<'a, T> {
     /// Commit — makes visible to readers, advances write_idx
     /// Only InitializedWriteGuard can commit, preventing commit without init (fixes CORE-014)
     pub fn commit(self) {
-        self.ring.write_idx.0.store(self.write_idx.wrapping_add(1), Ordering::Release);
+        self.ring
+            .write_idx
+            .0
+            .store(self.write_idx.wrapping_add(1), Ordering::Release);
         self.ring.write_reserved.0.store(false, Ordering::Release);
         std::mem::forget(self);
     }
@@ -337,7 +360,10 @@ impl<'a, T> Drop for ReadGuard<'a, T> {
             ptr::drop_in_place((*self.ptr).as_mut_ptr());
         }
         self.ring.read_reserved.0.store(false, Ordering::Release);
-        self.ring.read_idx.0.store(self.read_idx.wrapping_add(1), Ordering::Release);
+        self.ring
+            .read_idx
+            .0
+            .store(self.read_idx.wrapping_add(1), Ordering::Release);
     }
 }
 
@@ -353,32 +379,49 @@ pub struct Consumer<T> {
 }
 
 impl<T> Producer<T> {
-    fn new(ring: Arc<RingBuffer<T>>) -> Self { Self { ring } }
+    fn new(ring: Arc<RingBuffer<T>>) -> Self {
+        Self { ring }
+    }
 
     pub fn allocate(&self) -> Option<WriteGuard<'_, T>> {
         self.ring.try_reserve()
     }
 
     pub fn publish_copy(&self, msg: T) -> Result<(), &'static str> {
-        let guard = self.ring.try_reserve().ok_or("Buffer full or already reserved")?;
+        let guard = self
+            .ring
+            .try_reserve()
+            .ok_or("Buffer full or already reserved")?;
         guard.write_value(msg).commit();
         Ok(())
     }
 
-    pub fn len(&self) -> usize { self.ring.len() }
-    pub fn is_empty(&self) -> bool { self.ring.is_empty() }
-    pub fn capacity(&self) -> usize { self.ring.capacity() }
+    pub fn len(&self) -> usize {
+        self.ring.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.ring.is_empty()
+    }
+    pub fn capacity(&self) -> usize {
+        self.ring.capacity()
+    }
 }
 
 impl<T> Consumer<T> {
-    fn new(ring: Arc<RingBuffer<T>>) -> Self { Self { ring } }
+    fn new(ring: Arc<RingBuffer<T>>) -> Self {
+        Self { ring }
+    }
 
     pub fn try_recv(&self) -> Option<ReadGuard<'_, T>> {
         self.ring.try_read()
     }
 
-    pub fn pending(&self) -> usize { self.ring.len() }
-    pub fn is_empty(&self) -> bool { self.ring.is_empty() }
+    pub fn pending(&self) -> usize {
+        self.ring.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.ring.is_empty()
+    }
 }
 
 /// Create SPSC channel — enforces one producer, one consumer via type system (fixes CORE-016)
@@ -399,12 +442,20 @@ pub struct Publisher<T> {
 
 impl<T> Publisher<T> {
     pub fn new(topic: &str, capacity: usize) -> Self {
-        Self { ring: Arc::new(RingBuffer::new(capacity)), topic: topic.to_string() }
+        Self {
+            ring: Arc::new(RingBuffer::new(capacity)),
+            topic: topic.to_string(),
+        }
     }
 
-    #[deprecated(note = "Use channel() API for type-enforced SPSC, from_ring() exposes raw Arc and weakens SPSC guarantee per CORE-016/019")]
+    #[deprecated(
+        note = "Use channel() API for type-enforced SPSC, from_ring() exposes raw Arc and weakens SPSC guarantee per CORE-016/019"
+    )]
     pub fn from_ring(topic: &str, ring: Arc<RingBuffer<T>>) -> Self {
-        Self { ring, topic: topic.to_string() }
+        Self {
+            ring,
+            topic: topic.to_string(),
+        }
     }
 
     pub fn allocate(&self) -> Option<WriteGuard<'_, T>> {
@@ -412,18 +463,31 @@ impl<T> Publisher<T> {
     }
 
     pub fn publish_copy(&self, msg: T) -> Result<(), &'static str> {
-        let guard = self.ring.try_reserve().ok_or("Buffer full or already reserved")?;
+        let guard = self
+            .ring
+            .try_reserve()
+            .ok_or("Buffer full or already reserved")?;
         guard.write_value(msg).commit();
         Ok(())
     }
 
-    pub fn topic(&self) -> &str { &self.topic }
+    pub fn topic(&self) -> &str {
+        &self.topic
+    }
 
-    #[deprecated(note = "Use channel() API for type-enforced SPSC — ring() exposes raw Arc<RingBuffer> allowing arbitrary producers/consumers outside type system, weakens SPSC guarantee")]
-    pub fn ring(&self) -> Arc<RingBuffer<T>> { self.ring.clone() }
+    #[deprecated(
+        note = "Use channel() API for type-enforced SPSC — ring() exposes raw Arc<RingBuffer> allowing arbitrary producers/consumers outside type system, weakens SPSC guarantee"
+    )]
+    pub fn ring(&self) -> Arc<RingBuffer<T>> {
+        self.ring.clone()
+    }
 
-    pub fn len(&self) -> usize { self.ring.len() }
-    pub fn is_empty(&self) -> bool { self.ring.is_empty() }
+    pub fn len(&self) -> usize {
+        self.ring.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.ring.is_empty()
+    }
 }
 
 pub struct Subscriber<T> {
@@ -432,25 +496,36 @@ pub struct Subscriber<T> {
 }
 
 impl<T> Subscriber<T> {
-    #[deprecated(note = "Use channel() API for type-enforced SPSC; Subscriber::new takes a raw Arc<RingBuffer> and weakens the SPSC guarantee per CORE-016/019")]
+    #[deprecated(
+        note = "Use channel() API for type-enforced SPSC; Subscriber::new takes a raw Arc<RingBuffer> and weakens the SPSC guarantee per CORE-016/019"
+    )]
     pub fn new(ring: Arc<RingBuffer<T>>, topic: &str) -> Self {
-        Self { ring, topic: topic.to_string() }
+        Self {
+            ring,
+            topic: topic.to_string(),
+        }
     }
 
     pub fn try_recv(&self) -> Option<ReadGuard<'_, T>> {
         self.ring.try_read()
     }
 
-    pub fn pending(&self) -> usize { self.ring.len() }
-    pub fn topic(&self) -> &str { &self.topic }
-    pub fn is_empty(&self) -> bool { self.ring.is_empty() }
+    pub fn pending(&self) -> usize {
+        self.ring.len()
+    }
+    pub fn topic(&self) -> &str {
+        &self.topic
+    }
+    pub fn is_empty(&self) -> bool {
+        self.ring.is_empty()
+    }
 }
 
 // ── Canonical Types — from nros-types crate per AUDIT Pass 12 INTEGRATION-001 fix ──────
 // Fixes duplicated message types: nros-core::Twist vs nros-node::Twist etc
 // Now single source of truth: nros-types crate
 pub use nros_types::{
-    WallTimestamp, MonotonicInstant, Vector3, Twist, MotorCommand, Odometry, Point3D, PointCloud,
+    MonotonicInstant, MotorCommand, Odometry, Point3D, PointCloud, Twist, Vector3, WallTimestamp,
 };
 
 // Backward compatibility aliases — old code used Timestamp, MonotonicTimestamp, Vector3, Twist
@@ -458,7 +533,7 @@ pub type Timestamp = WallTimestamp;
 pub type MonotonicTimestamp = MonotonicInstant;
 
 // Re-export for convenience
-pub use nros_types::{ImageFormat, Image, ImuData};
+pub use nros_types::{Image, ImageFormat, ImuData};
 
 // ── Performance Monitoring — Monotonic, separated from correctness ─────────
 
@@ -481,21 +556,36 @@ impl PerformanceStats {
         }
     }
 
-    pub fn record_send(&self) { self.messages_sent.fetch_add(1, Ordering::Relaxed); }
+    pub fn record_send(&self) {
+        self.messages_sent.fetch_add(1, Ordering::Relaxed);
+    }
 
     pub fn record_receive(&self, latency_ns: u64) {
         self.messages_received.fetch_add(1, Ordering::Relaxed);
-        self.total_latency_ns.fetch_add(latency_ns, Ordering::Relaxed);
+        self.total_latency_ns
+            .fetch_add(latency_ns, Ordering::Relaxed);
         let mut current_max = self.max_latency_ns.load(Ordering::Relaxed);
         while latency_ns > current_max {
-            match self.max_latency_ns.compare_exchange_weak(current_max, latency_ns, Ordering::Relaxed, Ordering::Relaxed) {
-                Ok(_) => break, Err(x) => current_max = x,
+            match self.max_latency_ns.compare_exchange_weak(
+                current_max,
+                latency_ns,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => break,
+                Err(x) => current_max = x,
             }
         }
         let mut current_min = self.min_latency_ns.load(Ordering::Relaxed);
         while latency_ns < current_min {
-            match self.min_latency_ns.compare_exchange_weak(current_min, latency_ns, Ordering::Relaxed, Ordering::Relaxed) {
-                Ok(_) => break, Err(x) => current_min = x,
+            match self.min_latency_ns.compare_exchange_weak(
+                current_min,
+                latency_ns,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => break,
+                Err(x) => current_min = x,
             }
         }
     }
@@ -503,28 +593,51 @@ impl PerformanceStats {
     pub fn avg_latency_us(&self) -> f64 {
         let total = self.total_latency_ns.load(Ordering::Relaxed);
         let count = self.messages_received.load(Ordering::Relaxed);
-        if count == 0 { 0.0 } else { (total as f64 / count as f64) / 1000.0 }
+        if count == 0 {
+            0.0
+        } else {
+            (total as f64 / count as f64) / 1000.0
+        }
     }
 
-    pub fn max_latency_us(&self) -> f64 { self.max_latency_ns.load(Ordering::Relaxed) as f64 / 1000.0 }
+    pub fn max_latency_us(&self) -> f64 {
+        self.max_latency_ns.load(Ordering::Relaxed) as f64 / 1000.0
+    }
     pub fn min_latency_us(&self) -> f64 {
         let v = self.min_latency_ns.load(Ordering::Relaxed);
-        if v == u64::MAX { 0.0 } else { v as f64 / 1000.0 }
+        if v == u64::MAX {
+            0.0
+        } else {
+            v as f64 / 1000.0
+        }
     }
 
     pub fn print_summary(&self, elapsed: std::time::Duration) {
         println!("\n=== NROS Zero-Copy Performance (Monotonic Clock) ===");
-        println!("Messages sent:     {}", self.messages_sent.load(Ordering::Relaxed));
-        println!("Messages received: {}", self.messages_received.load(Ordering::Relaxed));
+        println!(
+            "Messages sent:     {}",
+            self.messages_sent.load(Ordering::Relaxed)
+        );
+        println!(
+            "Messages received: {}",
+            self.messages_received.load(Ordering::Relaxed)
+        );
         println!("Total time:        {:.2?}", elapsed);
-        println!("Throughput:        {:.0} msg/s", self.messages_received.load(Ordering::Relaxed) as f64 / elapsed.as_secs_f64());
+        println!(
+            "Throughput:        {:.0} msg/s",
+            self.messages_received.load(Ordering::Relaxed) as f64 / elapsed.as_secs_f64()
+        );
         println!("Min latency:       {:.2} μs", self.min_latency_us());
         println!("Avg latency:       {:.2} μs", self.avg_latency_us());
         println!("Max latency:       {:.2} μs", self.max_latency_us());
     }
 }
 
-impl Default for PerformanceStats { fn default() -> Self { Self::new() } }
+impl Default for PerformanceStats {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 // ── Backpressure policies — fixes CORE-009 busy-spin sole policy ────────────
 // Per AUDIT Pass 14 QUEUE-001, Pass 15 overflow policies
@@ -549,8 +662,8 @@ pub struct ChannelConfig {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeliveryPolicy {
-    Fifo,           // Conventional FIFO queue
-    LatestValue,    // OverwriteLatest — capacity=1, always newest (e.g., cmd_vel)
+    Fifo,                          // Conventional FIFO queue
+    LatestValue,                   // OverwriteLatest — capacity=1, always newest (e.g., cmd_vel)
     Sampling { max_rate_hz: u32 }, // Sample at max rate
 }
 
@@ -566,14 +679,31 @@ impl Default for ChannelConfig {
 }
 
 impl ChannelConfig {
-    pub fn with_capacity(mut self, cap: usize) -> Self { self.capacity = cap; self }
-    pub fn with_overflow_policy(mut self, policy: BackpressurePolicy) -> Self { self.overflow_policy = policy; self }
-    pub fn with_delivery(mut self, delivery: DeliveryPolicy) -> Self { self.delivery = delivery; self }
-    pub fn with_deadline(mut self, deadline: std::time::Duration) -> Self { self.deadline = Some(deadline); self }
+    pub fn with_capacity(mut self, cap: usize) -> Self {
+        self.capacity = cap;
+        self
+    }
+    pub fn with_overflow_policy(mut self, policy: BackpressurePolicy) -> Self {
+        self.overflow_policy = policy;
+        self
+    }
+    pub fn with_delivery(mut self, delivery: DeliveryPolicy) -> Self {
+        self.delivery = delivery;
+        self
+    }
+    pub fn with_deadline(mut self, deadline: std::time::Duration) -> Self {
+        self.deadline = Some(deadline);
+        self
+    }
 
     /// For cmd_vel-like latest value semantics
     pub fn latest_value() -> Self {
-        Self { capacity: 1, overflow_policy: BackpressurePolicy::DropOldest, delivery: DeliveryPolicy::LatestValue, deadline: None }
+        Self {
+            capacity: 1,
+            overflow_policy: BackpressurePolicy::DropOldest,
+            delivery: DeliveryPolicy::LatestValue,
+            deadline: None,
+        }
     }
 }
 
@@ -617,8 +747,14 @@ mod tests {
     use std::sync::atomic::AtomicUsize;
     use std::thread;
 
-    struct DropCounter { count: Arc<AtomicUsize> }
-    impl Drop for DropCounter { fn drop(&mut self) { self.count.fetch_add(1, Ordering::Relaxed); } }
+    struct DropCounter {
+        count: Arc<AtomicUsize>,
+    }
+    impl Drop for DropCounter {
+        fn drop(&mut self) {
+            self.count.fetch_add(1, Ordering::Relaxed);
+        }
+    }
 
     #[test]
     fn test_zero_copy_pubsub_guard_api() {
@@ -627,7 +763,19 @@ mod tests {
         let (publisher, subscriber) = channel::<Twist>(1024);
         {
             let guard = publisher.allocate().unwrap();
-            let twist = Twist { timestamp: Timestamp::now(), linear: Vector3 { x: 1.0, y: 0.0, z: 0.0 }, angular: Vector3 { x: 0.0, y: 0.0, z: 0.5 } };
+            let twist = Twist {
+                timestamp: Timestamp::now(),
+                linear: Vector3 {
+                    x: 1.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                angular: Vector3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.5,
+                },
+            };
             guard.write_value(twist).commit();
         }
         {
@@ -641,7 +789,10 @@ mod tests {
     fn test_double_reserve_prevention() {
         let ring = RingBuffer::<u64>::new(4);
         let guard1 = ring.try_reserve().unwrap();
-        assert!(ring.try_reserve().is_none(), "Second reserve must fail while first outstanding");
+        assert!(
+            ring.try_reserve().is_none(),
+            "Second reserve must fail while first outstanding"
+        );
         guard1.write_value(42).commit();
         let mut guard2 = ring.try_reserve().unwrap();
         // Use write_value, not as_mut()
@@ -670,7 +821,9 @@ mod tests {
             guard.abort();
         }
         assert_eq!(ring.len(), 0);
-        let mut guard = ring.try_reserve().expect("Should be able to reserve after abandon");
+        let mut guard = ring
+            .try_reserve()
+            .expect("Should be able to reserve after abandon");
         guard.write_value(100).commit();
         assert_eq!(ring.len(), 1);
         let r = ring.try_read().unwrap();
@@ -704,7 +857,11 @@ mod tests {
         let ring = RingBuffer::new(4);
         {
             let guard = ring.try_reserve().unwrap();
-            guard.write_value(DropCounter { count: counter.clone() }).commit();
+            guard
+                .write_value(DropCounter {
+                    count: counter.clone(),
+                })
+                .commit();
         }
         assert_eq!(counter.load(Ordering::Relaxed), 0);
         {
@@ -715,7 +872,13 @@ mod tests {
         let counter2 = Arc::new(AtomicUsize::new(0));
         {
             let ring2 = RingBuffer::new(4);
-            ring2.try_reserve().unwrap().write_value(DropCounter { count: counter2.clone() }).commit();
+            ring2
+                .try_reserve()
+                .unwrap()
+                .write_value(DropCounter {
+                    count: counter2.clone(),
+                })
+                .commit();
         }
         assert_eq!(counter2.load(Ordering::Relaxed), 1);
     }
@@ -729,8 +892,11 @@ mod tests {
         {
             let ring = RingBuffer::<DropCounter>::new(4);
             for _ in 0..4 {
-                ring.try_reserve().unwrap()
-                    .write_value(DropCounter { count: counter.clone() })
+                ring.try_reserve()
+                    .unwrap()
+                    .write_value(DropCounter {
+                        count: counter.clone(),
+                    })
                     .commit();
             }
             // Full; none consumed. Drop must run 4 drop_in_place calls.
@@ -799,7 +965,9 @@ mod tests {
         });
         producer.join().unwrap();
         let received = consumer.join().unwrap();
-        for (i, val) in received.iter().enumerate() { assert_eq!(*val, i); }
+        for (i, val) in received.iter().enumerate() {
+            assert_eq!(*val, i);
+        }
     }
 
     #[test]
@@ -842,7 +1010,10 @@ mod tests {
     fn test_string_type() {
         // Test with non-Copy type requiring Drop
         let ring = RingBuffer::<String>::new(4);
-        ring.try_reserve().unwrap().write_value("hello".to_string()).commit();
+        ring.try_reserve()
+            .unwrap()
+            .write_value("hello".to_string())
+            .commit();
         let rg = ring.try_read().unwrap();
         assert_eq!(*rg, "hello");
     }
@@ -858,11 +1029,23 @@ mod tests {
         let (producer, consumer) = channel::<()>(2);
         producer.publish_copy(()).unwrap();
         producer.publish_copy(()).unwrap();
-        assert!(producer.len() == producer.capacity(), "2 outstanding ZST msgs must fill a cap-2 ring");
-        assert!(producer.publish_copy(()).is_err(), "full ring must reject publish");
-        { let g = consumer.try_recv().unwrap(); let _ = *g; }
+        assert!(
+            producer.len() == producer.capacity(),
+            "2 outstanding ZST msgs must fill a cap-2 ring"
+        );
+        assert!(
+            producer.publish_copy(()).is_err(),
+            "full ring must reject publish"
+        );
+        {
+            let g = consumer.try_recv().unwrap();
+            let _ = *g;
+        }
         assert_eq!(producer.len(), 1);
-        { let g2 = consumer.try_recv().unwrap(); let _ = *g2; }
+        {
+            let g2 = consumer.try_recv().unwrap();
+            let _ = *g2;
+        }
         assert!(producer.is_empty());
         // Refill so RingBuffer::drop drains one live ZST slot (exercises drain path).
         producer.publish_copy(()).unwrap();
@@ -877,16 +1060,25 @@ mod tests {
         struct ZDrop;
         static ZDROPS: AtomicUsize = AtomicUsize::new(0);
         impl Drop for ZDrop {
-            fn drop(&mut self) { ZDROPS.fetch_add(1, Ordering::SeqCst); }
+            fn drop(&mut self) {
+                ZDROPS.fetch_add(1, Ordering::SeqCst);
+            }
         }
         {
             let ring = RingBuffer::<ZDrop>::new(2);
             ring.try_reserve().unwrap().write_value(ZDrop).commit();
-            { let rg = ring.try_read().unwrap(); let _ = &*rg; }   // drop #1 (ReadGuard)
+            {
+                let rg = ring.try_read().unwrap();
+                let _ = &*rg;
+            } // drop #1 (ReadGuard)
             ring.try_reserve().unwrap().write_value(ZDrop).commit();
             // ring drop drains the remaining live slot → drop #2
         }
-        assert_eq!(ZDROPS.load(Ordering::SeqCst), 2, "each ZST value dropped exactly once");
+        assert_eq!(
+            ZDROPS.load(Ordering::SeqCst),
+            2,
+            "each ZST value dropped exactly once"
+        );
     }
 
     #[test]
@@ -910,8 +1102,15 @@ mod tests {
             guard.abort_initialized();
         }));
         assert!(r.is_err(), "drop panic must propagate");
-        assert_eq!(PDROPS.load(Ordering::SeqCst), 1, "T::drop must run exactly once (no double-drop)");
-        assert!(ring.try_reserve().is_none(), "reservation is intentionally leaked/wedged on drop-panic");
+        assert_eq!(
+            PDROPS.load(Ordering::SeqCst),
+            1,
+            "T::drop must run exactly once (no double-drop)"
+        );
+        assert!(
+            ring.try_reserve().is_none(),
+            "reservation is intentionally leaked/wedged on drop-panic"
+        );
         // RingBuffer::drop must not re-drop the aborted slot (write_idx never advanced,
         // drain count = 0): PDROPS stays 1 after the ring is dropped.
         drop(ring);
@@ -920,24 +1119,53 @@ mod tests {
 
     mod benchmarks {
         use super::*;
+        use std::time::Instant;
         #[test]
         #[ignore]
         fn benchmark_latency_monotonic() {
-            // Real latency measurement with monotonic clock, not synthetic 1000 ns
+            // Real end-to-end latency via a monotonic clock.
+            //
+            // Pass 29: this used to push a hard-coded `1000` into the latency vector with a
+            // TODO beside it, then print a note admitting the numbers meant nothing. That is
+            // worse than having no benchmark, because the code reads like a measurement. It
+            // now uses the same technique as `src/bin/bench.rs`, the canonical artifact
+            // generator: the producer records an `Instant` in a shared queue and the
+            // consumer subtracts it on receipt.
+            //
+            // Two details are carried over from the F29-09 fix in bench.rs and matter here
+            // just as much:
+            //   - the instant is enqueued BEFORE commit, so the consumer can never observe a
+            //     message whose instant is not yet queued; and
+            //   - the consumer terminates on messages RECEIVED, not on samples recorded, so
+            //     termination cannot depend on the queue staying in step. Without that, one
+            //     race makes the loop condition permanently unreachable and the benchmark
+            //     hangs — which is exactly what bench.rs did before F29-09.
+            //
+            // Cross-thread latency on a shared machine is dominated by scheduling, not by the
+            // ring. For the ring's own cost use
+            // tools/offline-mrustc/probes/microbench.rs (same-thread, ~110 ns/op).
             let capacity = 1024;
             let (producer, consumer) = channel::<Twist>(capacity);
             let iterations = 100_000;
             let latencies = Arc::new(std::sync::Mutex::new(Vec::with_capacity(iterations)));
             let lat_clone = latencies.clone();
+            let publish_queue: Arc<std::sync::Mutex<std::collections::VecDeque<Instant>>> =
+                Arc::new(std::sync::Mutex::new(
+                    std::collections::VecDeque::with_capacity(iterations),
+                ));
+            let queue_clone = publish_queue.clone();
 
             let consumer_thread = thread::spawn(move || {
                 let mut local_lats = Vec::with_capacity(iterations);
-                while local_lats.len() < iterations {
-                    if let Some(guard) = consumer.try_recv() {
-                        // In real bench, Twist would contain publish Instant
-                        // For now, we measure inter-arrival time as proxy, not true end-to-end
-                        // Real implementation would embed MonotonicTimestamp in message
-                        local_lats.push(1000); // TODO: replace with real publish Instant delta
+                let mut received = 0usize;
+                while received < iterations {
+                    if let Some(_guard) = consumer.try_recv() {
+                        received += 1;
+                        let now = Instant::now();
+                        let published = queue_clone.lock().unwrap().pop_front();
+                        if let Some(published) = published {
+                            local_lats.push(now.duration_since(published).as_nanos() as u64);
+                        }
                     } else {
                         thread::yield_now();
                     }
@@ -945,11 +1173,13 @@ mod tests {
                 *lat_clone.lock().unwrap() = local_lats;
             });
 
-            let start = std::time::Instant::now();
+            let start = Instant::now();
             for _ in 0..iterations {
+                let publish_time = Instant::now();
                 loop {
                     if let Some(guard) = producer.allocate() {
                         let twist = Twist::default();
+                        publish_queue.lock().unwrap().push_back(publish_time);
                         guard.write_value(twist).commit();
                         break;
                     }
@@ -959,9 +1189,40 @@ mod tests {
 
             consumer_thread.join().unwrap();
             let elapsed = start.elapsed();
-            let lats = latencies.lock().unwrap();
-            println!("Throughput: {:.0} msg/s, elapsed: {:?}", iterations as f64 / elapsed.as_secs_f64(), elapsed);
-            println!("Note: Latency measurement still needs publish Instant embedded in message for true end-to-end — currently measuring inter-arrival, not true latency. See bench.rs binary for full artifact with env info per AUDIT Pass 7 §12");
+            let mut lats = latencies.lock().unwrap().clone();
+            lats.sort_unstable();
+            let pct = |p: f64| -> f64 {
+                if lats.is_empty() {
+                    0.0
+                } else {
+                    let i = ((lats.len() as f64 - 1.0) * p / 100.0) as usize;
+                    lats[i] as f64 / 1000.0
+                }
+            };
+            let mean_ns = if lats.is_empty() {
+                0.0
+            } else {
+                lats.iter().sum::<u64>() as f64 / lats.len() as f64
+            };
+            println!(
+                "Throughput: {:.0} msg/s, elapsed: {:?}, latency samples: {}",
+                iterations as f64 / elapsed.as_secs_f64(),
+                elapsed,
+                lats.len()
+            );
+            println!(
+                "Latency us - mean {:.2}, p50 {:.2}, p95 {:.2}, p99 {:.2}, max {:.2}",
+                mean_ns / 1000.0,
+                pct(50.0),
+                pct(95.0),
+                pct(99.0),
+                lats.last().map(|v| *v as f64 / 1000.0).unwrap_or(0.0)
+            );
+            println!(
+                "Note: cross-thread and scheduler-bound. For the ring's own cost see \
+                 tools/offline-mrustc/probes/microbench.rs; for a committed artifact with \
+                 full environment info see src/bin/bench.rs (AUDIT Pass 7 s12)."
+            );
         }
     }
 }

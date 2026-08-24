@@ -4,9 +4,9 @@
 // NROS Core — Sound Zero-Copy SPSC — Demo v0.1.1 Type-State Initialization
 // Fixes P0 CORE-011 as_mut() over uninit removed, CORE-014 commit requires init via type-state
 
-use nros_core::{Publisher, Subscriber, Timestamp, Vector3, Twist, PerformanceStats, channel};
-use std::sync::Arc;
+use nros_core::{channel, PerformanceStats, Publisher, Subscriber, Timestamp, Twist, Vector3};
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
@@ -30,36 +30,60 @@ fn main() {
                 println!("Consumer: Received [linear: {:.2}, angular: {:.2}] latency ~{:.1}μs pending {}",
                     guard.linear.x, guard.angular.z, latency_ns as f64 / 1000.0, subscriber.pending());
                 drop(guard); // Drop advances read_idx and drop_in_place
-                if stats_clone.messages_received.load(Ordering::Relaxed) >= 10 { break; }
+                if stats_clone.messages_received.load(Ordering::Relaxed) >= 10 {
+                    break;
+                }
             }
             thread::sleep(Duration::from_millis(1));
         }
-        println!("Consumer: Finished — {} messages, no &T outlive (CORE-002)", stats_clone.messages_received.load(Ordering::Relaxed));
+        println!(
+            "Consumer: Finished — {} messages, no &T outlive (CORE-002)",
+            stats_clone.messages_received.load(Ordering::Relaxed)
+        );
     });
 
     println!("Producer: Publishing 10 messages 100ms interval, WriteGuard prevents double reserve (CORE-001)\n");
     for i in 0..10 {
         thread::sleep(Duration::from_millis(100));
         let handle = loop {
-            if let Some(h) = publisher.allocate() { break h; }
+            if let Some(h) = publisher.allocate() {
+                break h;
+            }
             thread::sleep(Duration::from_micros(10));
         };
         // Type-state: WriteGuard -> write_value -> InitializedWriteGuard -> commit()
         // No as_mut() over uninitialized memory (CORE-011 fixed)
         let twist = Twist {
             timestamp: Timestamp::now(),
-            linear: Vector3 { x: (i as f64)*0.1, y: 0.0, z: 0.0 },
-            angular: Vector3 { x: 0.0, y: 0.0, z: (i as f64)*0.05 },
+            linear: Vector3 {
+                x: (i as f64) * 0.1,
+                y: 0.0,
+                z: 0.0,
+            },
+            angular: Vector3 {
+                x: 0.0,
+                y: 0.0,
+                z: (i as f64) * 0.05,
+            },
         };
         handle.write_value(twist).commit();
         stats.record_send();
-        println!("Producer: Published #{} [{}]", i+1, publisher.topic());
+        println!("Producer: Published #{} [{}]", i + 1, publisher.topic());
     }
 
     consumer_handle.join().unwrap();
     println!("\n=== Final Stats (Monotonic) ===");
-    println!("Sent: {}, Received: {}", stats.messages_sent.load(Ordering::Relaxed), stats.messages_received.load(Ordering::Relaxed));
-    println!("Min: {:.2}μs Avg: {:.2}μs Max: {:.2}μs", stats.min_latency_us(), stats.avg_latency_us(), stats.max_latency_us());
+    println!(
+        "Sent: {}, Received: {}",
+        stats.messages_sent.load(Ordering::Relaxed),
+        stats.messages_received.load(Ordering::Relaxed)
+    );
+    println!(
+        "Min: {:.2}μs Avg: {:.2}μs Max: {:.2}μs",
+        stats.min_latency_us(),
+        stats.avg_latency_us(),
+        stats.max_latency_us()
+    );
 
     // Demo 2: New SpscChannel API enforces single producer/consumer via type system (fixes CORE-016, CORE-019)
     println!("\n--- SpscChannel API demo (type-enforced SPSC, no Arc sharing) ---");
@@ -68,12 +92,17 @@ fn main() {
     producer.publish_copy(42).unwrap();
     let guard = consumer.try_recv().unwrap();
     assert_eq!(*guard, 42);
-    println!("SpscChannel: Published 42, received {} — Producer/Consumer not Clone, enforces SPSC role", *guard);
+    println!(
+        "SpscChannel: Published 42, received {} — Producer/Consumer not Clone, enforces SPSC role",
+        *guard
+    );
     // Drop guard advances
     drop(guard);
 
     // Demo 3: Throughput benchmark separated (fixes CORE-008)
-    println!("\n--- Throughput benchmark (100k) — use bench binary for real artifact with env info ---");
+    println!(
+        "\n--- Throughput benchmark (100k) — use bench binary for real artifact with env info ---"
+    );
     let (prod, cons) = channel::<Twist>(1024);
     let stats2 = Arc::new(PerformanceStats::new());
     let stats2_c = stats2.clone();
@@ -81,7 +110,9 @@ fn main() {
         while stats2_c.messages_received.load(Ordering::Relaxed) < 100_000 {
             if let Some(_guard) = cons.try_recv() {
                 stats2_c.record_receive(800);
-            } else { thread::yield_now(); }
+            } else {
+                thread::yield_now();
+            }
         }
     });
     let start = std::time::Instant::now();

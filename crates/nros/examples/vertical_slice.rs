@@ -18,7 +18,9 @@ fn main() {
     // Create SPSC channel with type-enforced endpoint ownership (fixes CORE-016)
     // Producer and Consumer are not Clone, cannot create multiple producers from same channel
     let (producer, consumer) = nros_core::channel::<Twist>(16);
-    println!("[Channel] Created SPSC channel capacity 16 with Producer/Consumer ownership enforced");
+    println!(
+        "[Channel] Created SPSC channel capacity 16 with Producer/Consumer ownership enforced"
+    );
 
     // Create VelocityController (nros-node) — uses canonical Twist, MotorCommand
     let mut controller = VelocityController::new("velocity_controller");
@@ -71,7 +73,10 @@ fn main() {
         let elapsed_queue = recv_start.elapsed();
 
         // Verify ownership transfer, no copy: received_guard Derefs to &T, Drop will drop and advance
-        assert!((received_guard.linear.x - twist.linear.x).abs() < 1e-9, "Message correctness");
+        assert!(
+            (received_guard.linear.x - twist.linear.x).abs() < 1e-9,
+            "Message correctness"
+        );
         // Note: canonical `Twist` has no frame_id accessor — a previous `received_guard.frame_id()`
         // assertion here was a stale copy from the HAL Image path and does not compile (E0599).
         // Found by the first real CI execution (arena deep-analysis session, 2026-08-22).
@@ -139,9 +144,21 @@ fn main() {
 
     println!("\n=== Vertical Slice Results (Canonical Types, No Conversion Shim) ===");
     println!("Iterations: {}", iterations);
-    println!("Total time: {:.2?}, Throughput: {:.1} msg/s", total_time, throughput);
-    println!("Latency min: {:.1}μs p50: {:.1}μs mean: {:.1}μs p99: {:.1}μs max: {:.1}μs", min, p50, mean, p99, max);
-    println!("Deadline misses (deadline {}μs): {} / {} ({:.1}%)", deadline_us, deadline_misses, iterations, deadline_misses as f64 / iterations as f64 * 100.0);
+    println!(
+        "Total time: {:.2?}, Throughput: {:.1} msg/s",
+        total_time, throughput
+    );
+    println!(
+        "Latency min: {:.1}μs p50: {:.1}μs mean: {:.1}μs p99: {:.1}μs max: {:.1}μs",
+        min, p50, mean, p99, max
+    );
+    println!(
+        "Deadline misses (deadline {}μs): {} / {} ({:.1}%)",
+        deadline_us,
+        deadline_misses,
+        iterations,
+        deadline_misses as f64 / iterations as f64 * 100.0
+    );
     println!("Ownership: Drop exactly once verified via DropCounter test");
     println!("SPSC: Producer/Consumer not Clone enforced via type system (channel() returns non-Clone handles)");
     println!("Zero-copy: Inside ring zero-copy candidate (WriteGuard/ReadGuard), transport/HAL still SIMULATED per EVIDENCE_REGISTRY");
@@ -156,7 +173,10 @@ fn main() {
     let (prod_full, _cons_full) = nros_core::channel::<u64>(2);
     prod_full.allocate().unwrap().write_value(1).commit();
     prod_full.allocate().unwrap().write_value(2).commit();
-    assert!(prod_full.allocate().is_none(), "Should be full, ReturnNone policy");
+    assert!(
+        prod_full.allocate().is_none(),
+        "Should be full, ReturnNone policy"
+    );
     println!("✅ Queue full correctly returns None (BackpressurePolicy::ReturnNone) — no deadlock, no leak");
 
     println!("\n✅ Vertical slice PASSED — Twist -> SPSC -> VelocityController -> MotorCommand -> Sim with canonical types, no conversion shim, ownership transfer, deadline monitoring, failure injection");

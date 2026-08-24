@@ -23,8 +23,16 @@ pub fn node(attr: TokenStream, item: TokenStream) -> TokenStream {
     // Parse as struct to ensure it's valid, then re-emit with framework field attributes consumed
     let mut input = parse_macro_input!(item as ItemStruct);
     const FIELD_HELPER_ATTRS: &[&str] = &[
-        "subscribe", "publish", "param", "time_sync", "compute", "interrupt",
-        "shared_state", "task", "service", "telemetry",
+        "subscribe",
+        "publish",
+        "param",
+        "time_sync",
+        "compute",
+        "interrupt",
+        "shared_state",
+        "task",
+        "service",
+        "telemetry",
     ];
     for field in input.fields.iter_mut() {
         field
@@ -124,19 +132,34 @@ pub fn sim(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 /// #[plugin] / #[plugin_impl] / #[algorithm] / etc for plugin system
 #[proc_macro_attribute]
-pub fn plugin(attr: TokenStream, item: TokenStream) -> TokenStream { let _ = attr; item }
+pub fn plugin(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let _ = attr;
+    item
+}
 
 #[proc_macro_attribute]
-pub fn plugin_impl(attr: TokenStream, item: TokenStream) -> TokenStream { let _ = attr; item }
+pub fn plugin_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let _ = attr;
+    item
+}
 
 #[proc_macro_attribute]
-pub fn algorithm(attr: TokenStream, item: TokenStream) -> TokenStream { let _ = attr; item }
+pub fn algorithm(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let _ = attr;
+    item
+}
 
 #[proc_macro_attribute]
-pub fn algorithm_impl(attr: TokenStream, item: TokenStream) -> TokenStream { let _ = attr; item }
+pub fn algorithm_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let _ = attr;
+    item
+}
 
 #[proc_macro_attribute]
-pub fn telemetry(attr: TokenStream, item: TokenStream) -> TokenStream { let _ = attr; item }
+pub fn telemetry(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let _ = attr;
+    item
+}
 
 // Additional helper to parse any item as-is for robustness
 fn _parse_any(item: TokenStream) -> TokenStream {

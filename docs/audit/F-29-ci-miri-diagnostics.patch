@@ -1,0 +1,90 @@
+From: Pass 29 audit session <arena-agent@users.noreply.github.com>
+Subject: Make the Miri gate's failure reason readable (diagnostics only, no behaviour change)
+
+The Safety-gate job has failed in every recorded run (40/40 on the audited lineage).
+The step-level record is always the same and is the whole of the available evidence:
+
+    1 success  Set up job
+    2 success  Run actions/checkout@v4
+    3 success  Install Miri
+    4 failure  Miri on nros-core        <- "Process completed with exit code 1"
+    5 skipped  Miri on nros-types
+
+There is no NROS-authored annotation for it, and job logs are served from
+`*.blob.core.windows.net`, which is not reachable from every environment. So the cause
+cannot be decoded from outside CI.
+
+Note that step 3 *succeeds*. That is in tension with F-25's premise (that
+`rustup component add miri` fails because RUSTUP_TOOLCHAIN=stable outranks
+`rustup default nightly`) -- if the component were unavailable, `cargo miri setup` in
+that same step would have failed. F-25 has never actually been exercised either: the
+branch whose run is titled "apply F-25 Miri toolchain fix" (arena/01a03242-nros @
+dee4f028) contains no ci.yml change at all.
+
+This patch changes no gate semantics. It adds one read-only toolchain probe and mirrors
+the Miri failure reason into workflow-command annotations, which ride the API rather than
+the blob host and can be read with:
+
+    gh api repos/Abdus2023/NROS/check-runs/<job-id>/annotations
+
+The probe answers the one question that decides the fix: if `cargo miri --version`
+fails, this is toolchain resolution and F-25's approach is the right shape; if it
+succeeds, the `Miri on nros-core` failure is a genuine Miri finding in nros-core's
+`MaybeUninit` / `drop_in_place` / raw-pointer code and must be treated as a P0 soundness
+bug, not a CI defect.
+
+Apply with:  git apply docs/audit/F-29-ci-miri-diagnostics.patch
+(Cannot be pushed from the audit sandbox: the app token lacks the `workflows` scope --
+the same limitation that keeps F-20 and F-25 unapplied.)
+---
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 9105d8f..aa8e44b 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -84,8 +84,45 @@ jobs:
+           rustup default nightly
+           rustup component add miri
+           cargo miri setup
++      - name: Probe effective toolchain (F-29 diagnostics)
++        run: |
++          # F-29: the Miri gate has failed in every recorded run, and the only visible
++          # detail is "Process completed with exit code 1" on `Miri on nros-core` while
++          # `Install Miri` succeeds. Job logs live on a blob host that is not reachable
++          # from every environment, so print *and* annotate -- annotations ride the API
++          # and can be read with:
++          #   gh api repos/OWNER/REPO/check-runs/<job-id>/annotations
++          # This step settles the one question that decides the fix: is `cargo miri`
++          # resolvable at all? If it is not, the failure is toolchain resolution (F-25's
++          # hypothesis). If it is, the failure below is a genuine Miri finding in
++          # nros-core's unsafe code and must be treated as a P0 soundness bug.
++          echo "RUSTUP_TOOLCHAIN=${RUSTUP_TOOLCHAIN:-<unset>}"
++          rustup show
++          cargo --version
++          rustc --version
++          if cargo miri --version; then
++            echo "::notice title=Miri toolchain::cargo-miri resolves; a failure below is a real finding"
++          else
++            echo "::error title=Miri toolchain::cargo-miri NOT resolvable - toolchain problem, not a code finding"
++          fi
+       - name: Miri on nros-core
+-        run: cargo miri test -p nros-core --lib
++        run: |
++          set +e
++          out=$(cargo miri test -p nros-core --lib 2>&1)
++          rc=$?
++          printf '%s\n' "$out"
++          if [ "$rc" -ne 0 ]; then
++            # Mirror the reason into annotations so it is readable without the log blob.
++            printf '%s\n' "$out" \
++              | grep -E "Undefined Behavior|error(\[|:)|panicked|no such command|not available for|MIRIFLAGS" \
++              | head -40 \
++              | while IFS= read -r line; do
++                  esc=$(printf '%s' "$line" | sed -e 's/%/%25/g' -e 's/\r/%0D/g')
++                  printf '::error title=Miri nros-core::%s\n' "$esc"
++                done
++            printf '::error title=Miri nros-core::exit code %s\n' "$rc"
++          fi
++          exit "$rc"
+       - name: Miri on nros-types
+         run: cargo miri test -p nros-types --lib
+ 

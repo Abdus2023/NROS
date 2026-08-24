@@ -70,7 +70,12 @@ impl NodeCapabilities {
             cpu_cores: 8,
             memory_mb: 16384,
             has_gpu: true,
-            sensors: vec!["camera".into(), "lidar".into(), "radar".into(), "imu".into()],
+            sensors: vec![
+                "camera".into(),
+                "lidar".into(),
+                "radar".into(),
+                "imu".into(),
+            ],
             actuators: vec!["motors".into(), "arm".into()],
         }
     }
@@ -169,7 +174,10 @@ impl LeaderElection {
     /// Start election — increment term, become candidate, request votes
     /// Real NROS: sends RequestVote RPC with last log index/term per Raft
     pub fn start_election(&self) -> bool {
-        println!("[Node {}] Starting election (timeout {:?})", self.node_id.0, self.election_timeout);
+        println!(
+            "[Node {}] Starting election (timeout {:?})",
+            self.node_id.0, self.election_timeout
+        );
 
         // Increment term per Raft §5.2
         let new_term = self.current_term.fetch_add(1, Ordering::SeqCst) + 1;
@@ -199,9 +207,15 @@ impl LeaderElection {
         for (peer_id, _) in peers.iter() {
             if self.should_grant_vote(*peer_id, new_term) {
                 votes.insert(*peer_id);
-                println!("[Node {}] Granted vote by Node {}", peer_id.0, self.node_id.0);
+                println!(
+                    "[Node {}] Granted vote by Node {}",
+                    peer_id.0, self.node_id.0
+                );
             } else {
-                println!("[Node {}] Denied vote for Node {}", peer_id.0, self.node_id.0);
+                println!(
+                    "[Node {}] Denied vote for Node {}",
+                    peer_id.0, self.node_id.0
+                );
             }
         }
 
@@ -213,7 +227,10 @@ impl LeaderElection {
             self.become_leader(new_term);
             true
         } else {
-            println!("[Node {}] Election failed: only {} / {} votes for term {}", self.node_id.0, vote_count, votes_needed, new_term);
+            println!(
+                "[Node {}] Election failed: only {} / {} votes for term {}",
+                self.node_id.0, vote_count, votes_needed, new_term
+            );
             // Become follower again
             let mut role = self.role.lock().unwrap();
             *role = NodeRole::Follower;
@@ -227,7 +244,10 @@ impl LeaderElection {
         // (candidate, term) so the simulation is reproducible. (The project also has a
         // private `mod rand` below; inlining avoids the extra global-state lookup and keeps
         // the election outcome a pure function of node id + term.)
-        let mix = candidate_id.0.wrapping_mul(2_654_435_761).wrapping_add(term.wrapping_mul(40_503));
+        let mix = candidate_id
+            .0
+            .wrapping_mul(2_654_435_761)
+            .wrapping_add(term.wrapping_mul(40_503));
         (mix % 10) < 7
     }
 
@@ -240,7 +260,10 @@ impl LeaderElection {
             let mut leader_id = self.leader_id.lock().unwrap();
             *leader_id = Some(self.node_id);
         }
-        println!("[Node {}] ✓ Became LEADER for term {} (heartbeat interval {:?})", self.node_id.0, term, self.heartbeat_interval);
+        println!(
+            "[Node {}] ✓ Became LEADER for term {} (heartbeat interval {:?})",
+            self.node_id.0, term, self.heartbeat_interval
+        );
     }
 
     pub fn become_follower(&self, leader: RobotId, term: u64) {
@@ -255,7 +278,10 @@ impl LeaderElection {
         }
         let mut last_hb = self.last_heartbeat.lock().unwrap();
         *last_hb = Instant::now();
-        println!("[Node {}] Became FOLLOWER of {} for term {}", self.node_id.0, leader.0, term);
+        println!(
+            "[Node {}] Became FOLLOWER of {} for term {}",
+            self.node_id.0, leader.0, term
+        );
     }
 
     /// Leader sends heartbeat — real: AppendEntries RPC empty per Raft §5.2
@@ -267,7 +293,10 @@ impl LeaderElection {
         let peers = self.peers.lock().unwrap();
         for (peer_id, info) in peers.iter() {
             // In real: send AppendEntries with prev_log_index, entries, leader_commit
-            println!("[Node {}] Sending heartbeat to Node {} @ {}", self.node_id.0, peer_id.0, info.address);
+            println!(
+                "[Node {}] Sending heartbeat to Node {} @ {}",
+                self.node_id.0, peer_id.0, info.address
+            );
         }
 
         let mut last_hb = self.last_heartbeat.lock().unwrap();
@@ -338,10 +367,18 @@ pub trait ElectionEngine {
 pub type SimulatedElection = LeaderElection;
 
 impl ElectionEngine for LeaderElection {
-    fn start_election(&self) -> bool { LeaderElection::start_election(self) }
-    fn is_leader(&self) -> bool { LeaderElection::is_leader(self) }
-    fn term(&self) -> u64 { LeaderElection::term(self) }
-    fn is_simulated(&self) -> bool { true }
+    fn start_election(&self) -> bool {
+        LeaderElection::start_election(self)
+    }
+    fn is_leader(&self) -> bool {
+        LeaderElection::is_leader(self)
+    }
+    fn term(&self) -> u64 {
+        LeaderElection::term(self)
+    }
+    fn is_simulated(&self) -> bool {
+        true
+    }
 }
 
 /// Real Raft election — SCAFFOLDED per AUDIT.md P1
@@ -408,7 +445,9 @@ impl ElectionEngine for RaftElection {
     fn is_leader(&self) -> bool {
         *self.role.lock().unwrap() == NodeRole::Leader
     }
-    fn term(&self) -> u64 { self.current_term.load(Ordering::SeqCst) }
+    fn term(&self) -> u64 {
+        self.current_term.load(Ordering::SeqCst)
+    }
     fn is_simulated(&self) -> bool {
         // Pass 24 (I-009): this is SCAFFOLDED (request_vote_rpc/append_entries_rpc are
         // no-ops and start_election always returns false). It must NOT masquerade as a
@@ -602,7 +641,12 @@ impl TaskScheduler {
         }
     }
 
-    pub fn submit_task(&self, task_type: String, priority: u32, requirements: TaskRequirements) -> TaskId {
+    pub fn submit_task(
+        &self,
+        task_type: String,
+        priority: u32,
+        requirements: TaskRequirements,
+    ) -> TaskId {
         let task_id = TaskId(self.task_counter.fetch_add(1, Ordering::SeqCst));
 
         let task = Task {
@@ -618,8 +662,12 @@ impl TaskScheduler {
         let mut tasks = self.tasks.lock().unwrap();
         tasks.insert(task_id, task);
 
-        println!("[Node {}] Submitted task {}: {} prio {} req CPU:{} MEM:{} GPU:{} sensors:{:?}", 
-            self.node_id.0, task_id.0, task_type, priority, 
+        println!(
+            "[Node {}] Submitted task {}: {} prio {} req CPU:{} MEM:{} GPU:{} sensors:{:?}",
+            self.node_id.0,
+            task_id.0,
+            task_type,
+            priority,
             tasks.get(&task_id).unwrap().requirements.min_cpu_cores,
             tasks.get(&task_id).unwrap().requirements.min_memory_mb,
             tasks.get(&task_id).unwrap().requirements.requires_gpu,
@@ -635,16 +683,24 @@ impl TaskScheduler {
 
     pub fn assign_task(&self, task_id: TaskId, node_id: RobotId) -> Result<(), String> {
         let mut tasks = self.tasks.lock().unwrap();
-        let task = tasks.get_mut(&task_id).ok_or_else(|| format!("Task {} not found", task_id.0))?;
+        let task = tasks
+            .get_mut(&task_id)
+            .ok_or_else(|| format!("Task {} not found", task_id.0))?;
 
         if task.status != TaskStatus::Pending {
-            return Err(format!("Task {} not pending but {}", task_id.0, task.status));
+            return Err(format!(
+                "Task {} not pending but {}",
+                task_id.0, task.status
+            ));
         }
 
         task.status = TaskStatus::Assigned;
         task.assigned_to = Some(node_id);
 
-        println!("[Node {}] Assigned task {} to Node {} (type: {})", self.node_id.0, task_id.0, node_id.0, task.task_type);
+        println!(
+            "[Node {}] Assigned task {} to Node {} (type: {})",
+            self.node_id.0, task_id.0, node_id.0, task.task_type
+        );
 
         Ok(())
     }
@@ -652,10 +708,15 @@ impl TaskScheduler {
     pub fn execute_task(&self, task_id: TaskId) -> Result<Duration, String> {
         {
             let mut tasks = self.tasks.lock().unwrap();
-            let task = tasks.get_mut(&task_id).ok_or_else(|| format!("Task {} not found", task_id.0))?;
+            let task = tasks
+                .get_mut(&task_id)
+                .ok_or_else(|| format!("Task {} not found", task_id.0))?;
 
             if task.assigned_to != Some(self.node_id) {
-                return Err(format!("Task {} assigned to {:?} not this node {}", task_id.0, task.assigned_to, self.node_id.0));
+                return Err(format!(
+                    "Task {} assigned to {:?} not this node {}",
+                    task_id.0, task.assigned_to, self.node_id.0
+                ));
             }
 
             // Pass 27 fix (F-21): guard the state transition. Previously any non-foreign
@@ -663,16 +724,32 @@ impl TaskScheduler {
             // could be silently driven to Running again, so a completed task re-ran and
             // stats/lifecycle double-counted. Only Assigned -> Running is legal.
             if task.status != TaskStatus::Assigned {
-                return Err(format!("Task {} not assigned (status {}) — only Assigned tasks can start", task_id.0, task.status));
+                return Err(format!(
+                    "Task {} not assigned (status {}) — only Assigned tasks can start",
+                    task_id.0, task.status
+                ));
             }
 
             task.status = TaskStatus::Running;
         }
 
-        println!("[Node {}] Executing task {}: {}", self.node_id.0, task_id.0, self.tasks.lock().unwrap().get(&task_id).unwrap().task_type);
+        println!(
+            "[Node {}] Executing task {}: {}",
+            self.node_id.0,
+            task_id.0,
+            self.tasks.lock().unwrap().get(&task_id).unwrap().task_type
+        );
 
         // Simulate execution — real: dispatch to ComputeScheduler with auto device selection per §16.3
-        let exec_time = match self.tasks.lock().unwrap().get(&task_id).unwrap().task_type.as_str() {
+        let exec_time = match self
+            .tasks
+            .lock()
+            .unwrap()
+            .get(&task_id)
+            .unwrap()
+            .task_type
+            .as_str()
+        {
             "object_detection" => Duration::from_millis(150),
             "path_planning" => Duration::from_millis(80),
             "sensor_fusion" => Duration::from_millis(200),
@@ -684,14 +761,21 @@ impl TaskScheduler {
         let task = tasks.get_mut(&task_id).unwrap();
         task.status = TaskStatus::Completed;
 
-        println!("[Node {}] Completed task {} in {:?}", self.node_id.0, task_id.0, exec_time);
+        println!(
+            "[Node {}] Completed task {} in {:?}",
+            self.node_id.0, task_id.0, exec_time
+        );
 
         Ok(exec_time)
     }
 
     pub fn pending_tasks(&self) -> Vec<Task> {
         let tasks = self.tasks.lock().unwrap();
-        let mut pending: Vec<Task> = tasks.values().filter(|t| t.status == TaskStatus::Pending).cloned().collect();
+        let mut pending: Vec<Task> = tasks
+            .values()
+            .filter(|t| t.status == TaskStatus::Pending)
+            .cloned()
+            .collect();
         // Priority sorting — higher priority first
         pending.sort_by(|a, b| b.priority.cmp(&a.priority));
         pending
@@ -732,8 +816,11 @@ pub struct TaskStats {
 
 impl std::fmt::Display for TaskStats {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "total:{} pending:{} assigned:{} running:{} completed:{} failed:{}", 
-            self.total, self.pending, self.assigned, self.running, self.completed, self.failed)
+        write!(
+            f,
+            "total:{} pending:{} assigned:{} running:{} completed:{} failed:{}",
+            self.total, self.pending, self.assigned, self.running, self.completed, self.failed
+        )
     }
 }
 
@@ -768,14 +855,24 @@ impl FleetCoordinator {
 
         self.leader_election.add_peer(info.clone());
 
-        println!("[Fleet {}] Registered robot {} caps CPU:{} MEM:{} GPU:{} sensors:{:?}", 
-            self.fleet_id, id.0, info.capabilities.cpu_cores, info.capabilities.memory_mb, info.capabilities.has_gpu, info.capabilities.sensors);
+        println!(
+            "[Fleet {}] Registered robot {} caps CPU:{} MEM:{} GPU:{} sensors:{:?}",
+            self.fleet_id,
+            id.0,
+            info.capabilities.cpu_cores,
+            info.capabilities.memory_mb,
+            info.capabilities.has_gpu,
+            info.capabilities.sensors
+        );
     }
 
     /// Coordination loop — check election timeout + heartbeat + distribute if leader
     pub fn coordinate(&self) -> Result<(), String> {
         if self.leader_election.check_leader_timeout() {
-            println!("[Fleet {}] Leader timeout detected, starting election...", self.fleet_id);
+            println!(
+                "[Fleet {}] Leader timeout detected, starting election...",
+                self.fleet_id
+            );
             self.leader_election.start_election();
         }
 
@@ -793,13 +890,19 @@ impl FleetCoordinator {
             return Ok(());
         }
 
-        println!("[Fleet {}] Leader {} distributing {} pending tasks", self.fleet_id, self.leader_election.node_id.0, pending.len());
+        println!(
+            "[Fleet {}] Leader {} distributing {} pending tasks",
+            self.fleet_id,
+            self.leader_election.node_id.0,
+            pending.len()
+        );
 
         let robots = self.robots.lock().unwrap();
 
         for task in pending {
             // Find capable robot with capability matching — real: score based on load, power efficiency, throughput per §16.3
-            let mut candidates: Vec<(RobotId, NodeInfo)> = robots.iter()
+            let mut candidates: Vec<(RobotId, NodeInfo)> = robots
+                .iter()
                 .filter(|(_, info)| info.capabilities.matches(&task.requirements))
                 .map(|(id, info)| (*id, info.clone()))
                 .collect();
@@ -809,7 +912,8 @@ impl FleetCoordinator {
                 // Check if self already accounted as robot — in this demo we treat coordinator node as part of fleet
                 // For simplicity, if no candidate and self can execute, assign to self
                 if candidates.is_empty() {
-                    self.task_scheduler.assign_task(task.id, self.leader_election.node_id)?;
+                    self.task_scheduler
+                        .assign_task(task.id, self.leader_election.node_id)?;
                     continue;
                 }
             }
@@ -820,7 +924,10 @@ impl FleetCoordinator {
             if let Some((robot_id, _)) = candidates.first() {
                 self.task_scheduler.assign_task(task.id, *robot_id)?;
             } else {
-                println!("[Fleet {}] No capable robot for task {} req {:?}", self.fleet_id, task.id.0, task.requirements);
+                println!(
+                    "[Fleet {}] No capable robot for task {} req {:?}",
+                    self.fleet_id, task.id.0, task.requirements
+                );
             }
         }
 
@@ -860,8 +967,15 @@ pub struct FleetStatus {
 
 impl std::fmt::Display for FleetStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Fleet '{}' robots:{} leader:{:?} term:{} tasks:[{}]", 
-            self.fleet_id, self.total_robots, self.leader.map(|r| r.0), self.term, self.tasks)
+        write!(
+            f,
+            "Fleet '{}' robots:{} leader:{:?} term:{} tasks:[{}]",
+            self.fleet_id,
+            self.total_robots,
+            self.leader.map(|r| r.0),
+            self.term,
+            self.tasks
+        )
     }
 }
 
@@ -892,7 +1006,10 @@ mod tests {
         let _ = election.start_election();
         // After election, role is either Leader or Follower
         let role = election.role();
-        assert!(matches!(role, NodeRole::Leader | NodeRole::Follower | NodeRole::Candidate));
+        assert!(matches!(
+            role,
+            NodeRole::Leader | NodeRole::Follower | NodeRole::Candidate
+        ));
     }
 
     #[test]
@@ -911,12 +1028,16 @@ mod tests {
         let caps = NodeCapabilities::high_end();
         let scheduler = TaskScheduler::new(RobotId::new(1), caps);
 
-        let task_id = scheduler.submit_task("test".to_string(), 5, TaskRequirements {
-            min_cpu_cores: 2,
-            min_memory_mb: 1024,
-            requires_gpu: false,
-            required_sensors: vec![],
-        });
+        let task_id = scheduler.submit_task(
+            "test".to_string(),
+            5,
+            TaskRequirements {
+                min_cpu_cores: 2,
+                min_memory_mb: 1024,
+                requires_gpu: false,
+                required_sensors: vec![],
+            },
+        );
 
         assert_eq!(scheduler.count(), 1);
         scheduler.assign_task(task_id, RobotId::new(1)).unwrap();
@@ -972,6 +1093,9 @@ mod tests {
         assert!(scheduler.execute_task(task_id).is_err());
 
         let stats = scheduler.task_stats();
-        assert_eq!(stats.completed, 1, "guarded re-execution must not double-count");
+        assert_eq!(
+            stats.completed, 1,
+            "guarded re-execution must not double-count"
+        );
     }
 }

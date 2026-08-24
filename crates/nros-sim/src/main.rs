@@ -1,7 +1,7 @@
 //! NROS Simulation Engine Demo — Physics + Sensor Simulation
 //! Per DESIGN.md §7.3 same code runs in sim and reality
 
-use nros_sim::{Vector3, SimulationWorld};
+use nros_sim::{SimulationWorld, Vector3};
 use std::time::Duration;
 
 fn main() {
@@ -30,10 +30,26 @@ fn main() {
     world.add_imu();
 
     // Create environment — walls + obstacles
-    world.spawn_obstacle("wall_1", Vector3::new(5.0, 0.5, 0.0), Vector3::new(0.2, 1.0, 10.0));
-    world.spawn_obstacle("wall_2", Vector3::new(-5.0, 0.5, 0.0), Vector3::new(0.2, 1.0, 10.0));
-    world.spawn_obstacle("wall_3", Vector3::new(0.0, 0.5, 5.0), Vector3::new(10.0, 1.0, 0.2));
-    world.spawn_obstacle("box_1", Vector3::new(2.0, 0.25, 2.0), Vector3::new(0.5, 0.5, 0.5));
+    world.spawn_obstacle(
+        "wall_1",
+        Vector3::new(5.0, 0.5, 0.0),
+        Vector3::new(0.2, 1.0, 10.0),
+    );
+    world.spawn_obstacle(
+        "wall_2",
+        Vector3::new(-5.0, 0.5, 0.0),
+        Vector3::new(0.2, 1.0, 10.0),
+    );
+    world.spawn_obstacle(
+        "wall_3",
+        Vector3::new(0.0, 0.5, 5.0),
+        Vector3::new(10.0, 1.0, 0.2),
+    );
+    world.spawn_obstacle(
+        "box_1",
+        Vector3::new(2.0, 0.25, 2.0),
+        Vector3::new(0.5, 0.5, 0.5),
+    );
     world.spawn_sphere("sphere_1", Vector3::new(1.0, 1.0, -1.0), 0.3, 2.0);
 
     println!("\n=== Starting Simulation (20Hz control loop) ===\n");
@@ -62,7 +78,13 @@ fn main() {
 
         // Read sensors every 10 steps (2 Hz) — in real NROS would be #[time_sync(tolerance_ms=5)] fused_callback
         if step % 10 == 0 {
-            println!("\n--- Step {} (t={:.2}s) cmd lin={:.1} ang={:.1} ---", step, world.time.as_secs_f64(), linear_velocity, angular_velocity);
+            println!(
+                "\n--- Step {} (t={:.2}s) cmd lin={:.1} ang={:.1} ---",
+                step,
+                world.time.as_secs_f64(),
+                linear_velocity,
+                angular_velocity
+            );
 
             if let Some((pos, yaw)) = world.get_robot_pose() {
                 println!("Robot: pos={} yaw={:.1}°", pos, yaw.to_degrees());
@@ -78,7 +100,10 @@ fn main() {
             }
 
             if let Some((accel, gyro)) = world.read_imu() {
-                println!("IMU: accel={} gyro={} (noise {:.2}/{:.3})", accel, gyro, 0.01, 0.001);
+                println!(
+                    "IMU: accel={} gyro={} (noise {:.2}/{:.3})",
+                    accel, gyro, 0.01, 0.001
+                );
             }
 
             if let Some(image_data) = world.capture_camera() {
@@ -98,7 +123,9 @@ fn main() {
     println!("✓ Collision detection and resolution (ground plane + bounding radius)");
     println!("✓ Semi-implicit Euler integration, fixed time step 240Hz deterministic");
     println!("✓ Quaternion integration for orientation, Euler conversion");
-    println!("✓ Simulated camera with synthetic Vulkan rendering (gradient + white boxes for entities)");
+    println!(
+        "✓ Simulated camera with synthetic Vulkan rendering (gradient + white boxes for entities)"
+    );
     println!("✓ Simulated LiDAR with raycasting 360 rays, range 10m, narrow beam 0.99 dot");
     println!("✓ Simulated IMU with physics-based force/mass + gravity subtraction + noise");
     println!("✓ Real-time factor control 1.0x per nros.toml simulation.realtime_factor");
