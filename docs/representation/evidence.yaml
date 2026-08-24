@@ -39,26 +39,23 @@ records:
     ci:
       status: check_clippy_passed_2026-08-24
     miri:
-      # Pass 30 (2026-08-24): the previous `unknown` classification is superseded by
-      # the retrieved CI job log (run 32707535971, head 083e3ed9). Miri installed,
-      # compiled nros-core and ran the libtest suite; every test ahead of
-      # test_zero_copy_pubsub_guard_api passed. That test then stopped on
-      # `SystemTime::now()` (WallTimestamp::now) -> clock_gettime(CLOCK_REALTIME),
-      # which Miri isolation refuses. BLOCKED_TEST_ENVIRONMENT means: Miri executed,
-      # no UB was observed, and the suite could not proceed past a host-syscall
-      # dependency in one test. F30-01 replaces the incidental `Timestamp::now()`
-      # in that test with a fixed timestamp so the whole suite executes under
-      # isolation; transition to `executed_passed` requires observing a green
-      # safety-gate job with this remediation in place (per CLAIM-MIRI-001:
-      # configuration or installation never establishes execution or pass).
-      status: blocked_test_environment
-      observed_run: "32707535971"
-      observed_head: "083e3ed9"
-      failing_test: test_zero_copy_pubsub_guard_api
-      cause: wall_clock_syscall_under_miri_isolation
-      operation: SystemTime::now via WallTimestamp::now
-      safety_violation_observed: "false"
-      remediation: deterministic_timestamp_injected_F30-01
+      # Pass 30 (2026-08-24): EXECUTED GREEN. CI run 32718667809 (branch
+      # arena/01a03356-nros, head 2d4ea5b90 = the F30-01 remediation commit),
+      # job 'Safety gate (Miri, hard)' success; per-step conclusions resolvable
+      # via the GitHub API: 'Install Miri' success, 'Miri on nros-core' success,
+      # 'Miri on nros-types' success. No UB diagnostic has ever been observed
+      # against nros-core. History: the previous 40/40 red was decoded from run
+      # 32707535971's log as a BLOCKED_TEST_ENVIRONMENT - one test's
+      # SystemTime::now() -> clock_gettime(CLOCK_REALTIME) dependency, refused
+      # under isolation; F30-01 replaced the incidental Timestamp::now() with a
+      # fixed timestamp (nros-core) and marked the inherently wall-clock-bound
+      # nros-types test #[cfg_attr(miri, ignore)]. Isolation stayed enabled.
+      status: executed_passed_2026-08-24
+      passing_run: "32718667809"
+      passing_head: "2d4ea5b901bee386d44b1a7994cfa8088d4a26e2"
+      scope: nros-core and nros-types libtest suites under isolation
+      prior_blocker: wall_clock_syscall_in_test_resolved_by_F30-01
+      loom: not_run_concurrency_interleavings_verification_outstanding
     benchmark:
       status: present_non_gating
     hardware:
@@ -113,14 +110,13 @@ records:
   # Pass 29/30 update (2026-08-24, supersedes the issue list recorded above):
   # the workspace `cargo test` job now passes (F29-01 TCP EOF frame-loss fix);
   # fmt passes (F29-03, 26 files reformatted); the F-20 fetch-depth deficiency
-  # is implemented in .github/workflows/ci.yml at a098872d (all checkouts now
-  # fetch-depth: 0), with first executed confirmation pending on the next CI
-  # run; and the Miri failure is DECODED from job logs — it reached the
-  # nros-core suite and stopped at test_zero_copy_pubsub_guard_api on
-  # SystemTime::now() under isolation (environmental test dependency, no UB
-  # observed; see CORE-IPC-001 miri block). Pass 30 F30-01 removes that
-  # dependency and skips the inherently wall-clock-bound nros-types test under
-  # Miri only.
+  # is fixed in .github/workflows/ci.yml at a098872d (all checkouts now
+  # fetch-depth: 0) and CONFIRMED executed in run 32718667809 (doc-gate green);
+  # and the Miri failure was DECODED from job logs as a test-side wall-clock
+  # dependency under isolation, remediated by F30-01 (deterministic timestamp
+  # in nros-core; Miri-ignore for the inherently wall-clock-bound nros-types
+  # test) and CONFIRMED executed in run 32718667809 — the first fully green
+  # 9/9 CI in the repository's recorded history (see CORE-IPC-001 miri block).
   - capability: CORE-IPC-002
     source:
       status: absent
