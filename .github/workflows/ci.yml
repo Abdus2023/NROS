@@ -49,6 +49,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - run: rustup component add rustfmt
       - run: cargo fmt --all -- --check
 
@@ -57,6 +59,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - run: cargo check --workspace --all-targets
 
   test:
@@ -64,6 +68,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - run: cargo test --workspace --all-targets
 
   clippy:
@@ -71,6 +77,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - run: rustup component add clippy
       - run: cargo clippy --workspace --all-targets
 
@@ -79,6 +87,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Install Miri
         run: |
           rustup default nightly
@@ -94,6 +104,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Build the CLI
         run: cargo build -p nros-cli
       - name: Run nros init (basic template) and cargo-check
@@ -113,6 +125,8 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Build benchmark
         run: cargo build -p nros-core --bin bench
       - name: Run benchmark
@@ -130,6 +144,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Install documentation validator dependency
         run: python3 -m pip install --disable-pip-version-check --no-input pyyaml
       - name: Run documentation representation validator
